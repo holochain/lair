@@ -1,0 +1,6 @@
+[workspace]
+members = [
+  "crates/lair",
+  "crates/lair_api",
+  "crates/lair_client",
+]
