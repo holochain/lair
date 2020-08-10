@@ -4,3 +4,6 @@
 
 mod error;
 pub use error::*;
+
+mod config;
+pub use config::*;

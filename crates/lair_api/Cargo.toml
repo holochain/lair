@@ -11,5 +11,6 @@ categories = [ "cryptography" ]
 edition = "2018"
 
 [dependencies]
+directories = "3"
 ghost_actor = "0.2.0"
 thiserror = "1"

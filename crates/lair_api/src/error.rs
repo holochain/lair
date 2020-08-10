@@ -5,6 +5,10 @@ pub enum LairError {
     #[error("LairError: {0}")]
     GhostError(#[from] ghost_actor::GhostError),
 
+    /// Trying to start up Lair process, but a pidfile/process already exists
+    #[error("Lair pidfile/process already exists")]
+    ProcessAlreadyExists,
+
     /// Unspecified Internal error.
     #[error(transparent)]
     Other(Box<dyn std::error::Error + Send + Sync>),
