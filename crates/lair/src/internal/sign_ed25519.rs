@@ -66,3 +66,35 @@ pub async fn sign_ed25519_verify(
     })
     .await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(threaded_scheduler)]
+    async fn it_can_sign_and_verify() {
+        let msg = Arc::new(vec![0, 1, 2, 3]);
+
+        let SignEd25519KeypairResult { priv_key, pub_key } =
+            sign_ed25519_keypair_new_from_entropy().await.unwrap();
+
+        let sig = sign_ed25519(priv_key.clone(), msg.clone()).await.unwrap();
+
+        assert!(
+            sign_ed25519_verify(pub_key.clone(), msg.clone(), sig.clone(),)
+                .await
+                .unwrap()
+        );
+
+        let mut bad_sig = (*sig).clone();
+        use std::num::Wrapping;
+        bad_sig[0] = (Wrapping(bad_sig[0]) + Wrapping(1)).0;
+        assert!(!sign_ed25519_verify(
+            pub_key.clone(),
+            msg.clone(),
+            Arc::new(bad_sig),
+        )
+        .await
+        .unwrap());
+    }
+}
