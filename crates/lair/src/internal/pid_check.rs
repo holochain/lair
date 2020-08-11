@@ -1,3 +1,5 @@
+//! Utilities for dealing with pid files.
+
 use crate::*;
 use std::{
     io::{Read, Write},
