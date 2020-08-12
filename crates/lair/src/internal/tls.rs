@@ -22,27 +22,10 @@ impl Default for TlsCertOptions {
     }
 }
 
-/// Result of generating a certificate
-#[derive(Debug)]
-pub struct TlsCertGenerateResult {
-    /// The random sni that will be built into the self-signed certificate
-    pub sni: String,
-
-    /// Private key bytes.
-    /// @todo - once we're integrated with sodoken, make this a priv buffer.
-    pub priv_key_der: Vec<u8>,
-
-    /// Certificate bytes.
-    pub cert_der: Vec<u8>,
-
-    /// 32 byte blake2b certificate digest.
-    pub cert_digest: Vec<u8>,
-}
-
 /// Generate a new random Tls keypair and self signed certificate.
 pub async fn tls_cert_self_signed_new_from_entropy(
     options: TlsCertOptions,
-) -> LairResult<TlsCertGenerateResult> {
+) -> LairResult<entry::EntryTlsCert> {
     rayon_exec(move || {
         let sni = format!("a{}a.a{}a", nanoid::nanoid!(), nanoid::nanoid!());
         let mut params = rcgen::CertificateParams::new(vec![sni.clone()]);
@@ -60,7 +43,7 @@ pub async fn tls_cert_self_signed_new_from_entropy(
             .finalize()
             .as_bytes()
             .to_vec();
-        Ok(TlsCertGenerateResult {
+        Ok(entry::EntryTlsCert {
             sni,
             priv_key_der,
             cert_der,

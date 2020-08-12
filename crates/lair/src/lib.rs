@@ -10,6 +10,8 @@ pub use statics::*;
 
 pub mod internal;
 
+pub mod entry;
+
 /// Main loop of lair executable.
 pub async fn execute_lair() -> LairResult<()> {
     let config = Config::builder().build();
