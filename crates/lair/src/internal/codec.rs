@@ -183,40 +183,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_codec_encode_and_decode_tls_cert() {
+    fn it_codec_encode_and_decode() {
         let mut writer = CodecWriter::new(1024).unwrap();
         writer.write_pre_padding(16).unwrap();
+        writer.write_pre_padding(16).unwrap();
         writer.write_entry_type(EntryType::TlsCert).unwrap();
-        writer.write_u64(4).unwrap(); //cert len
-        writer.write_u64(4).unwrap(); //priv len
+        writer.write_entry_type(EntryType::SignEd25519).unwrap();
+        writer.write_u64(4).unwrap();
+        writer.write_u64(4).unwrap();
         writer.write_bytes(&[42, 42, 42, 42]).unwrap();
         writer.write_bytes(&[43, 43, 43, 43]).unwrap();
+        writer.write_pre_padding(16).unwrap();
+        writer.write_bytes(&[44, 44, 44, 44]).unwrap();
 
         let raw = writer.into_vec();
 
         let mut reader = CodecReader::new(&raw);
+        reader.read_pre_padding().unwrap();
         reader.read_pre_padding().unwrap();
         assert_eq!(EntryType::TlsCert, reader.read_entry_type().unwrap());
-        assert_eq!(4, reader.read_u64().unwrap());
-        assert_eq!(4, reader.read_u64().unwrap());
-        assert_eq!(&[42, 42, 42, 42], reader.read_bytes(4).unwrap());
-        assert_eq!(&[43, 43, 43, 43], reader.read_bytes(4).unwrap());
-    }
-
-    #[test]
-    fn it_codec_encode_and_decode_sign_ed25519() {
-        let mut writer = CodecWriter::new(1024).unwrap();
-        writer.write_pre_padding(64).unwrap();
-        writer.write_entry_type(EntryType::SignEd25519).unwrap();
-        writer.write_bytes(&[42, 42, 42, 42]).unwrap();
-        writer.write_bytes(&[43, 43, 43, 43]).unwrap();
-
-        let raw = writer.into_vec();
-
-        let mut reader = CodecReader::new(&raw);
-        reader.read_pre_padding().unwrap();
         assert_eq!(EntryType::SignEd25519, reader.read_entry_type().unwrap());
+        assert_eq!(4, reader.read_u64().unwrap());
+        assert_eq!(4, reader.read_u64().unwrap());
         assert_eq!(&[42, 42, 42, 42], reader.read_bytes(4).unwrap());
         assert_eq!(&[43, 43, 43, 43], reader.read_bytes(4).unwrap());
+        reader.read_pre_padding().unwrap();
+        assert_eq!(&[44, 44, 44, 44], reader.read_bytes(4).unwrap());
     }
 }

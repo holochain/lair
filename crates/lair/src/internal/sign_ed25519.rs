@@ -3,20 +3,9 @@
 
 use crate::*;
 
-/// Result data for sign_ed25519_keypair_new_from_entropy.
-#[derive(Debug)]
-pub struct SignEd25519KeypairResult {
-    /// Private key bytes.
-    /// @todo - once we're integrated with sodoken, make this a priv buffer.
-    pub priv_key: Arc<Vec<u8>>,
-
-    /// Public key bytes.
-    pub pub_key: Arc<Vec<u8>>,
-}
-
 /// Generate a new random ed25519 signature keypair.
 pub async fn sign_ed25519_keypair_new_from_entropy(
-) -> LairResult<SignEd25519KeypairResult> {
+) -> LairResult<entry::EntrySignEd25519> {
     rayon_exec(move || {
         let sys_rand = ring::rand::SystemRandom::new();
         let mut priv_key = vec![0; 32];
@@ -28,7 +17,7 @@ pub async fn sign_ed25519_keypair_new_from_entropy(
         let pub_key = ring::signature::KeyPair::public_key(&keypair)
             .as_ref()
             .to_vec();
-        Ok(SignEd25519KeypairResult {
+        Ok(entry::EntrySignEd25519 {
             priv_key: Arc::new(priv_key),
             pub_key: Arc::new(pub_key),
         })
@@ -75,7 +64,7 @@ mod tests {
     async fn it_can_sign_and_verify() {
         let msg = Arc::new(vec![0, 1, 2, 3]);
 
-        let SignEd25519KeypairResult { priv_key, pub_key } =
+        let entry::EntrySignEd25519 { priv_key, pub_key } =
             sign_ed25519_keypair_new_from_entropy().await.unwrap();
 
         let sig = sign_ed25519(priv_key.clone(), msg.clone()).await.unwrap();
