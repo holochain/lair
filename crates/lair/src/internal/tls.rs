@@ -44,10 +44,10 @@ pub async fn tls_cert_self_signed_new_from_entropy(
             .as_bytes()
             .to_vec();
         Ok(entry::EntryTlsCert {
-            sni,
-            priv_key_der,
-            cert_der,
-            cert_digest,
+            sni: Arc::new(sni),
+            priv_key_der: Arc::new(priv_key_der),
+            cert_der: Arc::new(cert_der),
+            cert_digest: Arc::new(cert_digest),
         })
     })
     .await

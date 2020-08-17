@@ -12,9 +12,17 @@ pub mod internal;
 
 pub mod entry;
 
+pub mod store;
+
 /// Main loop of lair executable.
 pub async fn execute_lair() -> LairResult<()> {
-    let config = Config::builder().build();
+    let mut config = Config::builder();
+
+    if let Some(lair_dir) = std::env::var_os("LAIR_DIR") {
+        config = config.set_root_path(lair_dir);
+    }
+
+    let config = config.build();
 
     let internal::pid_check::PidCheckResult { .. } =
         internal::pid_check::pid_check(&config)?;

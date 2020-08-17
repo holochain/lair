@@ -2,7 +2,7 @@
 
 use crate::*;
 
-const ENTRY_SIZE: usize = 1024;
+pub(crate) const ENTRY_SIZE: usize = 1024;
 
 /// Enum of lair entry types for decoding.
 #[derive(Debug, Clone)]
@@ -74,10 +74,10 @@ fn entry_decode_tls_cert(
     let cert_digest = reader.read_bytes(32)?.to_vec();
 
     Ok(EntryTlsCert {
-        sni,
-        priv_key_der,
-        cert_der,
-        cert_digest,
+        sni: Arc::new(sni),
+        priv_key_der: Arc::new(priv_key_der),
+        cert_der: Arc::new(cert_der),
+        cert_digest: Arc::new(cert_digest),
     })
 }
 
@@ -94,17 +94,17 @@ fn entry_decode_sign_ed25519(
 #[derive(Debug, Clone)]
 pub struct EntryTlsCert {
     /// The random sni that will be built into the self-signed certificate
-    pub sni: String,
+    pub sni: Arc<String>,
 
     /// Private key bytes.
     /// @todo - once we're integrated with sodoken, make this a priv buffer.
-    pub priv_key_der: Vec<u8>,
+    pub priv_key_der: Arc<Vec<u8>>,
 
     /// Certificate bytes.
-    pub cert_der: Vec<u8>,
+    pub cert_der: Arc<Vec<u8>>,
 
     /// 32 byte blake2b certificate digest.
-    pub cert_digest: Vec<u8>,
+    pub cert_digest: Arc<Vec<u8>>,
 }
 
 impl EntryTlsCert {
@@ -172,6 +172,16 @@ impl EntrySignEd25519 {
 
         Ok(writer.into_vec())
     }
+
+    /// Create a signature for given message with this entry's priv_key.
+    pub fn sign(
+        &self,
+        message: Arc<Vec<u8>>,
+    ) -> impl std::future::Future<Output = LairResult<Arc<Vec<u8>>>> + 'static
+    {
+        let priv_key = self.priv_key.clone();
+        internal::sign_ed25519::sign_ed25519(priv_key, message)
+    }
 }
 
 #[cfg(test)]
@@ -196,10 +206,10 @@ mod tests {
     #[test]
     fn it_can_encode_and_decode_tls_cert_entry() {
         let e = EntryTlsCert {
-            sni: "test".to_string(),
-            priv_key_der: vec![1, 2],
-            cert_der: vec![3, 4],
-            cert_digest: vec![0x42; 32],
+            sni: Arc::new("test".to_string()),
+            priv_key_der: Arc::new(vec![1, 2]),
+            cert_der: Arc::new(vec![3, 4]),
+            cert_digest: Arc::new(vec![0x42; 32]),
         };
         let d = LairEntry::from(e.clone()).encode().unwrap();
         let e2 = match LairEntry::decode(&d).unwrap() {
