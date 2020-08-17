@@ -147,7 +147,7 @@ async fn load_all_entries(
     }
 
     store_file
-        .seek(std::io::SeekFrom::Start(0))
+        .seek(std::io::SeekFrom::Start(entry::ENTRY_SIZE as u64))
         .await
         .map_err(LairError::other)?;
 

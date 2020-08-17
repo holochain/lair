@@ -172,6 +172,16 @@ impl EntrySignEd25519 {
 
         Ok(writer.into_vec())
     }
+
+    /// Create a signature for given message with this entry's priv_key.
+    pub fn sign(
+        &self,
+        message: Arc<Vec<u8>>,
+    ) -> impl std::future::Future<Output = LairResult<Arc<Vec<u8>>>> + 'static
+    {
+        let priv_key = self.priv_key.clone();
+        internal::sign_ed25519::sign_ed25519(priv_key, message)
+    }
 }
 
 #[cfg(test)]
