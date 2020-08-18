@@ -78,6 +78,12 @@ pub struct CodecWriter(std::io::Cursor<Vec<u8>>);
 
 impl CodecWriter {
     /// Create a new codec Writer.
+    pub fn new_zeroed(size: usize) -> LairResult<Self> {
+        let data = vec![0; size];
+        Ok(Self(std::io::Cursor::new(data)))
+    }
+
+    /// Create a new codec Writer.
     pub fn new(size: usize) -> LairResult<Self> {
         let mut data = vec![0; size];
         let sys_rand = ring::rand::SystemRandom::new();

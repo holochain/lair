@@ -19,6 +19,17 @@ pub enum TlsCertAlg {
     PkcsEd25519 = 0x00000200,
 }
 
+impl TlsCertAlg {
+    /// parse a u32 into a LairEntryType enum variant.
+    pub fn parse(d: u32) -> LairResult<Self> {
+        use TlsCertAlg::*;
+        Ok(match d {
+            x if x == PkcsEd25519 as u32 => PkcsEd25519,
+            _ => return Err("invalide tls cert alg".into()),
+        })
+    }
+}
+
 /// Configuration for Tls Certificate Generation.
 pub struct TlsCertOptions {
     /// Tls keypair algorithm to use.
@@ -66,6 +77,19 @@ pub enum LairEntryType {
 
     /// Ed25519 algorithm signature keypair.
     SignEd25519 = 0x00000200,
+}
+
+impl LairEntryType {
+    /// parse a u32 into a LairEntryType enum variant.
+    pub fn parse(d: u32) -> LairResult<Self> {
+        use LairEntryType::*;
+        Ok(match d {
+            x if x == Invalid as u32 => Invalid,
+            x if x == TlsCert as u32 => TlsCert,
+            x if x == SignEd25519 as u32 => SignEd25519,
+            _ => return Err("invalide lair entry type".into()),
+        })
+    }
 }
 
 ghost_actor::ghost_chan! {

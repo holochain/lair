@@ -166,11 +166,101 @@ enum LairWireType {
     ToCliSignEd25519SignByPubKeyResponse = 0x00000241,
 }
 
+impl LairWireType {
+    pub fn parse(d: u32) -> LairResult<Self> {
+        use LairWireType::*;
+        Ok(match d {
+            x if x == ToCliRequestUnlockPassphrase as u32 => {
+                ToCliRequestUnlockPassphrase
+            }
+            x if x == ToLairRequestUnlockPassphraseResponse as u32 => {
+                ToLairRequestUnlockPassphraseResponse
+            }
+            x if x == ToLairLairGetLastEntryIndex as u32 => {
+                ToLairLairGetLastEntryIndex
+            }
+            x if x == ToCliLairGetLastEntryIndexResponse as u32 => {
+                ToCliLairGetLastEntryIndexResponse
+            }
+            x if x == ToLairLairGetEntryType as u32 => ToLairLairGetEntryType,
+            x if x == ToCliLairGetEntryTypeResponse as u32 => {
+                ToCliLairGetEntryTypeResponse
+            }
+            x if x == ToLairTlsCertNewSelfSignedFromEntropy as u32 => {
+                ToLairTlsCertNewSelfSignedFromEntropy
+            }
+            x if x == ToCliTlsCertNewSelfSignedFromEntropyResponse as u32 => {
+                ToCliTlsCertNewSelfSignedFromEntropyResponse
+            }
+            x if x == ToLairTlsCertGet as u32 => ToLairTlsCertGet,
+            x if x == ToCliTlsCertGetResponse as u32 => ToCliTlsCertGetResponse,
+            x if x == ToLairTlsCertGetCertByIndex as u32 => {
+                ToLairTlsCertGetCertByIndex
+            }
+            x if x == ToCliTlsCertGetCertByIndexResponse as u32 => {
+                ToCliTlsCertGetCertByIndexResponse
+            }
+            x if x == ToLairTlsCertGetCertByDigest as u32 => {
+                ToLairTlsCertGetCertByDigest
+            }
+            x if x == ToCliTlsCertGetCertByDigestResponse as u32 => {
+                ToCliTlsCertGetCertByDigestResponse
+            }
+            x if x == ToLairTlsCertGetCertBySni as u32 => {
+                ToLairTlsCertGetCertBySni
+            }
+            x if x == ToCliTlsCertGetCertBySniResponse as u32 => {
+                ToCliTlsCertGetCertBySniResponse
+            }
+            x if x == ToLairTlsCertGetPrivKeyByIndex as u32 => {
+                ToLairTlsCertGetPrivKeyByIndex
+            }
+            x if x == ToCliTlsCertGetPrivKeyByIndexResponse as u32 => {
+                ToCliTlsCertGetPrivKeyByIndexResponse
+            }
+            x if x == ToLairTlsCertGetPrivKeyByDigest as u32 => {
+                ToLairTlsCertGetPrivKeyByDigest
+            }
+            x if x == ToCliTlsCertGetPrivKeyByDigestResonse as u32 => {
+                ToCliTlsCertGetPrivKeyByDigestResonse
+            }
+            x if x == ToLairTlsCertGetPrivKeyBySni as u32 => {
+                ToLairTlsCertGetPrivKeyBySni
+            }
+            x if x == ToCliTlsCertGetPrivKeyBySniResponse as u32 => {
+                ToCliTlsCertGetPrivKeyBySniResponse
+            }
+            x if x == ToLairSignEd25519NewFromEntropy as u32 => {
+                ToLairSignEd25519NewFromEntropy
+            }
+            x if x == ToCliSignEd25519NewFromEntropyResponse as u32 => {
+                ToCliSignEd25519NewFromEntropyResponse
+            }
+            x if x == ToLairSignEd25519Get as u32 => ToLairSignEd25519Get,
+            x if x == ToCliSignEd25519GetResponse as u32 => {
+                ToCliSignEd25519GetResponse
+            }
+            x if x == ToLairSignEd25519SignByIndex as u32 => {
+                ToLairSignEd25519SignByIndex
+            }
+            x if x == ToCliSignEd25519SignByIndexResponse as u32 => {
+                ToCliSignEd25519SignByIndexResponse
+            }
+            x if x == ToLairSignEd25519SignByPubKey as u32 => {
+                ToLairSignEd25519SignByPubKey
+            }
+            x if x == ToCliSignEd25519SignByPubKeyResponse as u32 => {
+                ToCliSignEd25519SignByPubKeyResponse
+            }
+            _ => return Err("invalide wire type".into()),
+        })
+    }
+}
+
 impl LairWire {
     /// Encode this variant into lair wire protocol binary data.
     pub fn encode(&self) -> LairResult<Vec<u8>> {
         let mut writer = codec::CodecWriter::new(256)?;
-        writer.write_pre_padding(16)?;
         writer.write_u32(256)?;
 
         use LairWire::*;
@@ -296,7 +386,6 @@ impl LairWire {
                 }
                 // certs are kinda big
                 writer = codec::CodecWriter::new(1024)?;
-                writer.write_pre_padding(32)?;
                 writer.write_u32(1024)?;
                 writer.write_u32(
                     LairWireType::ToCliTlsCertGetCertByIndexResponse as u32,
@@ -321,7 +410,6 @@ impl LairWire {
                 }
                 // certs are kinda big
                 writer = codec::CodecWriter::new(1024)?;
-                writer.write_pre_padding(32)?;
                 writer.write_u32(1024)?;
                 writer.write_u32(
                     LairWireType::ToCliTlsCertGetCertByDigestResponse as u32,
@@ -348,7 +436,6 @@ impl LairWire {
                 }
                 // certs are kinda big
                 writer = codec::CodecWriter::new(1024)?;
-                writer.write_pre_padding(32)?;
                 writer.write_u32(1024)?;
                 writer.write_u32(
                     LairWireType::ToCliTlsCertGetCertBySniResponse as u32,
@@ -476,15 +563,13 @@ impl LairWire {
                 message,
             } => {
                 // outgoing sig requests just need to be the right size...
-                let size = 16 // pre padding
-                    + 4 // msg len
+                let size = 4 // msg len
                     + 4 // msg type
                     + 8 // msg id
                     + 4 // keystore index
                     + 8 // message length
                     + message.len(); // message content
-                writer = codec::CodecWriter::new(size)?;
-                writer.write_pre_padding(16)?;
+                writer = codec::CodecWriter::new_zeroed(size)?;
                 writer.write_u32(size as u32)?;
                 writer.write_u32(
                     LairWireType::ToLairSignEd25519SignByIndex as u32,
@@ -507,15 +592,13 @@ impl LairWire {
                 message,
             } => {
                 // outgoing sig requests just need to be the right size...
-                let size = 16 // pre padding
-                    + 4 // msg len
+                let size = 4 // msg len
                     + 4 // msg type
                     + 8 // msg id
                     + 32 // pub key
                     + 8 // message length
                     + message.len(); // message content
-                writer = codec::CodecWriter::new(size)?;
-                writer.write_pre_padding(16)?;
+                writer = codec::CodecWriter::new_zeroed(size)?;
                 writer.write_u32(size as u32)?;
                 writer.write_u32(
                     LairWireType::ToLairSignEd25519SignByPubKey as u32,
@@ -535,5 +618,278 @@ impl LairWire {
         }
 
         Ok(writer.into_vec())
+    }
+
+    /// Returns true if we have enough bytes to decode.
+    pub fn peek_size_ok(data: &[u8]) -> bool {
+        if data.len() < 4 {
+            return false;
+        }
+        use byteorder::ReadBytesExt;
+        let size = match (&data[0..4]).read_u32::<byteorder::LittleEndian>() {
+            Ok(size) => size,
+            Err(_) => return false,
+        };
+        data.len() >= size as usize
+    }
+
+    /// Decode lair wire protocol binary data into enum variant.
+    pub fn decode(data: &[u8]) -> LairResult<Self> {
+        if !Self::peek_size_ok(data) {
+            return Err("not enough data to decode".into());
+        }
+        let mut reader = codec::CodecReader::new(data);
+        let _size = reader.read_u32()?;
+
+        let wire_type = LairWireType::parse(reader.read_u32()?)?;
+
+        use LairWire::*;
+
+        Ok(match wire_type {
+            LairWireType::ToCliRequestUnlockPassphrase => {
+                let msg_id = reader.read_u64()?;
+                ToCliRequestUnlockPassphrase { msg_id }
+            }
+            LairWireType::ToLairRequestUnlockPassphraseResponse => {
+                let msg_id = reader.read_u64()?;
+                let pp_len = reader.read_u64()?;
+                let passphrase =
+                    String::from_utf8_lossy(reader.read_bytes(pp_len)?)
+                        .to_string();
+                ToLairRequestUnlockPassphraseResponse { msg_id, passphrase }
+            }
+            LairWireType::ToLairLairGetLastEntryIndex => {
+                let msg_id = reader.read_u64()?;
+                ToLairLairGetLastEntryIndex { msg_id }
+            }
+            LairWireType::ToCliLairGetLastEntryIndexResponse => {
+                let msg_id = reader.read_u64()?;
+                let last_keystore_index = reader.read_u32()?;
+                ToCliLairGetLastEntryIndexResponse {
+                    msg_id,
+                    last_keystore_index,
+                }
+            }
+            LairWireType::ToLairLairGetEntryType => {
+                let msg_id = reader.read_u64()?;
+                let keystore_index = reader.read_u32()?;
+                ToLairLairGetEntryType {
+                    msg_id,
+                    keystore_index,
+                }
+            }
+            LairWireType::ToCliLairGetEntryTypeResponse => {
+                let msg_id = reader.read_u64()?;
+                let lair_entry_type = reader.read_u32()?;
+                let lair_entry_type = LairEntryType::parse(lair_entry_type)?;
+                ToCliLairGetEntryTypeResponse {
+                    msg_id,
+                    lair_entry_type,
+                }
+            }
+            LairWireType::ToLairTlsCertNewSelfSignedFromEntropy => {
+                let msg_id = reader.read_u64()?;
+                let cert_alg = reader.read_u32()?;
+                let cert_alg = TlsCertAlg::parse(cert_alg)?;
+                ToLairTlsCertNewSelfSignedFromEntropy { msg_id, cert_alg }
+            }
+            LairWireType::ToCliTlsCertNewSelfSignedFromEntropyResponse => {
+                let msg_id = reader.read_u64()?;
+                let keystore_index = reader.read_u32()?;
+                let cert_digest = Arc::new(reader.read_bytes(32)?.to_vec());
+                let cert_sni_len = reader.read_u64()?;
+                let cert_sni = Arc::new(
+                    String::from_utf8_lossy(reader.read_bytes(cert_sni_len)?)
+                        .to_string(),
+                );
+                ToCliTlsCertNewSelfSignedFromEntropyResponse {
+                    msg_id,
+                    keystore_index,
+                    cert_sni,
+                    cert_digest,
+                }
+            }
+            LairWireType::ToLairTlsCertGet => {
+                let msg_id = reader.read_u64()?;
+                let keystore_index = reader.read_u32()?;
+                ToLairTlsCertGet {
+                    msg_id,
+                    keystore_index,
+                }
+            }
+            LairWireType::ToCliTlsCertGetResponse => {
+                let msg_id = reader.read_u64()?;
+                let cert_digest = Arc::new(reader.read_bytes(32)?.to_vec());
+                let cert_sni_len = reader.read_u64()?;
+                let cert_sni = Arc::new(
+                    String::from_utf8_lossy(reader.read_bytes(cert_sni_len)?)
+                        .to_string(),
+                );
+                ToCliTlsCertGetResponse {
+                    msg_id,
+                    cert_sni,
+                    cert_digest,
+                }
+            }
+            LairWireType::ToLairTlsCertGetCertByIndex => {
+                let msg_id = reader.read_u64()?;
+                let keystore_index = reader.read_u32()?;
+                ToLairTlsCertGetCertByIndex {
+                    msg_id,
+                    keystore_index,
+                }
+            }
+            LairWireType::ToCliTlsCertGetCertByIndexResponse => {
+                let msg_id = reader.read_u64()?;
+                let cert_len = reader.read_u64()?;
+                let cert = Arc::new(reader.read_bytes(cert_len)?.to_vec());
+                ToCliTlsCertGetCertByIndexResponse { msg_id, cert }
+            }
+            LairWireType::ToLairTlsCertGetCertByDigest => {
+                let msg_id = reader.read_u64()?;
+                let cert_digest = Arc::new(reader.read_bytes(32)?.to_vec());
+                ToLairTlsCertGetCertByDigest {
+                    msg_id,
+                    cert_digest,
+                }
+            }
+            LairWireType::ToCliTlsCertGetCertByDigestResponse => {
+                let msg_id = reader.read_u64()?;
+                let cert_len = reader.read_u64()?;
+                let cert = Arc::new(reader.read_bytes(cert_len)?.to_vec());
+                ToCliTlsCertGetCertByDigestResponse { msg_id, cert }
+            }
+            LairWireType::ToLairTlsCertGetCertBySni => {
+                let msg_id = reader.read_u64()?;
+                let cert_sni_len = reader.read_u64()?;
+                let cert_sni = Arc::new(
+                    String::from_utf8_lossy(reader.read_bytes(cert_sni_len)?)
+                        .to_string(),
+                );
+                ToLairTlsCertGetCertBySni { msg_id, cert_sni }
+            }
+            LairWireType::ToCliTlsCertGetCertBySniResponse => {
+                let msg_id = reader.read_u64()?;
+                let cert_len = reader.read_u64()?;
+                let cert = Arc::new(reader.read_bytes(cert_len)?.to_vec());
+                ToCliTlsCertGetCertBySniResponse { msg_id, cert }
+            }
+            LairWireType::ToLairTlsCertGetPrivKeyByIndex => {
+                let msg_id = reader.read_u64()?;
+                let keystore_index = reader.read_u32()?;
+                ToLairTlsCertGetPrivKeyByIndex {
+                    msg_id,
+                    keystore_index,
+                }
+            }
+            LairWireType::ToCliTlsCertGetPrivKeyByIndexResponse => {
+                let msg_id = reader.read_u64()?;
+                let cert_priv_key_len = reader.read_u64()?;
+                let cert_priv_key =
+                    Arc::new(reader.read_bytes(cert_priv_key_len)?.to_vec());
+                ToCliTlsCertGetPrivKeyByIndexResponse {
+                    msg_id,
+                    cert_priv_key,
+                }
+            }
+            LairWireType::ToLairTlsCertGetPrivKeyByDigest => {
+                let msg_id = reader.read_u64()?;
+                let cert_digest = Arc::new(reader.read_bytes(32)?.to_vec());
+                ToLairTlsCertGetPrivKeyByDigest {
+                    msg_id,
+                    cert_digest,
+                }
+            }
+            LairWireType::ToCliTlsCertGetPrivKeyByDigestResonse => {
+                let msg_id = reader.read_u64()?;
+                let cert_priv_key_len = reader.read_u64()?;
+                let cert_priv_key =
+                    Arc::new(reader.read_bytes(cert_priv_key_len)?.to_vec());
+                ToCliTlsCertGetPrivKeyByDigestResonse {
+                    msg_id,
+                    cert_priv_key,
+                }
+            }
+            LairWireType::ToLairTlsCertGetPrivKeyBySni => {
+                let msg_id = reader.read_u64()?;
+                let cert_sni_len = reader.read_u64()?;
+                let cert_sni = Arc::new(
+                    String::from_utf8_lossy(reader.read_bytes(cert_sni_len)?)
+                        .to_string(),
+                );
+                ToLairTlsCertGetPrivKeyBySni { msg_id, cert_sni }
+            }
+            LairWireType::ToCliTlsCertGetPrivKeyBySniResponse => {
+                let msg_id = reader.read_u64()?;
+                let cert_priv_key_len = reader.read_u64()?;
+                let cert_priv_key =
+                    Arc::new(reader.read_bytes(cert_priv_key_len)?.to_vec());
+                ToCliTlsCertGetPrivKeyBySniResponse {
+                    msg_id,
+                    cert_priv_key,
+                }
+            }
+            LairWireType::ToLairSignEd25519NewFromEntropy => {
+                let msg_id = reader.read_u64()?;
+                ToLairSignEd25519NewFromEntropy { msg_id }
+            }
+            LairWireType::ToCliSignEd25519NewFromEntropyResponse => {
+                let msg_id = reader.read_u64()?;
+                let keystore_index = reader.read_u32()?;
+                let pub_key = Arc::new(reader.read_bytes(32)?.to_vec());
+                ToCliSignEd25519NewFromEntropyResponse {
+                    msg_id,
+                    keystore_index,
+                    pub_key,
+                }
+            }
+            LairWireType::ToLairSignEd25519Get => {
+                let msg_id = reader.read_u64()?;
+                let keystore_index = reader.read_u32()?;
+                ToLairSignEd25519Get {
+                    msg_id,
+                    keystore_index,
+                }
+            }
+            LairWireType::ToCliSignEd25519GetResponse => {
+                let msg_id = reader.read_u64()?;
+                let pub_key = Arc::new(reader.read_bytes(32)?.to_vec());
+                ToCliSignEd25519GetResponse { msg_id, pub_key }
+            }
+            LairWireType::ToLairSignEd25519SignByIndex => {
+                let msg_id = reader.read_u64()?;
+                let keystore_index = reader.read_u32()?;
+                let message_len = reader.read_u64()?;
+                let message =
+                    Arc::new(reader.read_bytes(message_len)?.to_vec());
+                ToLairSignEd25519SignByIndex {
+                    msg_id,
+                    keystore_index,
+                    message,
+                }
+            }
+            LairWireType::ToCliSignEd25519SignByIndexResponse => {
+                let msg_id = reader.read_u64()?;
+                let signature = Arc::new(reader.read_bytes(64)?.to_vec());
+                ToCliSignEd25519SignByIndexResponse { msg_id, signature }
+            }
+            LairWireType::ToLairSignEd25519SignByPubKey => {
+                let msg_id = reader.read_u64()?;
+                let pub_key = Arc::new(reader.read_bytes(32)?.to_vec());
+                let message_len = reader.read_u64()?;
+                let message =
+                    Arc::new(reader.read_bytes(message_len)?.to_vec());
+                ToLairSignEd25519SignByPubKey {
+                    msg_id,
+                    pub_key,
+                    message,
+                }
+            }
+            LairWireType::ToCliSignEd25519SignByPubKeyResponse => {
+                let msg_id = reader.read_u64()?;
+                let signature = Arc::new(reader.read_bytes(64)?.to_vec());
+                ToCliSignEd25519SignByPubKeyResponse { msg_id, signature }
+            }
+        })
     }
 }
