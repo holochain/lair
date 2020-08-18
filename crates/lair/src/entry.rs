@@ -2,6 +2,8 @@
 
 use crate::*;
 
+use lair_api::internal::codec;
+
 pub(crate) const ENTRY_SIZE: usize = 1024;
 
 /// Enum of lair entry types for decoding.
@@ -32,17 +34,17 @@ impl LairEntry {
     ///         otherwise we would first have to load priv keys into unprotected
     ///         memory.
     pub fn decode(data: &[u8]) -> LairResult<LairEntry> {
-        let mut reader = internal::codec::CodecReader::new(data);
+        let mut reader = codec::CodecReader::new(data);
 
         reader.read_pre_padding()?;
 
         let entry_type = reader.read_entry_type()?;
 
         Ok(match entry_type {
-            internal::codec::EntryType::TlsCert => {
+            codec::EntryType::TlsCert => {
                 LairEntry::TlsCert(entry_decode_tls_cert(reader)?)
             }
-            internal::codec::EntryType::SignEd25519 => {
+            codec::EntryType::SignEd25519 => {
                 LairEntry::SignEd25519(entry_decode_sign_ed25519(reader)?)
             }
         })
@@ -60,7 +62,7 @@ impl LairEntry {
 }
 
 fn entry_decode_tls_cert(
-    mut reader: internal::codec::CodecReader<'_>,
+    mut reader: codec::CodecReader<'_>,
 ) -> LairResult<EntryTlsCert> {
     let sni_len = reader.read_u64()?;
     let sni = String::from_utf8_lossy(reader.read_bytes(sni_len)?).to_string();
@@ -82,7 +84,7 @@ fn entry_decode_tls_cert(
 }
 
 fn entry_decode_sign_ed25519(
-    mut reader: internal::codec::CodecReader<'_>,
+    mut reader: codec::CodecReader<'_>,
 ) -> LairResult<EntrySignEd25519> {
     let priv_key = Arc::new(reader.read_bytes(32)?.to_vec());
     let pub_key = Arc::new(reader.read_bytes(32)?.to_vec());
@@ -112,13 +114,13 @@ impl EntryTlsCert {
     /// @todo - once we're integrated with sodoken, this should encrypt too
     ///         otherwise we're writing our priv key to unprotected memory.
     pub fn encode(&self) -> LairResult<Vec<u8>> {
-        let mut writer = internal::codec::CodecWriter::new(ENTRY_SIZE)?;
+        let mut writer = codec::CodecWriter::new(ENTRY_SIZE)?;
 
         // pre padding
         writer.write_pre_padding(16)?;
 
         // tls cert entry type
-        writer.write_entry_type(internal::codec::EntryType::TlsCert)?;
+        writer.write_entry_type(codec::EntryType::TlsCert)?;
 
         // write sni
         let sni_bytes = self.sni.as_bytes();
@@ -156,13 +158,13 @@ impl EntrySignEd25519 {
     /// @todo - once we're integrated with sodoken, this should encrypt too
     ///         otherwise we're writing our priv key to unprotected memory.
     pub fn encode(&self) -> LairResult<Vec<u8>> {
-        let mut writer = internal::codec::CodecWriter::new(ENTRY_SIZE)?;
+        let mut writer = codec::CodecWriter::new(ENTRY_SIZE)?;
 
         // pre padding
         writer.write_pre_padding(64)?;
 
         // sign ed25519 entry type
-        writer.write_entry_type(internal::codec::EntryType::SignEd25519)?;
+        writer.write_entry_type(codec::EntryType::SignEd25519)?;
 
         // write priv_key (always 32 bytes)
         writer.write_bytes(&self.priv_key[0..32])?;
