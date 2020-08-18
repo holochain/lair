@@ -53,7 +53,12 @@ impl<'lt> CodecReader<'lt> {
         }
     }
 
-    /// Read a u64 (often a length value) element.
+    /// Read a u32 element.
+    pub fn read_u32(&mut self) -> LairResult<u32> {
+        read_u32(&mut self.0)
+    }
+
+    /// Read a u64 element.
     pub fn read_u64(&mut self) -> LairResult<u64> {
         read_u64(&mut self.0)
     }
@@ -118,7 +123,13 @@ impl CodecWriter {
         Ok(())
     }
 
-    /// Write a u64 (often a length value) element.
+    /// Write a u32 element.
+    pub fn write_u32(&mut self, val: u32) -> LairResult<()> {
+        write_u32(&mut self.0, val)?;
+        Ok(())
+    }
+
+    /// Write a u64 element.
     pub fn write_u64(&mut self, val: u64) -> LairResult<()> {
         write_u64(&mut self.0, val)?;
         Ok(())

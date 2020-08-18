@@ -12,9 +12,11 @@ ghost_actor::ghost_chan! {
 }
 
 /// Tls keypair algorithm to use.
+#[repr(u32)]
+#[derive(Clone, Copy)]
 pub enum TlsCertAlg {
     /// Ed25519 Curve.
-    PkcsEd25519,
+    PkcsEd25519 = 0x00000200,
 }
 
 /// Configuration for Tls Certificate Generation.
@@ -52,29 +54,54 @@ pub type SignEd25519PubKey = Arc<Vec<u8>>;
 /// The 64 byte detached ed25519 signature data.
 pub type SignEd25519Signature = Arc<Vec<u8>>;
 
+/// The entry type for a given entry.
+#[repr(u32)]
+#[derive(Clone, Copy)]
+pub enum LairEntryType {
+    /// This entry index was deleted or corrupted.
+    Invalid = 0x00000000,
+
+    /// Tls Certificate & private key.
+    TlsCert = 0x00000100,
+
+    /// Ed25519 algorithm signature keypair.
+    SignEd25519 = 0x00000200,
+}
+
 ghost_actor::ghost_chan! {
     /// Lair Client Actor Api.
     pub chan LairClientApi<LairError> {
+        /// Get the highest entry index.
+        /// Note, some entries my be stubs / erased values.
+        fn lair_get_last_entry_index() -> KeystoreIndex;
+
+        /// Get the entry type for a given index.
+        fn lair_get_entry_type(
+            keystore_index: KeystoreIndex,
+        ) -> LairEntryType;
+
         /// Create a new self-signed tls certificate.
         fn tls_cert_new_self_signed_from_entropy(
             options: TlsCertOptions,
         ) -> (KeystoreIndex, CertSni, CertDigest);
 
-        /// List tls cert keystore indexes / digests.
-        fn tls_cert_list() -> Vec<(KeystoreIndex, CertSni, CertDigest)>;
+        /// Get tls cert info by keystore index.
+        fn tls_cert_get(
+            keystore_index: KeystoreIndex,
+        ) -> (CertSni, CertDigest);
 
         /// Fetch the certificate by entry index.
-        fn tls_cert_get_by_index(
+        fn tls_cert_get_cert_by_index(
             keystore_index: KeystoreIndex,
         ) -> Cert;
 
         /// Fetch the certificate by digest.
-        fn tls_cert_get_by_digest(
+        fn tls_cert_get_cert_by_digest(
             cert_digest: CertDigest,
         ) -> Cert;
 
         /// Fetch the certificate by sni.
-        fn tls_cert_get_by_sni(
+        fn tls_cert_get_cert_by_sni(
             sni: CertSni,
         ) -> Cert;
 
@@ -94,10 +121,13 @@ ghost_actor::ghost_chan! {
         ) -> CertPrivKey;
 
         /// Create a new signature ed25519 keypair from entropy.
-        fn sign_ed25519_new_from_entropy() -> (KeystoreIndex, SignEd25519PubKey);
+        fn sign_ed25519_new_from_entropy(
+        ) -> (KeystoreIndex, SignEd25519PubKey);
 
-        /// List sign ed25519 keystore indexes / pubkeys.
-        fn sign_ed25519_list() -> Vec<(KeystoreIndex, SignEd25519PubKey)>;
+        /// Get ed25519 keypair info by keystore index.
+        fn sign_ed25519_get(
+            keystore_index: KeystoreIndex,
+        ) -> SignEd25519PubKey;
 
         /// Generate a signature for message by keystore index.
         fn sign_ed25519_sign_by_index(
