@@ -11,12 +11,22 @@ ghost_actor::ghost_chan! {
     }
 }
 
+/// Lair Client Event Receiver Type.
+pub type LairClientEventReceiver =
+    futures::channel::mpsc::Receiver<LairClientEvent>;
+
 /// Tls keypair algorithm to use.
 #[repr(u32)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum TlsCertAlg {
     /// Ed25519 Curve.
     PkcsEd25519 = 0x00000200,
+}
+
+impl Default for TlsCertAlg {
+    fn default() -> Self {
+        Self::PkcsEd25519
+    }
 }
 
 impl TlsCertAlg {
@@ -67,7 +77,7 @@ pub type SignEd25519Signature = Arc<Vec<u8>>;
 
 /// The entry type for a given entry.
 #[repr(u32)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum LairEntryType {
     /// This entry index was deleted or corrupted.
     Invalid = 0x00000000,
@@ -77,6 +87,12 @@ pub enum LairEntryType {
 
     /// Ed25519 algorithm signature keypair.
     SignEd25519 = 0x00000200,
+}
+
+impl Default for LairEntryType {
+    fn default() -> Self {
+        Self::Invalid
+    }
 }
 
 impl LairEntryType {
@@ -166,3 +182,6 @@ ghost_actor::ghost_chan! {
         ) -> SignEd25519Signature;
     }
 }
+
+/// Lair Client Sender Type.
+pub type LairClientSender = futures::channel::mpsc::Sender<LairClientApi>;

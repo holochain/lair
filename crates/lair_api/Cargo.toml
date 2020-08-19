@@ -13,6 +13,8 @@ edition = "2018"
 [dependencies]
 byteorder = "1"
 directories = "3"
+futures = "0.3"
 ghost_actor = "0.2.0"
 ring = "0.16"
 thiserror = "1"
+tokio = { version = "0.2", features = [ "full" ] }
