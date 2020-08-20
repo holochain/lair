@@ -6,4 +6,4 @@ members = [
 ]
 
 [patch.crates-io]
-tokio = { git = "https://github.com/tokio-rs/tokio.git", branch = "master" }
+tokio = { git = "https://github.com/tokio-rs/tokio.git", branch = "v0.2.x" }
