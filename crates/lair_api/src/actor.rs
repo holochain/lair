@@ -1,6 +1,7 @@
 //! Types associated with Lair client actor.
 
 use crate::*;
+use derive_more::*;
 
 ghost_actor::ghost_chan! {
     /// "Event" types emitted by Lair Client Actor Api.
@@ -55,25 +56,93 @@ impl Default for TlsCertOptions {
 }
 
 /// Keystore index type.
-pub type KeystoreIndex = u32;
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Display,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Deref,
+    From,
+    Into,
+)]
+pub struct KeystoreIndex(pub u32);
 
 /// Der encoded Tls Certificate bytes.
-pub type Cert = Arc<Vec<u8>>;
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
+)]
+pub struct Cert(pub Arc<Vec<u8>>);
+
+impl From<Vec<u8>> for Cert {
+    fn from(d: Vec<u8>) -> Self {
+        Self(Arc::new(d))
+    }
+}
 
 /// Der encoded pkcs #8 Tls Certificate private key bytes.
-pub type CertPrivKey = Arc<Vec<u8>>;
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
+)]
+pub struct CertPrivKey(pub Arc<Vec<u8>>);
+
+impl From<Vec<u8>> for CertPrivKey {
+    fn from(d: Vec<u8>) -> Self {
+        Self(Arc::new(d))
+    }
+}
 
 /// Sni encoded in given Tls Certificate.
-pub type CertSni = Arc<String>;
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
+)]
+pub struct CertSni(pub Arc<String>);
+
+impl From<String> for CertSni {
+    fn from(s: String) -> Self {
+        Self(Arc::new(s))
+    }
+}
 
 /// The 32 byte blake2b digest of given Tls Certificate.
-pub type CertDigest = Arc<Vec<u8>>;
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
+)]
+pub struct CertDigest(pub Arc<Vec<u8>>);
+
+impl From<Vec<u8>> for CertDigest {
+    fn from(d: Vec<u8>) -> Self {
+        Self(Arc::new(d))
+    }
+}
 
 /// The 32 byte signature ed25519 public key.
-pub type SignEd25519PubKey = Arc<Vec<u8>>;
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
+)]
+pub struct SignEd25519PubKey(pub Arc<Vec<u8>>);
+
+impl From<Vec<u8>> for SignEd25519PubKey {
+    fn from(d: Vec<u8>) -> Self {
+        Self(Arc::new(d))
+    }
+}
 
 /// The 64 byte detached ed25519 signature data.
-pub type SignEd25519Signature = Arc<Vec<u8>>;
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
+)]
+pub struct SignEd25519Signature(pub Arc<Vec<u8>>);
+
+impl From<Vec<u8>> for SignEd25519Signature {
+    fn from(d: Vec<u8>) -> Self {
+        Self(Arc::new(d))
+    }
+}
 
 /// The entry type for a given entry.
 #[repr(u32)]

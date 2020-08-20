@@ -4,7 +4,7 @@ use crate::{actor::*, internal::codec, *};
 
 macro_rules! default_encode_setup {
     ($msg_id:ident, $wire_type:ident) => {{
-        let mut writer = codec::CodecWriter::new(256)?;
+        let mut writer = codec::CodecWriter::new_zeroed(256)?;
         writer.write_u32(256)?;
         writer.write_u32($wire_type)?;
         writer.write_u64(*$msg_id)?;
@@ -49,28 +49,28 @@ macro_rules! wire_type_meta_macro {
                 last_keystore_index: KeystoreIndex,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
-                writer.write_u32(*last_keystore_index)?;
+                writer.write_u32(**last_keystore_index)?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
                 let last_keystore_index = reader.read_u32()?;
                 LairWire::ToCliLairGetLastEntryIndexResponse {
                     msg_id,
-                    last_keystore_index,
+                    last_keystore_index: last_keystore_index.into(),
                 }
             },
             ToLairLairGetEntryType 0x00000020 {
                 keystore_index: KeystoreIndex,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
-                writer.write_u32(*keystore_index)?;
+                writer.write_u32(**keystore_index)?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
                 let keystore_index = reader.read_u32()?;
                 LairWire::ToLairLairGetEntryType {
                     msg_id,
-                    keystore_index,
+                    keystore_index: keystore_index.into(),
                 }
             },
             ToCliLairGetEntryTypeResponse 0x00000021 {
@@ -107,34 +107,34 @@ macro_rules! wire_type_meta_macro {
                 cert_digest: CertDigest,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
-                writer.write_u32(*keystore_index)?;
+                writer.write_u32(**keystore_index)?;
                 writer.write_str(cert_sni, 128)?;
-                writer.write_bytes(cert_digest)?;
+                writer.write_bytes_exact(cert_digest, 32)?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
                 let keystore_index = reader.read_u32()?;
-                let cert_sni = Arc::new(reader.read_str()?);
-                let cert_digest = Arc::new(reader.read_bytes(32)?.to_vec());
+                let cert_sni = reader.read_str()?;
+                let cert_digest = reader.read_bytes(32)?.to_vec();
                 LairWire::ToCliTlsCertNewSelfSignedFromEntropyResponse {
                     msg_id,
-                    keystore_index,
-                    cert_sni,
-                    cert_digest,
+                    keystore_index: keystore_index.into(),
+                    cert_sni: cert_sni.into(),
+                    cert_digest: cert_digest.into(),
                 }
             },
             ToLairTlsCertGet 0x00000120 {
                 keystore_index: KeystoreIndex,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
-                writer.write_u32(*keystore_index)?;
+                writer.write_u32(**keystore_index)?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
                 let keystore_index = reader.read_u32()?;
                 LairWire::ToLairTlsCertGet {
                     msg_id,
-                    keystore_index,
+                    keystore_index: keystore_index.into(),
                 }
             },
             ToCliTlsCertGetResponse 0x00000121 {
@@ -143,30 +143,30 @@ macro_rules! wire_type_meta_macro {
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
                 writer.write_str(cert_sni, 128)?;
-                writer.write_bytes(cert_digest)?;
+                writer.write_bytes_exact(cert_digest, 32)?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let cert_sni = Arc::new(reader.read_str()?);
-                let cert_digest = Arc::new(reader.read_bytes(32)?.to_vec());
+                let cert_sni = reader.read_str()?;
+                let cert_digest = reader.read_bytes(32)?.to_vec();
                 LairWire::ToCliTlsCertGetResponse {
                     msg_id,
-                    cert_sni,
-                    cert_digest,
+                    cert_sni: cert_sni.into(),
+                    cert_digest: cert_digest.into(),
                 }
             },
             ToLairTlsCertGetCertByIndex 0x00000130 {
                 keystore_index: KeystoreIndex,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
-                writer.write_u32(*keystore_index)?;
+                writer.write_u32(**keystore_index)?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
                 let keystore_index = reader.read_u32()?;
                 LairWire::ToLairTlsCertGetCertByIndex {
                     msg_id,
-                    keystore_index,
+                    keystore_index: keystore_index.into(),
                 }
             },
             ToCliTlsCertGetCertByIndexResponse 0x00000131 {
@@ -180,24 +180,24 @@ macro_rules! wire_type_meta_macro {
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let cert = Arc::new(reader.read_sized_bytes()?);
+                let cert = reader.read_sized_bytes()?;
                 LairWire::ToCliTlsCertGetCertByIndexResponse {
                     msg_id,
-                    cert,
+                    cert: cert.into(),
                 }
             },
             ToLairTlsCertGetCertByDigest 0x00000140 {
                 cert_digest: CertDigest,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
-                writer.write_bytes(cert_digest)?;
+                writer.write_bytes_exact(cert_digest, 32)?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let cert_digest = Arc::new(reader.read_bytes(32)?.to_vec());
+                let cert_digest = reader.read_bytes(32)?.to_vec();
                 LairWire::ToLairTlsCertGetCertByDigest {
                     msg_id,
-                    cert_digest,
+                    cert_digest: cert_digest.into(),
                 }
             },
             ToCliTlsCertGetCertByDigestResponse 0x00000141 {
@@ -211,10 +211,10 @@ macro_rules! wire_type_meta_macro {
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let cert = Arc::new(reader.read_sized_bytes()?);
+                let cert = reader.read_sized_bytes()?;
                 LairWire::ToCliTlsCertGetCertByDigestResponse {
                     msg_id,
-                    cert,
+                    cert: cert.into(),
                 }
             },
             ToLairTlsCertGetCertBySni 0x00000150 {
@@ -225,10 +225,10 @@ macro_rules! wire_type_meta_macro {
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let cert_sni = Arc::new(reader.read_str()?);
+                let cert_sni = reader.read_str()?;
                 LairWire::ToLairTlsCertGetCertBySni {
                     msg_id,
-                    cert_sni,
+                    cert_sni: cert_sni.into(),
                 }
             },
             ToCliTlsCertGetCertBySniResponse 0x00000151 {
@@ -242,24 +242,24 @@ macro_rules! wire_type_meta_macro {
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let cert = Arc::new(reader.read_sized_bytes()?);
+                let cert = reader.read_sized_bytes()?;
                 LairWire::ToCliTlsCertGetCertBySniResponse {
                     msg_id,
-                    cert,
+                    cert: cert.into(),
                 }
             },
             ToLairTlsCertGetPrivKeyByIndex 0x00000160 {
                 keystore_index: KeystoreIndex,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
-                writer.write_u32(*keystore_index)?;
+                writer.write_u32(**keystore_index)?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
                 let keystore_index = reader.read_u32()?;
                 LairWire::ToLairTlsCertGetPrivKeyByIndex {
                     msg_id,
-                    keystore_index,
+                    keystore_index: keystore_index.into(),
                 }
             },
             ToCliTlsCertGetPrivKeyByIndexResponse 0x00000161 {
@@ -270,24 +270,24 @@ macro_rules! wire_type_meta_macro {
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let cert_priv_key = Arc::new(reader.read_sized_bytes()?);
+                let cert_priv_key = reader.read_sized_bytes()?;
                 LairWire::ToCliTlsCertGetPrivKeyByIndexResponse {
                     msg_id,
-                    cert_priv_key,
+                    cert_priv_key: cert_priv_key.into(),
                 }
             },
             ToLairTlsCertGetPrivKeyByDigest 0x00000170 {
                 cert_digest: CertDigest,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
-                writer.write_bytes(cert_digest)?;
+                writer.write_bytes_exact(cert_digest, 32)?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let cert_digest = Arc::new(reader.read_bytes(32)?.to_vec());
+                let cert_digest = reader.read_bytes(32)?.to_vec();
                 LairWire::ToLairTlsCertGetPrivKeyByDigest {
                     msg_id,
-                    cert_digest,
+                    cert_digest: cert_digest.into(),
                 }
             },
             ToCliTlsCertGetPrivKeyByDigestResonse 0x00000171 {
@@ -298,10 +298,10 @@ macro_rules! wire_type_meta_macro {
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let cert_priv_key = Arc::new(reader.read_sized_bytes()?);
+                let cert_priv_key = reader.read_sized_bytes()?;
                 LairWire::ToCliTlsCertGetPrivKeyByDigestResonse {
                     msg_id,
-                    cert_priv_key,
+                    cert_priv_key: cert_priv_key.into(),
                 }
             },
             ToLairTlsCertGetPrivKeyBySni 0x00000180 {
@@ -312,10 +312,10 @@ macro_rules! wire_type_meta_macro {
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let cert_sni = Arc::new(reader.read_str()?);
+                let cert_sni = reader.read_str()?;
                 LairWire::ToLairTlsCertGetPrivKeyBySni {
                     msg_id,
-                    cert_sni,
+                    cert_sni: cert_sni.into(),
                 }
             },
             ToCliTlsCertGetPrivKeyBySniResponse 0x00000181 {
@@ -326,10 +326,10 @@ macro_rules! wire_type_meta_macro {
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let cert_priv_key = Arc::new(reader.read_sized_bytes()?);
+                let cert_priv_key = reader.read_sized_bytes()?;
                 LairWire::ToCliTlsCertGetPrivKeyBySniResponse {
                     msg_id,
-                    cert_priv_key,
+                    cert_priv_key: cert_priv_key.into(),
                 }
             },
             ToLairSignEd25519NewFromEntropy 0x00000210 {
@@ -345,45 +345,45 @@ macro_rules! wire_type_meta_macro {
                 pub_key: SignEd25519PubKey,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
-                writer.write_u32(*keystore_index)?;
-                writer.write_bytes(pub_key)?;
+                writer.write_u32(**keystore_index)?;
+                writer.write_bytes_exact(pub_key, 32)?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
                 let keystore_index = reader.read_u32()?;
-                let pub_key = Arc::new(reader.read_bytes(32)?.to_vec());
+                let pub_key = reader.read_bytes(32)?.to_vec();
                 LairWire::ToCliSignEd25519NewFromEntropyResponse {
                     msg_id,
-                    keystore_index,
-                    pub_key,
+                    keystore_index: keystore_index.into(),
+                    pub_key: pub_key.into(),
                 }
             },
             ToLairSignEd25519Get 0x00000220 {
                 keystore_index: KeystoreIndex,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
-                writer.write_u32(*keystore_index)?;
+                writer.write_u32(**keystore_index)?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
                 let keystore_index = reader.read_u32()?;
                 LairWire::ToLairSignEd25519Get {
                     msg_id,
-                    keystore_index,
+                    keystore_index: keystore_index.into(),
                 }
             },
             ToCliSignEd25519GetResponse 0x00000221 {
                 pub_key: SignEd25519PubKey,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
-                writer.write_bytes(pub_key)?;
+                writer.write_bytes_exact(pub_key, 32)?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let pub_key = Arc::new(reader.read_bytes(32)?.to_vec());
+                let pub_key = reader.read_bytes(32)?.to_vec();
                 LairWire::ToCliSignEd25519GetResponse {
                     msg_id,
-                    pub_key,
+                    pub_key: pub_key.into(),
                 }
             },
             ToLairSignEd25519SignByIndex 0x00000230 {
@@ -401,7 +401,7 @@ macro_rules! wire_type_meta_macro {
                 writer.write_u32(size as u32)?;
                 writer.write_u32(wire_type)?;
                 writer.write_u64(*msg_id)?;
-                writer.write_u32(*keystore_index)?;
+                writer.write_u32(**keystore_index)?;
                 writer.write_sized_bytes(message, message.len())?;
                 Ok(writer.into_vec())
             } |reader| {
@@ -410,7 +410,7 @@ macro_rules! wire_type_meta_macro {
                 let message = Arc::new(reader.read_sized_bytes()?);
                 LairWire::ToLairSignEd25519SignByIndex {
                     msg_id,
-                    keystore_index,
+                    keystore_index: keystore_index.into(),
                     message,
                 }
             },
@@ -418,14 +418,14 @@ macro_rules! wire_type_meta_macro {
                 signature: SignEd25519Signature,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
-                writer.write_bytes(signature)?;
+                writer.write_bytes_exact(signature, 64)?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let signature = Arc::new(reader.read_bytes(64)?.to_vec());
+                let signature = reader.read_bytes(64)?.to_vec();
                 LairWire::ToCliSignEd25519SignByIndexResponse {
                     msg_id,
-                    signature,
+                    signature: signature.into(),
                 }
             },
             ToLairSignEd25519SignByPubKey 0x00000240 {
@@ -443,16 +443,16 @@ macro_rules! wire_type_meta_macro {
                 writer.write_u32(size as u32)?;
                 writer.write_u32(wire_type)?;
                 writer.write_u64(*msg_id)?;
-                writer.write_bytes(pub_key)?;
+                writer.write_bytes_exact(pub_key, 32)?;
                 writer.write_sized_bytes(message, message.len())?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let pub_key = Arc::new(reader.read_bytes(32)?.to_vec());
+                let pub_key = reader.read_bytes(32)?.to_vec();
                 let message = Arc::new(reader.read_sized_bytes()?);
                 LairWire::ToLairSignEd25519SignByPubKey {
                     msg_id,
-                    pub_key,
+                    pub_key: pub_key.into(),
                     message,
                 }
             },
@@ -460,14 +460,14 @@ macro_rules! wire_type_meta_macro {
                 signature: SignEd25519Signature,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
-                writer.write_bytes(signature)?;
+                writer.write_bytes_exact(signature, 64)?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let signature = Arc::new(reader.read_bytes(32)?.to_vec());
+                let signature = reader.read_bytes(64)?.to_vec();
                 LairWire::ToCliSignEd25519SignByPubKeyResponse {
                     msg_id,
-                    signature,
+                    signature: signature.into(),
                 }
             },
         }
@@ -585,6 +585,7 @@ wire_type_meta_macro!(lair_wire_enum);
 
 trait WriterExt {
     fn write_str(&mut self, s: &str, max: usize) -> LairResult<()>;
+    fn write_bytes_exact(&mut self, b: &[u8], len: usize) -> LairResult<()>;
     fn write_sized_bytes(&mut self, b: &[u8], max: usize) -> LairResult<()>;
 }
 
@@ -596,6 +597,19 @@ impl WriterExt for codec::CodecWriter {
         }
         self.write_u64(s.len() as u64)?;
         self.write_bytes(s)?;
+        Ok(())
+    }
+
+    fn write_bytes_exact(&mut self, b: &[u8], len: usize) -> LairResult<()> {
+        if b.len() != len {
+            return Err(format!(
+                "invalid byte count, expected {}, got {}",
+                len,
+                b.len()
+            )
+            .into());
+        }
+        self.write_bytes(b)?;
         Ok(())
     }
 
@@ -630,6 +644,35 @@ impl ReaderExt for codec::CodecReader<'_> {
 mod tests {
     use super::*;
 
+    trait TestVal: Sized {
+        fn test_val() -> Self;
+    }
+    macro_rules! test_val {
+        ($t:ty, $e:expr) => {
+            impl TestVal for $t {
+                fn test_val() -> Self {
+                    $e
+                }
+            }
+        };
+    }
+    impl<T: TestVal> TestVal for Arc<T> {
+        fn test_val() -> Self {
+            Arc::new(TestVal::test_val())
+        }
+    }
+    test_val!(String, "test-val".to_string());
+    test_val!(Vec<u8>, vec![0x42; 32]);
+    test_val!(LairEntryType, Default::default());
+    test_val!(TlsCertAlg, Default::default());
+    test_val!(KeystoreIndex, 42.into());
+    test_val!(Cert, vec![0x42; 32].into());
+    test_val!(CertPrivKey, vec![0x42; 32].into());
+    test_val!(CertSni, "test-val".to_string().into());
+    test_val!(CertDigest, vec![0x42; 32].into());
+    test_val!(SignEd25519PubKey, vec![0x42; 32].into());
+    test_val!(SignEd25519Signature, vec![0x42; 64].into());
+
     macro_rules! lair_wire_enum_test {
         ($(
             $variant:ident $repr:literal {$(
@@ -644,7 +687,7 @@ mod tests {
                 let item = LairWire::$variant {
                     msg_id: 0,
                     $(
-                        $p_name: Default::default(),
+                        $p_name: TestVal::test_val(),
                     )*
                 };
                 let encoded = item.encode().unwrap();
