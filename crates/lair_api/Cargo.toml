@@ -18,4 +18,4 @@ futures = "0.3"
 ghost_actor = "0.2.0"
 ring = "0.16"
 thiserror = "1"
-tokio = { version = "0.2", features = [ "full" ] }
+tokio = { version = "0.3", features = [ "full" ] }

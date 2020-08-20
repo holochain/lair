@@ -24,7 +24,7 @@ rcgen = "0.8.5"
 ring = "0.16"
 sysinfo = "0.15"
 thiserror = "1"
-tokio = { version = "0.2", features = [ "full" ] }
+tokio = { version = "0.3", features = [ "full" ] }
 tracing = "0.1"
 
 [dev-dependencies]

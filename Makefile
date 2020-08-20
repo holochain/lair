@@ -1,8 +1,6 @@
-# Run tests using local system tools, rather than nix-shell versions
-# Attempts to first ensure the tool versions are compatible
-# Note: You probably want to run the nix-shell version before pushing code
+# Lair Makefile
 
-.PHONY: all publish test fmt clean tools tool_rust tool_fmt tool_readme
+.PHONY: all bump publish test fmt clean tools tool_rust tool_fmt tool_readme
 
 #RUSTFLAGS += ...
 

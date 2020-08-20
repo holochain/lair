@@ -4,3 +4,6 @@ members = [
   "crates/lair_api",
   "crates/lair_client",
 ]
+
+[patch.crates-io]
+tokio = { git = "https://github.com/tokio-rs/tokio.git", branch = "master" }
