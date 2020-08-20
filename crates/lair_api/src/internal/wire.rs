@@ -527,6 +527,27 @@ macro_rules! lair_wire_enum {
         )*}
 
         impl LairWire {
+            /// Is this an "event" type message?
+            pub fn is_event(&self) -> bool {
+                match self {$(
+                    LairWire::$variant {
+                        ..
+                    } => {
+                        $repr & 0xff000000 == 0xff000000_u32
+                    }
+                )*}
+            }
+
+            /// Get the msg_id associated with this variant.
+            pub fn get_msg_id(&self) -> u64 {
+                match self {$(
+                    LairWire::$variant {
+                        msg_id,
+                        ..
+                    } => *msg_id,
+                )*}
+            }
+
             /// Encode this variant into lair wire protocol binary data.
             #[allow(unused_variables)]
             pub fn encode(&self) -> LairResult<Vec<u8>> {
@@ -543,13 +564,22 @@ macro_rules! lair_wire_enum {
                 )*}
             }
 
-            /// Returns true if we have enough bytes to decode.
-            pub fn peek_size_ok(data: &[u8]) -> bool {
+            /// Returns the amount of data we need to decode the next item.
+            pub fn peek_size(data: &[u8]) -> LairResult<usize> {
                 if data.len() < 4 {
-                    return false;
+                    return Err("not enough to read size".into());
                 }
                 use byteorder::ReadBytesExt;
                 let size = match (&data[0..4]).read_u32::<byteorder::LittleEndian>() {
+                    Ok(size) => size,
+                    Err(e) => return Err(LairError::other(e)),
+                };
+                Ok(size as usize)
+            }
+
+            /// Returns true if we have enough bytes to decode.
+            pub fn peek_size_ok(data: &[u8]) -> bool {
+                let size = match LairWire::peek_size(data) {
                     Ok(size) => size,
                     Err(_) => return false,
                 };

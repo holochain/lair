@@ -8,6 +8,7 @@ pub struct Config {
     root_path: PathBuf,
     store_path: PathBuf,
     pid_path: PathBuf,
+    socket_path: PathBuf,
 }
 
 impl Config {
@@ -22,6 +23,8 @@ impl Config {
         self.store_path.push("store");
         self.pid_path = self.root_path.clone();
         self.pid_path.push("pid");
+        self.socket_path = self.root_path.clone();
+        self.socket_path.push("socket");
         Arc::new(self)
     }
 
@@ -40,9 +43,14 @@ impl Config {
         self.store_path.as_path()
     }
 
-    /// Get the paith to the lair pidfile.
+    /// Get the path to the lair pidfile.
     pub fn get_pid_path(&self) -> &Path {
         self.pid_path.as_path()
+    }
+
+    /// Get the path to the lair ipc socket.
+    pub fn get_socket_path(&self) -> &Path {
+        self.socket_path.as_path()
     }
 }
 
@@ -57,6 +65,7 @@ impl Default for ConfigBuilder {
             root_path: pdir.data_local_dir().to_path_buf(),
             store_path: PathBuf::new(),
             pid_path: PathBuf::new(),
+            socket_path: PathBuf::new(),
         })
     }
 }
