@@ -4,7 +4,7 @@ use crate::{actor::*, internal::codec, *};
 
 macro_rules! default_encode_setup {
     ($msg_id:ident, $wire_type:ident) => {{
-        let mut writer = codec::CodecWriter::new_zeroed(256)?;
+        let mut writer = codec::CodecWriter::new(256)?;
         writer.write_u32(256)?;
         writer.write_u32($wire_type)?;
         writer.write_u64(*$msg_id)?;
@@ -15,7 +15,7 @@ macro_rules! default_encode_setup {
 macro_rules! wire_type_meta_macro {
     ($macro_name:ident) => {
         $macro_name! {
-            ToCliRequestUnlockPassphrase 0xff000010 {
+            ToCliRequestUnlockPassphrase 0xff000010 true true {
             } |msg_id, wire_type| {
                 let writer = default_encode_setup!(msg_id, wire_type);
                 Ok(writer.into_vec())
@@ -23,7 +23,7 @@ macro_rules! wire_type_meta_macro {
                 let msg_id = reader.read_u64()?;
                 LairWire::ToCliRequestUnlockPassphrase { msg_id }
             },
-            ToLairRequestUnlockPassphraseResponse 0xff000011 {
+            ToLairRequestUnlockPassphraseResponse 0xff000011 true false {
                 passphrase: String,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -37,7 +37,7 @@ macro_rules! wire_type_meta_macro {
                     passphrase,
                 }
             },
-            ToLairLairGetLastEntryIndex 0x00000010 {
+            ToLairLairGetLastEntryIndex 0x00000010 false true {
             } |msg_id, wire_type| {
                 let writer = default_encode_setup!(msg_id, wire_type);
                 Ok(writer.into_vec())
@@ -45,7 +45,7 @@ macro_rules! wire_type_meta_macro {
                 let msg_id = reader.read_u64()?;
                 LairWire::ToLairLairGetLastEntryIndex { msg_id }
             },
-            ToCliLairGetLastEntryIndexResponse 0x00000011 {
+            ToCliLairGetLastEntryIndexResponse 0x00000011 false false {
                 last_keystore_index: KeystoreIndex,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -59,7 +59,7 @@ macro_rules! wire_type_meta_macro {
                     last_keystore_index: last_keystore_index.into(),
                 }
             },
-            ToLairLairGetEntryType 0x00000020 {
+            ToLairLairGetEntryType 0x00000020 false true {
                 keystore_index: KeystoreIndex,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -73,7 +73,7 @@ macro_rules! wire_type_meta_macro {
                     keystore_index: keystore_index.into(),
                 }
             },
-            ToCliLairGetEntryTypeResponse 0x00000021 {
+            ToCliLairGetEntryTypeResponse 0x00000021 false false {
                 lair_entry_type: LairEntryType,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -87,7 +87,7 @@ macro_rules! wire_type_meta_macro {
                     lair_entry_type,
                 }
             },
-            ToLairTlsCertNewSelfSignedFromEntropy 0x00000110 {
+            ToLairTlsCertNewSelfSignedFromEntropy 0x00000110 false true {
                 cert_alg: TlsCertAlg,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -101,7 +101,7 @@ macro_rules! wire_type_meta_macro {
                     cert_alg,
                 }
             },
-            ToCliTlsCertNewSelfSignedFromEntropyResponse 0x00000111 {
+            ToCliTlsCertNewSelfSignedFromEntropyResponse 0x00000111 false false {
                 keystore_index: KeystoreIndex,
                 cert_sni: CertSni,
                 cert_digest: CertDigest,
@@ -123,7 +123,7 @@ macro_rules! wire_type_meta_macro {
                     cert_digest: cert_digest.into(),
                 }
             },
-            ToLairTlsCertGet 0x00000120 {
+            ToLairTlsCertGet 0x00000120 false true {
                 keystore_index: KeystoreIndex,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -137,7 +137,7 @@ macro_rules! wire_type_meta_macro {
                     keystore_index: keystore_index.into(),
                 }
             },
-            ToCliTlsCertGetResponse 0x00000121 {
+            ToCliTlsCertGetResponse 0x00000121 false false {
                 cert_sni: CertSni,
                 cert_digest: CertDigest,
             } |msg_id, wire_type| {
@@ -155,7 +155,7 @@ macro_rules! wire_type_meta_macro {
                     cert_digest: cert_digest.into(),
                 }
             },
-            ToLairTlsCertGetCertByIndex 0x00000130 {
+            ToLairTlsCertGetCertByIndex 0x00000130 false true {
                 keystore_index: KeystoreIndex,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -169,7 +169,7 @@ macro_rules! wire_type_meta_macro {
                     keystore_index: keystore_index.into(),
                 }
             },
-            ToCliTlsCertGetCertByIndexResponse 0x00000131 {
+            ToCliTlsCertGetCertByIndexResponse 0x00000131 false false {
                 cert: Cert,
             } |msg_id, wire_type| {
                 let mut writer = codec::CodecWriter::new(1024)?;
@@ -186,7 +186,7 @@ macro_rules! wire_type_meta_macro {
                     cert: cert.into(),
                 }
             },
-            ToLairTlsCertGetCertByDigest 0x00000140 {
+            ToLairTlsCertGetCertByDigest 0x00000140 false true {
                 cert_digest: CertDigest,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -200,7 +200,7 @@ macro_rules! wire_type_meta_macro {
                     cert_digest: cert_digest.into(),
                 }
             },
-            ToCliTlsCertGetCertByDigestResponse 0x00000141 {
+            ToCliTlsCertGetCertByDigestResponse 0x00000141 false false {
                 cert: Cert,
             } |msg_id, wire_type| {
                 let mut writer = codec::CodecWriter::new(1024)?;
@@ -217,7 +217,7 @@ macro_rules! wire_type_meta_macro {
                     cert: cert.into(),
                 }
             },
-            ToLairTlsCertGetCertBySni 0x00000150 {
+            ToLairTlsCertGetCertBySni 0x00000150 false true {
                 cert_sni: CertSni,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -231,7 +231,7 @@ macro_rules! wire_type_meta_macro {
                     cert_sni: cert_sni.into(),
                 }
             },
-            ToCliTlsCertGetCertBySniResponse 0x00000151 {
+            ToCliTlsCertGetCertBySniResponse 0x00000151 false false {
                 cert: Cert,
             } |msg_id, wire_type| {
                 let mut writer = codec::CodecWriter::new(1024)?;
@@ -248,7 +248,7 @@ macro_rules! wire_type_meta_macro {
                     cert: cert.into(),
                 }
             },
-            ToLairTlsCertGetPrivKeyByIndex 0x00000160 {
+            ToLairTlsCertGetPrivKeyByIndex 0x00000160 false true {
                 keystore_index: KeystoreIndex,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -262,7 +262,7 @@ macro_rules! wire_type_meta_macro {
                     keystore_index: keystore_index.into(),
                 }
             },
-            ToCliTlsCertGetPrivKeyByIndexResponse 0x00000161 {
+            ToCliTlsCertGetPrivKeyByIndexResponse 0x00000161 false false {
                 cert_priv_key: CertPrivKey,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -276,7 +276,7 @@ macro_rules! wire_type_meta_macro {
                     cert_priv_key: cert_priv_key.into(),
                 }
             },
-            ToLairTlsCertGetPrivKeyByDigest 0x00000170 {
+            ToLairTlsCertGetPrivKeyByDigest 0x00000170 false true {
                 cert_digest: CertDigest,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -290,7 +290,7 @@ macro_rules! wire_type_meta_macro {
                     cert_digest: cert_digest.into(),
                 }
             },
-            ToCliTlsCertGetPrivKeyByDigestResonse 0x00000171 {
+            ToCliTlsCertGetPrivKeyByDigestResonse 0x00000171 false false {
                 cert_priv_key: CertPrivKey,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -304,7 +304,7 @@ macro_rules! wire_type_meta_macro {
                     cert_priv_key: cert_priv_key.into(),
                 }
             },
-            ToLairTlsCertGetPrivKeyBySni 0x00000180 {
+            ToLairTlsCertGetPrivKeyBySni 0x00000180 false true {
                 cert_sni: CertSni,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -318,7 +318,7 @@ macro_rules! wire_type_meta_macro {
                     cert_sni: cert_sni.into(),
                 }
             },
-            ToCliTlsCertGetPrivKeyBySniResponse 0x00000181 {
+            ToCliTlsCertGetPrivKeyBySniResponse 0x00000181 false false {
                 cert_priv_key: CertPrivKey,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -332,7 +332,7 @@ macro_rules! wire_type_meta_macro {
                     cert_priv_key: cert_priv_key.into(),
                 }
             },
-            ToLairSignEd25519NewFromEntropy 0x00000210 {
+            ToLairSignEd25519NewFromEntropy 0x00000210 false true {
             } |msg_id, wire_type| {
                 let writer = default_encode_setup!(msg_id, wire_type);
                 Ok(writer.into_vec())
@@ -340,7 +340,7 @@ macro_rules! wire_type_meta_macro {
                 let msg_id = reader.read_u64()?;
                 LairWire::ToLairSignEd25519NewFromEntropy { msg_id }
             },
-            ToCliSignEd25519NewFromEntropyResponse 0x00000211 {
+            ToCliSignEd25519NewFromEntropyResponse 0x00000211 false false {
                 keystore_index: KeystoreIndex,
                 pub_key: SignEd25519PubKey,
             } |msg_id, wire_type| {
@@ -358,7 +358,7 @@ macro_rules! wire_type_meta_macro {
                     pub_key: pub_key.into(),
                 }
             },
-            ToLairSignEd25519Get 0x00000220 {
+            ToLairSignEd25519Get 0x00000220 false true {
                 keystore_index: KeystoreIndex,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -372,7 +372,7 @@ macro_rules! wire_type_meta_macro {
                     keystore_index: keystore_index.into(),
                 }
             },
-            ToCliSignEd25519GetResponse 0x00000221 {
+            ToCliSignEd25519GetResponse 0x00000221 false false {
                 pub_key: SignEd25519PubKey,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -386,7 +386,7 @@ macro_rules! wire_type_meta_macro {
                     pub_key: pub_key.into(),
                 }
             },
-            ToLairSignEd25519SignByIndex 0x00000230 {
+            ToLairSignEd25519SignByIndex 0x00000230 false true {
                 keystore_index: KeystoreIndex,
                 message: Arc<Vec<u8>>,
             } |msg_id, wire_type| {
@@ -414,7 +414,7 @@ macro_rules! wire_type_meta_macro {
                     message,
                 }
             },
-            ToCliSignEd25519SignByIndexResponse 0x00000231 {
+            ToCliSignEd25519SignByIndexResponse 0x00000231 false false {
                 signature: SignEd25519Signature,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -428,7 +428,7 @@ macro_rules! wire_type_meta_macro {
                     signature: signature.into(),
                 }
             },
-            ToLairSignEd25519SignByPubKey 0x00000240 {
+            ToLairSignEd25519SignByPubKey 0x00000240 false true {
                 pub_key: SignEd25519PubKey,
                 message: Arc<Vec<u8>>,
             } |msg_id, wire_type| {
@@ -456,7 +456,7 @@ macro_rules! wire_type_meta_macro {
                     message,
                 }
             },
-            ToCliSignEd25519SignByPubKeyResponse 0x00000241 {
+            ToCliSignEd25519SignByPubKeyResponse 0x00000241 false false {
                 signature: SignEd25519Signature,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -476,7 +476,7 @@ macro_rules! wire_type_meta_macro {
 
 macro_rules! lair_wire_type_enum {
     ($(
-        $variant:ident $repr:literal {$(
+        $variant:ident $repr:literal $is_evt:literal $is_req:literal {$(
             $p_name:ident: $p_ty:ty,
         )*}
         |$msg_id:ident, $wire_type:ident| $encode:block
@@ -509,7 +509,7 @@ wire_type_meta_macro!(lair_wire_type_enum);
 
 macro_rules! lair_wire_enum {
     ($(
-        $variant:ident $repr:literal {$(
+        $variant:ident $repr:literal $is_evt:literal $is_req:literal {$(
             $p_name:ident: $p_ty:ty,
         )*} |$msg_id:ident, $wire_type:ident| $encode:block
         |$reader:ident| $decode:block,
@@ -533,7 +533,19 @@ macro_rules! lair_wire_enum {
                     LairWire::$variant {
                         ..
                     } => {
-                        $repr & 0xff000000 == 0xff000000_u32
+                        $is_evt
+                    }
+                )*}
+            }
+
+            /// Is this a "request" type message?
+            /// If false, this must be a "response" type message.
+            pub fn is_req(&self) -> bool {
+                match self {$(
+                    LairWire::$variant {
+                        ..
+                    } => {
+                        $is_req
                     }
                 )*}
             }
@@ -705,7 +717,7 @@ mod tests {
 
     macro_rules! lair_wire_enum_test {
         ($(
-            $variant:ident $repr:literal {$(
+            $variant:ident $repr:literal $is_evt:literal $is_req:literal {$(
                 $p_name:ident: $p_ty:ty,
             )*}
             |$msg_id:ident, $wire_type:ident| $encode:block
