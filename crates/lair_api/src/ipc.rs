@@ -17,8 +17,6 @@ pub async fn spawn_client_ipc(
 
     let api_send = spawn_client_ipc::spawn_client_ipc(config, evt_send).await?;
 
-    //let (kill_switch, ipc_send, ipc_recv) = spawn_ipc_connection(config);
-
     Ok((api_send, evt_recv))
 }
 

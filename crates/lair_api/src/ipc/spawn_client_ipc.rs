@@ -51,14 +51,6 @@ pub(crate) async fn spawn_client_ipc(
     Ok(sender)
 }
 
-/*
-ghost_actor::ghost_chan! {
-    chan InternalApi<LairError> {
-        fn stub() -> ();
-    }
-}
-*/
-
 struct Internal {
     _kill_switch: KillSwitch,
     ipc_send: IpcSender,
