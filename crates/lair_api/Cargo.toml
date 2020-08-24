@@ -19,3 +19,7 @@ ghost_actor = "0.2.0"
 ring = "0.16"
 thiserror = "1"
 tokio = { version = "0.2", features = [ "full" ] }
+
+[dev-dependencies]
+tempfile = "3"
+tracing-subscriber = "0.2"

@@ -9,10 +9,6 @@ pub enum LairError {
     #[error("Lair pidfile/process already exists")]
     ProcessAlreadyExists,
 
-    /// Failed to Parse - Codec Error
-    #[error("Failed to parse lair encoding: {0}")]
-    CodecParseError(String),
-
     /// Unspecified Internal error.
     #[error(transparent)]
     Other(Box<dyn std::error::Error + Send + Sync>),
