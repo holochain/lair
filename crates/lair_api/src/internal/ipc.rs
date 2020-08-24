@@ -1,5 +1,6 @@
 //! Abstraction over unix domain sockets / windows named pipes
 
+use crate::internal::util::*;
 use crate::internal::wire::*;
 use crate::*;
 
@@ -18,19 +19,8 @@ mod win_ipc;
 #[cfg(windows)]
 use win_ipc::*;
 
-ghost_actor::ghost_chan! {
-    /// Low-level send api..
-    pub chan LowLevelWireApi<LairError> {
-        /// Send LairWire message somewhere.
-        fn low_level_send(msg: LairWire) -> ();
-    }
-}
-
-/// Low-level send api Sender.
-type LowLevelWireSender = futures::channel::mpsc::Sender<LowLevelWireApi>;
-
-/// Low-level send api Receiver.
-type LowLevelWireReceiver = futures::channel::mpsc::Receiver<LowLevelWireApi>;
+mod low_level;
+pub(crate) use low_level::*;
 
 /// IpcRespond
 type IpcRespond = ghost_actor::GhostRespond<IpcWireApiHandlerResult<LairWire>>;
@@ -48,86 +38,6 @@ pub type IncomingIpcSender =
 /// IncomingIpcReceiver
 pub type IncomingIpcReceiver =
     futures::channel::mpsc::Receiver<(KillSwitch, IpcSender, IpcReceiver)>;
-
-fn err_spawn<F>(hint: &'static str, f: F)
-where
-    F: std::future::Future<Output = LairResult<()>> + 'static + Send,
-{
-    tokio::task::spawn(async move {
-        match f.await {
-            Ok(_) => tracing::debug!("FUTURE {} ENDED Ok!!!", hint),
-            Err(e) => tracing::warn!("FUTURE {} ENDED Err: {:?}", hint, e),
-        }
-    });
-}
-
-fn spawn_low_level_write_half(
-    kill_switch: KillSwitch,
-    mut write_half: IpcWrite,
-) -> LairResult<LowLevelWireSender> {
-    let (s, mut r) = futures::channel::mpsc::channel(10);
-
-    err_spawn("ll-write", async move {
-        while let Some(msg) = r.next().await {
-            match msg {
-                LowLevelWireApi::LowLevelSend { respond, msg, .. } => {
-                    tracing::trace!("ll write {:?}", msg);
-                    let r: LairResult<()> = async {
-                        let msg = msg.encode()?;
-                        write_half
-                            .write_all(&msg)
-                            .await
-                            .map_err(LairError::other)?;
-                        Ok(())
-                    }
-                    .await;
-                    respond.respond(Ok(async move { r }.boxed().into()));
-                }
-            }
-
-            if !kill_switch.cont() {
-                break;
-            }
-        }
-        LairResult::<()>::Ok(())
-    });
-
-    Ok(s)
-}
-
-fn spawn_low_level_read_half(
-    kill_switch: KillSwitch,
-    mut read_half: IpcRead,
-) -> LairResult<LowLevelWireReceiver> {
-    let (s, r) = futures::channel::mpsc::channel(10);
-
-    err_spawn("ll-read", async move {
-        let mut pending_data = Vec::new();
-        let mut buffer = [0_u8; 4096];
-        loop {
-            let read = read_half
-                .read(&mut buffer)
-                .await
-                .map_err(LairError::other)?;
-            pending_data.extend_from_slice(&buffer[..read]);
-            while let Ok(size) = LairWire::peek_size(&pending_data) {
-                if pending_data.len() < size {
-                    break;
-                }
-                let msg = LairWire::decode(&pending_data)?;
-                tracing::trace!("ll read {:?}", msg);
-                let _ = pending_data.drain(..size);
-                s.low_level_send(msg).await?;
-            }
-            if !kill_switch.cont() {
-                break;
-            }
-        }
-        LairResult::<()>::Ok(())
-    });
-
-    Ok(r)
-}
 
 /// Establish an outgoing client ipc connection to a lair server.
 pub async fn spawn_ipc_connection(
@@ -269,34 +179,6 @@ async fn spawn_read_task(
     Ok(())
 }
 
-/// If any of these are dropped, they all say we should stop looping.
-#[derive(Clone)]
-pub struct KillSwitch(Arc<std::sync::atomic::AtomicBool>);
-
-impl Drop for KillSwitch {
-    fn drop(&mut self) {
-        self.0.store(false, std::sync::atomic::Ordering::Relaxed)
-    }
-}
-
-impl KillSwitch {
-    /// Create a new kill switch
-    pub fn new() -> Self {
-        Self(Arc::new(std::sync::atomic::AtomicBool::new(true)))
-    }
-
-    /// Should we continue?
-    pub fn cont(&self) -> bool {
-        self.0.load(std::sync::atomic::Ordering::Relaxed)
-    }
-}
-
-impl Default for KillSwitch {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 #[derive(Clone)]
 struct RespondTrack(Arc<tokio::sync::Mutex<HashMap<u64, IpcRespond>>>);
 
@@ -331,8 +213,21 @@ ghost_actor::ghost_chan! {
 mod tests {
     use super::*;
 
+    fn init_tracing() {
+        let _ = tracing::subscriber::set_global_default(
+            tracing_subscriber::FmtSubscriber::builder()
+                .with_env_filter(
+                    tracing_subscriber::EnvFilter::from_default_env(),
+                )
+                .compact()
+                .finish(),
+        );
+    }
+
     #[tokio::test(threaded_scheduler)]
     async fn test_ipc_raw_wire() -> LairResult<()> {
+        init_tracing();
+
         let tmpdir = tempfile::tempdir().unwrap();
 
         let config = Config::builder().set_root_path(tmpdir.path()).build();

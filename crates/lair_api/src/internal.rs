@@ -3,4 +3,5 @@
 
 pub mod codec;
 pub mod ipc;
+pub mod util;
 pub mod wire;
