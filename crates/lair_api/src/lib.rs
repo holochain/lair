@@ -13,3 +13,5 @@ pub use config::*;
 pub mod internal;
 
 pub mod actor;
+
+pub mod ipc;

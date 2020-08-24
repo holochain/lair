@@ -12,6 +12,10 @@ ghost_actor::ghost_chan! {
     }
 }
 
+/// Lair Client Event Sender Type.
+pub type LairClientEventSenderType =
+    futures::channel::mpsc::Sender<LairClientEvent>;
+
 /// Lair Client Event Receiver Type.
 pub type LairClientEventReceiver =
     futures::channel::mpsc::Receiver<LairClientEvent>;
