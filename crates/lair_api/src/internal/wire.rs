@@ -290,7 +290,7 @@ macro_rules! wire_type_meta_macro {
                     cert_digest: cert_digest.into(),
                 }
             },
-            ToCliTlsCertGetPrivKeyByDigestResonse 0x00000171 false false {
+            ToCliTlsCertGetPrivKeyByDigestResponse 0x00000171 false false {
                 cert_priv_key: CertPrivKey,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
@@ -299,7 +299,7 @@ macro_rules! wire_type_meta_macro {
             } |reader| {
                 let msg_id = reader.read_u64()?;
                 let cert_priv_key = reader.read_sized_bytes()?;
-                LairWire::ToCliTlsCertGetPrivKeyByDigestResonse {
+                LairWire::ToCliTlsCertGetPrivKeyByDigestResponse {
                     msg_id,
                     cert_priv_key: cert_priv_key.into(),
                 }

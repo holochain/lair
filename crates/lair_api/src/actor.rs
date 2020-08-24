@@ -215,7 +215,7 @@ ghost_actor::ghost_chan! {
 
         /// Fetch the certificate by sni.
         fn tls_cert_get_cert_by_sni(
-            sni: CertSni,
+            cert_sni: CertSni,
         ) -> Cert;
 
         /// Fetch the certificate private key by entry index.
@@ -230,7 +230,7 @@ ghost_actor::ghost_chan! {
 
         /// Fetch the certificate private key by sni.
         fn tls_cert_get_priv_key_by_sni(
-            sni: CertSni,
+            cert_sni: CertSni,
         ) -> CertPrivKey;
 
         /// Create a new signature ed25519 keypair from entropy.
