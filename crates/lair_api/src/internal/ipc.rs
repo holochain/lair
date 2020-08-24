@@ -3,7 +3,8 @@
 use crate::internal::wire::*;
 use crate::*;
 
-use futures::{sink::SinkExt, stream::StreamExt, future::FutureExt};
+use futures::{future::FutureExt, sink::SinkExt, stream::StreamExt};
+use ghost_actor::dependencies::tracing;
 use std::collections::HashMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -26,23 +27,19 @@ ghost_actor::ghost_chan! {
 }
 
 /// Low-level send api Sender.
-type LowLevelWireSender =
-    futures::channel::mpsc::Sender<LowLevelWireApi>;
+type LowLevelWireSender = futures::channel::mpsc::Sender<LowLevelWireApi>;
 
 /// Low-level send api Receiver.
-type LowLevelWireReceiver =
-    futures::channel::mpsc::Receiver<LowLevelWireApi>;
+type LowLevelWireReceiver = futures::channel::mpsc::Receiver<LowLevelWireApi>;
 
 /// IpcRespond
 type IpcRespond = ghost_actor::GhostRespond<IpcWireApiHandlerResult<LairWire>>;
 
 /// IpcSender
-pub type IpcSender =
-    futures::channel::mpsc::Sender<IpcWireApi>;
+pub type IpcSender = futures::channel::mpsc::Sender<IpcWireApi>;
 
 /// IpcReceiver
-pub type IpcReceiver =
-    futures::channel::mpsc::Receiver<IpcWireApi>;
+pub type IpcReceiver = futures::channel::mpsc::Receiver<IpcWireApi>;
 
 /// IncomingIpcReceiver
 pub type IncomingIpcSender =
@@ -58,8 +55,8 @@ where
 {
     tokio::task::spawn(async move {
         match f.await {
-            Ok(_) => println!("FUTURE {} ENDED Ok!!!", hint),
-            Err(e) => println!("FUTURE {} ENDED Err: {:?}", hint, e),
+            Ok(_) => tracing::debug!("FUTURE {} ENDED Ok!!!", hint),
+            Err(e) => tracing::warn!("FUTURE {} ENDED Err: {:?}", hint, e),
         }
     });
 }
@@ -73,19 +70,17 @@ fn spawn_low_level_write_half(
     err_spawn("ll-write", async move {
         while let Some(msg) = r.next().await {
             match msg {
-                LowLevelWireApi::LowLevelSend {
-                    respond,
-                    msg,
-                    ..
-                } => {
-                    println!("ll write {:?}", msg);
+                LowLevelWireApi::LowLevelSend { respond, msg, .. } => {
+                    tracing::trace!("ll write {:?}", msg);
                     let r: LairResult<()> = async {
                         let msg = msg.encode()?;
                         write_half
-                            .write_all(&msg).await
+                            .write_all(&msg)
+                            .await
                             .map_err(LairError::other)?;
                         Ok(())
-                    }.await;
+                    }
+                    .await;
                     respond.respond(Ok(async move { r }.boxed().into()));
                 }
             }
@@ -115,9 +110,12 @@ fn spawn_low_level_read_half(
                 .await
                 .map_err(LairError::other)?;
             pending_data.extend_from_slice(&buffer[..read]);
-            if let Ok(size) = LairWire::peek_size(&pending_data) {
+            while let Ok(size) = LairWire::peek_size(&pending_data) {
+                if pending_data.len() < size {
+                    break;
+                }
                 let msg = LairWire::decode(&pending_data)?;
-                println!("ll read {:?}", msg);
+                tracing::trace!("ll read {:?}", msg);
                 let _ = pending_data.drain(..size);
                 s.low_level_send(msg).await?;
             }
@@ -148,7 +146,10 @@ pub async fn spawn_bind_ipc(
 
     let srv = IpcServer::bind(config)?;
 
-    err_spawn("srv-bind", srv_main_bind_task(kill_switch.clone(), srv, in_send));
+    err_spawn(
+        "srv-bind",
+        srv_main_bind_task(kill_switch.clone(), srv, in_send),
+    );
 
     Ok((kill_switch, in_recv))
 }
@@ -160,10 +161,8 @@ async fn srv_main_bind_task(
 ) -> LairResult<()> {
     loop {
         if let Ok((read_half, write_half)) = srv.accept().await {
-            let (con_kill_switch, send, recv) = spawn_connection_pair(
-                read_half,
-                write_half,
-            )?;
+            let (con_kill_switch, send, recv) =
+                spawn_connection_pair(read_half, write_half)?;
 
             in_send
                 .send((con_kill_switch, send, recv))
@@ -192,19 +191,25 @@ fn spawn_connection_pair(
     let (incoming_msg_send, incoming_msg_recv) =
         futures::channel::mpsc::channel(10);
 
-    err_spawn("con-write", spawn_write_task(
-        respond_track.clone(),
-        kill_switch.clone(),
-        outgoing_msg_recv,
-        writer.clone(),
-    ));
-    err_spawn("con-read", spawn_read_task(
-        respond_track,
-        kill_switch.clone(),
-        incoming_msg_send,
-        reader,
-        writer,
-    ));
+    err_spawn(
+        "con-write",
+        spawn_write_task(
+            respond_track.clone(),
+            kill_switch.clone(),
+            outgoing_msg_recv,
+            writer.clone(),
+        ),
+    );
+    err_spawn(
+        "con-read",
+        spawn_read_task(
+            respond_track,
+            kill_switch.clone(),
+            incoming_msg_send,
+            reader,
+            writer,
+        ),
+    );
 
     Ok((kill_switch, outgoing_msg_send, incoming_msg_recv))
 }
@@ -217,11 +222,7 @@ async fn spawn_write_task(
 ) -> LairResult<()> {
     while let Some(msg) = outgoing_msg_recv.next().await {
         match msg {
-            IpcWireApi::Request {
-                respond,
-                msg,
-                ..
-            } => {
+            IpcWireApi::Request { respond, msg, .. } => {
                 respond_track.register(msg.get_msg_id(), respond).await;
                 writer.low_level_send(msg).await?;
             }
@@ -242,11 +243,7 @@ async fn spawn_read_task(
 ) -> LairResult<()> {
     while let Some(msg) = reader.next().await {
         match msg {
-            LowLevelWireApi::LowLevelSend {
-                respond,
-                msg,
-                ..
-            } => {
+            LowLevelWireApi::LowLevelSend { respond, msg, .. } => {
                 // respond right away, so it can start processing the
                 // next message.
                 respond.respond(Ok(async move { Ok(()) }.boxed().into()));
@@ -294,6 +291,12 @@ impl KillSwitch {
     }
 }
 
+impl Default for KillSwitch {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Clone)]
 struct RespondTrack(Arc<tokio::sync::Mutex<HashMap<u64, IpcRespond>>>);
 
@@ -338,12 +341,17 @@ mod tests {
 
         let srv_task_kill = srv_kill.clone();
         err_spawn("test-outer", async move {
-            while let Some((con_kill, con_send, mut con_recv)) = srv_recv.next().await {
+            while let Some((con_kill, con_send, mut con_recv)) =
+                srv_recv.next().await
+            {
                 err_spawn("test-inner", async move {
                     println!("GOT CONNECTION!!");
-                    let r = con_send.request(LairWire::ToCliRequestUnlockPassphrase {
-                        msg_id: 0,
-                    }).await.unwrap();
+                    let r = con_send
+                        .request(LairWire::ToCliRequestUnlockPassphrase {
+                            msg_id: 0,
+                        })
+                        .await
+                        .unwrap();
                     println!("passphrase req RESPONSE: {:?}", r);
                     match r {
                         LairWire::ToLairRequestUnlockPassphraseResponse {
@@ -354,25 +362,25 @@ mod tests {
                         }
                         _ => panic!("unexpected: {:?}", r),
                     }
+                    println!("DONE WITH PASSPHRASE LOOP\n\n");
                     while let Some(msg) = con_recv.next().await {
                         println!("GOT MESSAGE!!: {:?}", msg);
                         match msg {
-                            IpcWireApi::Request {
-                                respond: _,
-                                msg,
-                                ..
-                            } => {
+                            IpcWireApi::Request { respond, msg, .. } => {
                                 println!("GOT MESSAGE!!: {:?}", msg);
+                                if let LairWire::ToLairLairGetLastEntryIndex {
+                                    msg_id,
+                                } = msg
+                                {
+                                    respond.respond(Ok(async move {
+                                        Ok(LairWire::ToCliLairGetLastEntryIndexResponse {
+                                            msg_id,
+                                            last_keystore_index: 42.into(),
+                                        })
+                                    }.boxed().into()));
+                                }
                             }
                         }
-                        /*
-                        if let LairWire::ToLairLairGetLastEntryIndex { msg_id } = msg {
-                            con_send.send((LairWire::ToCliLairGetLastEntryIndexResponse {
-                                msg_id,
-                                last_keystore_index: 42.into(),
-                            }, None)).await.unwrap();
-                        }
-                        */
                         if !con_kill.cont() {
                             break;
                         }
@@ -386,61 +394,43 @@ mod tests {
             LairResult::<()>::Ok(())
         });
 
-        let (cli_kill, cli_send, mut cli_recv) = spawn_ipc_connection(config).await?;
+        let (cli_kill, cli_send, mut cli_recv) =
+            spawn_ipc_connection(config).await?;
 
         match cli_recv.next().await.unwrap() {
-            IpcWireApi::Request {
-                respond,
-                msg,
-                ..
-            } => {
+            IpcWireApi::Request { respond, msg, .. } => {
                 println!("GOT: {:?}", msg);
                 match msg {
-                    LairWire::ToCliRequestUnlockPassphrase {
-                        msg_id,
-                    } => {
+                    LairWire::ToCliRequestUnlockPassphrase { msg_id } => {
                         respond.respond(Ok(async move {
                             Ok(LairWire::ToLairRequestUnlockPassphraseResponse {
                                 msg_id,
                                 passphrase: "test-passphrase".to_string(),
                             })
-                        }.boxed().into()));
+                        }
+                        .boxed()
+                        .into()));
                     }
                     _ => panic!("unexpected: {:?}", msg),
                 }
             }
         }
 
-        let res = cli_send.request(LairWire::ToLairLairGetLastEntryIndex {
-            msg_id: 0,
-        }).await.unwrap();
+        let res = cli_send
+            .request(LairWire::ToLairLairGetLastEntryIndex { msg_id: 0 })
+            .await
+            .unwrap();
         println!("GOT: {:?}", res);
 
-        /*
-        let msg_id = match res {
-            LairWire::ToCliRequestUnlockPassphrase { msg_id } => msg_id,
-            _ => panic!("unexpected: {:?}", res),
-        };
-
-        let _ = respond.unwrap().send(LairWire::ToLairRequestUnlockPassphraseResponse {
-            msg_id,
-            passphrase: "test-passphrase".to_string(),
-        });
-
-        let (s, r) = tokio::sync::oneshot::channel();
-        cli_send.send((LairWire::ToLairLairGetLastEntryIndex {
-            msg_id: 0,
-        }, Some(s))).await.unwrap();
-        let res = r.await.unwrap();
         match res {
-            LairWire::ToCliLairGetLastEntryIndexResponse { last_keystore_index, .. } => {
+            LairWire::ToCliLairGetLastEntryIndexResponse {
+                last_keystore_index,
+                ..
+            } => {
                 assert_eq!(42, last_keystore_index.0);
             }
             _ => panic!("unexpected: {:?}", res),
         }
-        */
-
-        tokio::time::delay_for(std::time::Duration::from_millis(2000)).await;
 
         drop(cli_kill);
         drop(srv_kill);
