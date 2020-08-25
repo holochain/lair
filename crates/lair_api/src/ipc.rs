@@ -22,7 +22,7 @@ pub async fn spawn_client_ipc(
 
 /// Incoming Connection Receiver.
 pub type IncomingIpcConnectionReceiver =
-    futures::channel::mpsc::Receiver<(KillSwitch, LairClientEventSenderType)>;
+    futures::channel::mpsc::Receiver<LairClientEventSenderType>;
 
 mod spawn_bind_server_ipc;
 

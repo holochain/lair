@@ -60,7 +60,6 @@ impl ghost_actor::GhostControlHandler for Internal {}
 
 impl ghost_actor::GhostHandler<LairClientApi> for Internal {}
 
-#[allow(unused_variables)]
 impl LairClientApiHandler for Internal {
     fn handle_lair_get_last_entry_index(
         &mut self,
