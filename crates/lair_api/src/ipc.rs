@@ -239,8 +239,65 @@ mod tests {
                 )
                 .await?,
         );
-
-        println!("END OF TEST ASSERTS");
+        assert_eq!(
+            (CertSni::test_val(), CertDigest::test_val(),),
+            cli_send.tls_cert_get(0.into()).await?,
+        );
+        assert_eq!(
+            Cert::test_val(),
+            cli_send.tls_cert_get_cert_by_index(0.into()).await?,
+        );
+        assert_eq!(
+            Cert::test_val(),
+            cli_send
+                .tls_cert_get_cert_by_digest(CertDigest::test_val())
+                .await?,
+        );
+        assert_eq!(
+            Cert::test_val(),
+            cli_send
+                .tls_cert_get_cert_by_sni(CertSni::test_val())
+                .await?,
+        );
+        assert_eq!(
+            CertPrivKey::test_val(),
+            cli_send.tls_cert_get_priv_key_by_index(0.into()).await?,
+        );
+        assert_eq!(
+            CertPrivKey::test_val(),
+            cli_send
+                .tls_cert_get_priv_key_by_digest(CertDigest::test_val())
+                .await?,
+        );
+        assert_eq!(
+            CertPrivKey::test_val(),
+            cli_send
+                .tls_cert_get_priv_key_by_sni(CertSni::test_val())
+                .await?,
+        );
+        assert_eq!(
+            (KeystoreIndex::test_val(), SignEd25519PubKey::test_val(),),
+            cli_send.sign_ed25519_new_from_entropy().await?,
+        );
+        assert_eq!(
+            SignEd25519PubKey::test_val(),
+            cli_send.sign_ed25519_get(0.into()).await?,
+        );
+        assert_eq!(
+            SignEd25519Signature::test_val(),
+            cli_send
+                .sign_ed25519_sign_by_index(0.into(), b"".to_vec().into())
+                .await?,
+        );
+        assert_eq!(
+            SignEd25519Signature::test_val(),
+            cli_send
+                .sign_ed25519_sign_by_pub_key(
+                    SignEd25519PubKey::test_val(),
+                    b"".to_vec().into()
+                )
+                .await?,
+        );
 
         cli_send.ghost_actor_shutdown().await?;
         drop(tmpdir);
