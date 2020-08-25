@@ -12,7 +12,7 @@ pub(crate) async fn spawn_client_ipc(
         spawn_ipc_connection(config).await?;
 
     let evt_kill_switch = kill_switch.clone();
-    tokio::task::spawn(async move {
+    err_spawn("client-ipc-evt-loop", async move {
         while let Some(msg) = ipc_recv.next().await {
             match msg {
                 IpcWireApi::Request { respond, msg, .. } => match msg {
@@ -34,6 +34,7 @@ pub(crate) async fn spawn_client_ipc(
                 break;
             }
         }
+        Ok(())
     });
 
     let builder = ghost_actor::actor_builder::GhostActorBuilder::new();
@@ -43,10 +44,15 @@ pub(crate) async fn spawn_client_ipc(
         .create_channel::<LairClientApi>()
         .await?;
 
-    tokio::task::spawn(builder.spawn(Internal {
-        _kill_switch: kill_switch,
-        ipc_send,
-    }));
+    err_spawn("client-ipc-actor", async move {
+        builder
+            .spawn(Internal {
+                _kill_switch: kill_switch,
+                ipc_send,
+            })
+            .await
+            .map_err(LairError::other)
+    });
 
     Ok(sender)
 }

@@ -20,7 +20,7 @@ where
     let i_s = channel_factory.create_channel::<InternalApi>().await?;
 
     let i_kill_switch = _kill_switch.clone();
-    tokio::task::spawn(async move {
+    err_spawn("srv-ipc-incoming-loop", async move {
         while let Some((k, s, r)) = incoming_ipc_recv.next().await {
             if i_s.incoming(k, s, r).await.is_err() {
                 break;
@@ -29,14 +29,20 @@ where
                 break;
             }
         }
+        Ok(())
     });
 
-    tokio::task::spawn(builder.spawn(Internal {
-        _kill_switch,
-        channel_factory,
-        api_sender,
-        incoming_send,
-    }));
+    err_spawn("srv-ipc-actor", async move {
+        builder
+            .spawn(Internal {
+                _kill_switch,
+                channel_factory,
+                api_sender,
+                incoming_send,
+            })
+            .await
+            .map_err(LairError::other)
+    });
 
     Ok(())
 }
@@ -85,7 +91,7 @@ where
         let (evt_send, mut evt_recv) = futures::channel::mpsc::channel(10);
         let evt_kill_switch = con_kill_switch;
         let evt_ipc_send = ipc_send;
-        tokio::task::spawn(async move {
+        err_spawn("srv-con-evt-loop", async move {
             while let Some(msg) = evt_recv.next().await {
                 match msg {
                     LairClientEvent::RequestUnlockPassphrase {
@@ -111,6 +117,7 @@ where
                     break;
                 }
             }
+            Ok(())
         });
         let channel_factory = self.channel_factory.clone();
         let mut in_send_clone = self.incoming_send.clone();

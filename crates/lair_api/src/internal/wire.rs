@@ -683,10 +683,10 @@ impl ReaderExt for codec::CodecReader<'_> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
-    trait TestVal: Sized {
+    pub(crate) trait TestVal: Sized {
         fn test_val() -> Self;
     }
     macro_rules! test_val {

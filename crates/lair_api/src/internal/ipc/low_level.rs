@@ -36,6 +36,9 @@ pub(crate) fn spawn_low_level_write_half(
                         Ok(())
                     }
                     .await;
+                    if let Err(e) = &r {
+                        println!("NOETHUNTHEOUNTOEUH {:?}", e);
+                    }
                     respond.respond(Ok(async move { r }.boxed().into()));
                 }
             }

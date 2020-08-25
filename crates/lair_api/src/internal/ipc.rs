@@ -134,6 +134,7 @@ async fn spawn_write_task(
         match msg {
             IpcWireApi::Request { respond, msg, .. } => {
                 respond_track.register(msg.get_msg_id(), respond).await;
+                tracing::trace!("con write {:?}", msg);
                 writer.low_level_send(msg).await?;
             }
         }
