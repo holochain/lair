@@ -2,24 +2,27 @@
 
 use crate::actor::*;
 use crate::internal::util::*;
-//use crate::internal::ipc::*;
 use crate::*;
 
+mod spawn_client_ipc;
+
 /// Spawn a client Ipc connection.
-pub fn spawn_client_ipc(
-    _config: Arc<Config>,
-) -> (LairClientSender, LairClientEventReceiver) {
-    let (api_send, _api_recv) = futures::channel::mpsc::channel(10);
-    let (_evt_send, evt_recv) = futures::channel::mpsc::channel(10);
+pub async fn spawn_client_ipc(
+    config: Arc<Config>,
+) -> LairResult<(
+    ghost_actor::GhostSender<LairClientApi>,
+    LairClientEventReceiver,
+)> {
+    let (evt_send, evt_recv) = futures::channel::mpsc::channel(10);
 
-    //let (kill_switch, ipc_send, ipc_recv) = spawn_ipc_connection(config);
+    let api_send = spawn_client_ipc::spawn_client_ipc(config, evt_send).await?;
 
-    (api_send, evt_recv)
+    Ok((api_send, evt_recv))
 }
 
 /// Incoming Connection Receiver.
 pub type IncomingIpcConnectionReceiver =
-    futures::channel::mpsc::Receiver<(KillSwitch, LairClientEventSenderType)>;
+    futures::channel::mpsc::Receiver<LairClientEventSenderType>;
 
 mod spawn_bind_server_ipc;
 
@@ -39,13 +42,266 @@ where
         incoming_send,
     )
     .await?;
-    /*
-    let (kill_switch, incoming_ipc_recv) = spawn_bind_ipc(config);
-    while let Some((kill_switch, ipc_send, ipc_recv)) =
-        incoming_ipc_recv.next().await
-    {
-    }
-    */
 
     Ok(incoming_recv)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::internal::wire::tests::TestVal;
+    use futures::{future::FutureExt, stream::StreamExt};
+    use ghost_actor::{dependencies::tracing, GhostControlSender};
+
+    fn init_tracing() {
+        let _ = tracing::subscriber::set_global_default(
+            tracing_subscriber::FmtSubscriber::builder()
+                .with_env_filter(
+                    tracing_subscriber::EnvFilter::from_default_env(),
+                )
+                .compact()
+                .finish(),
+        );
+    }
+
+    #[tokio::test(threaded_scheduler)]
+    async fn test_high_level_ipc() -> LairResult<()> {
+        init_tracing();
+
+        let tmpdir = tempfile::tempdir().unwrap();
+        let config = Config::builder().set_root_path(tmpdir.path()).build();
+
+        struct TestServer;
+        impl ghost_actor::GhostControlHandler for TestServer {}
+        impl ghost_actor::GhostHandler<LairClientApi> for TestServer {}
+        impl LairClientApiHandler for TestServer {
+            fn handle_lair_get_last_entry_index(
+                &mut self,
+            ) -> LairClientApiHandlerResult<KeystoreIndex> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_lair_get_entry_type(
+                &mut self,
+                _keystore_index: KeystoreIndex,
+            ) -> LairClientApiHandlerResult<LairEntryType> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_tls_cert_new_self_signed_from_entropy(
+                &mut self,
+                _options: TlsCertOptions,
+            ) -> LairClientApiHandlerResult<(KeystoreIndex, CertSni, CertDigest)>
+            {
+                Ok(async move {
+                    Ok((
+                        TestVal::test_val(),
+                        TestVal::test_val(),
+                        TestVal::test_val(),
+                    ))
+                }
+                .boxed()
+                .into())
+            }
+            fn handle_tls_cert_get(
+                &mut self,
+                _keystore_index: KeystoreIndex,
+            ) -> LairClientApiHandlerResult<(CertSni, CertDigest)> {
+                Ok(async move { Ok((
+                    TestVal::test_val(),
+                    TestVal::test_val(),
+                )) }.boxed().into())
+            }
+            fn handle_tls_cert_get_cert_by_index(
+                &mut self,
+                _keystore_index: KeystoreIndex,
+            ) -> LairClientApiHandlerResult<Cert> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_tls_cert_get_cert_by_digest(
+                &mut self,
+                _cert_digest: CertDigest,
+            ) -> LairClientApiHandlerResult<Cert> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_tls_cert_get_cert_by_sni(
+                &mut self,
+                _cert_sni: CertSni,
+            ) -> LairClientApiHandlerResult<Cert> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_tls_cert_get_priv_key_by_index(
+                &mut self,
+                _keystore_index: KeystoreIndex,
+            ) -> LairClientApiHandlerResult<CertPrivKey> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_tls_cert_get_priv_key_by_digest(
+                &mut self,
+                _cert_digest: CertDigest,
+            ) -> LairClientApiHandlerResult<CertPrivKey> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_tls_cert_get_priv_key_by_sni(
+                &mut self,
+                _cert_sni: CertSni,
+            ) -> LairClientApiHandlerResult<CertPrivKey> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_sign_ed25519_new_from_entropy(
+                &mut self,
+            ) -> LairClientApiHandlerResult<(KeystoreIndex, SignEd25519PubKey)>
+            {
+                Ok(async move { Ok((
+                    TestVal::test_val(),
+                    TestVal::test_val(),
+                )) }.boxed().into())
+            }
+            fn handle_sign_ed25519_get(
+                &mut self,
+                _keystore_index: KeystoreIndex,
+            ) -> LairClientApiHandlerResult<SignEd25519PubKey> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_sign_ed25519_sign_by_index(
+                &mut self,
+                _keystore_index: KeystoreIndex,
+                _message: Arc<Vec<u8>>,
+            ) -> LairClientApiHandlerResult<SignEd25519Signature> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_sign_ed25519_sign_by_pub_key(
+                &mut self,
+                _pub_key: SignEd25519PubKey,
+                _message: Arc<Vec<u8>>,
+            ) -> LairClientApiHandlerResult<SignEd25519Signature> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+        }
+
+        let builder = ghost_actor::actor_builder::GhostActorBuilder::new();
+        let api_sender = builder
+            .channel_factory()
+            .create_channel::<LairClientApi>()
+            .await?;
+        err_spawn("test-api-actor", async move {
+            builder.spawn(TestServer).await.map_err(LairError::other)
+        });
+
+        let mut incoming_recv =
+            spawn_bind_server_ipc(config.clone(), api_sender).await?;
+
+        err_spawn("test-incoming-loop", async move {
+            let mut keep_em = Vec::new();
+            while let Some(evt_send) = incoming_recv.next().await {
+                let passphrase = evt_send.request_unlock_passphrase().await?;
+                assert_eq!("test-val", passphrase);
+                keep_em.push(evt_send);
+            }
+            Ok(())
+        });
+
+        let (cli_send, mut cli_recv) = spawn_client_ipc(config).await?;
+
+        err_spawn("test-evt-loop", async move {
+            while let Some(msg) = cli_recv.next().await {
+                match msg {
+                    LairClientEvent::RequestUnlockPassphrase {
+                        respond,
+                        ..
+                    } => {
+                        respond.respond(Ok(
+                            async move { Ok(TestVal::test_val()) }
+                                .boxed()
+                                .into(),
+                        ));
+                    }
+                }
+            }
+            Ok(())
+        });
+
+        assert_eq!(
+            KeystoreIndex::test_val(),
+            cli_send.lair_get_last_entry_index().await?
+        );
+        assert_eq!(
+            LairEntryType::test_val(),
+            cli_send.lair_get_entry_type(0.into()).await?
+        );
+        assert_eq!(
+            (
+                KeystoreIndex::test_val(),
+                CertSni::test_val(),
+                CertDigest::test_val(),
+            ),
+            cli_send
+                .tls_cert_new_self_signed_from_entropy(
+                    TlsCertOptions::default(),
+                )
+                .await?,
+        );
+        assert_eq!(
+            (CertSni::test_val(), CertDigest::test_val(),),
+            cli_send.tls_cert_get(0.into()).await?,
+        );
+        assert_eq!(
+            Cert::test_val(),
+            cli_send.tls_cert_get_cert_by_index(0.into()).await?,
+        );
+        assert_eq!(
+            Cert::test_val(),
+            cli_send
+                .tls_cert_get_cert_by_digest(CertDigest::test_val())
+                .await?,
+        );
+        assert_eq!(
+            Cert::test_val(),
+            cli_send
+                .tls_cert_get_cert_by_sni(CertSni::test_val())
+                .await?,
+        );
+        assert_eq!(
+            CertPrivKey::test_val(),
+            cli_send.tls_cert_get_priv_key_by_index(0.into()).await?,
+        );
+        assert_eq!(
+            CertPrivKey::test_val(),
+            cli_send
+                .tls_cert_get_priv_key_by_digest(CertDigest::test_val())
+                .await?,
+        );
+        assert_eq!(
+            CertPrivKey::test_val(),
+            cli_send
+                .tls_cert_get_priv_key_by_sni(CertSni::test_val())
+                .await?,
+        );
+        assert_eq!(
+            (KeystoreIndex::test_val(), SignEd25519PubKey::test_val(),),
+            cli_send.sign_ed25519_new_from_entropy().await?,
+        );
+        assert_eq!(
+            SignEd25519PubKey::test_val(),
+            cli_send.sign_ed25519_get(0.into()).await?,
+        );
+        assert_eq!(
+            SignEd25519Signature::test_val(),
+            cli_send
+                .sign_ed25519_sign_by_index(0.into(), b"".to_vec().into())
+                .await?,
+        );
+        assert_eq!(
+            SignEd25519Signature::test_val(),
+            cli_send
+                .sign_ed25519_sign_by_pub_key(
+                    SignEd25519PubKey::test_val(),
+                    b"".to_vec().into()
+                )
+                .await?,
+        );
+
+        cli_send.ghost_actor_shutdown().await?;
+        drop(tmpdir);
+
+        Ok(())
+    }
 }
