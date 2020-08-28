@@ -4,7 +4,7 @@ use crate::entry::LairEntry;
 use crate::store::EntryStoreSender;
 use crate::*;
 use futures::{future::FutureExt, stream::StreamExt};
-use lair_api::actor::*;
+use lair_keystore_api::actor::*;
 
 /// Spawn a new IPC server binding to serve out the Lair client api.
 pub async fn spawn_bind_server_ipc(
@@ -26,9 +26,11 @@ pub async fn spawn_bind_server_ipc(
         .create_channel::<InternalApi>()
         .await?;
 
-    let mut con_recv =
-        lair_api::ipc::spawn_bind_server_ipc(config.clone(), api_sender)
-            .await?;
+    let mut con_recv = lair_keystore_api::ipc::spawn_bind_server_ipc(
+        config.clone(),
+        api_sender,
+    )
+    .await?;
 
     tokio::task::spawn(async move {
         while let Some(con) = con_recv.next().await {
@@ -88,7 +90,7 @@ impl InternalApiHandler for Internal {
 
 impl ghost_actor::GhostHandler<LairClientApi> for Internal {}
 
-impl lair_api::actor::LairClientApiHandler for Internal {
+impl lair_keystore_api::actor::LairClientApiHandler for Internal {
     fn handle_lair_get_last_entry_index(
         &mut self,
     ) -> LairClientApiHandlerResult<KeystoreIndex> {

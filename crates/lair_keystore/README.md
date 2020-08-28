@@ -1,4 +1,4 @@
-# lair
+# lair_keystore
 
 secret lair private keystore
 

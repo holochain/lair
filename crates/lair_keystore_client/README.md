@@ -1,4 +1,4 @@
-# lair_client
+# lair_keystore_client
 
 client connector to secret lair private keystore
 

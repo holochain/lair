@@ -1,7 +1,7 @@
 [package]
-name = "lair_client"
+name = "lair_keystore_api"
 version = "0.0.1-alpha.1"
-description = "client connector to secret lair private keystore"
+description = "secret lair private keystore types"
 license = "Apache-2.0"
 repository = "https://github.com/holochain/lair"
 documentation = "https://docs.rs/lair"
@@ -11,5 +11,15 @@ categories = [ "cryptography" ]
 edition = "2018"
 
 [dependencies]
-lair_api = { version = "0.0.1-alpha.1", path = "../lair_api" }
-tracing = "0.1"
+byteorder = "1"
+derive_more = "0.99"
+directories = "3"
+futures = "0.3"
+ghost_actor = "0.2.0"
+ring = "0.16"
+thiserror = "1"
+tokio = { version = "0.2", features = [ "full" ] }
+
+[dev-dependencies]
+tempfile = "3"
+tracing-subscriber = "0.2"

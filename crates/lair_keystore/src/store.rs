@@ -3,7 +3,7 @@
 use crate::*;
 use entry::LairEntry;
 use futures::future::FutureExt;
-use lair_api::actor::*;
+use lair_keystore_api::actor::*;
 use std::collections::HashMap;
 
 ghost_actor::ghost_chan! {

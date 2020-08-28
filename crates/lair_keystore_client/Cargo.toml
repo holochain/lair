@@ -1,0 +1,15 @@
+[package]
+name = "lair_keystore_client"
+version = "0.0.1-alpha.1"
+description = "client connector to secret lair private keystore"
+license = "Apache-2.0"
+repository = "https://github.com/holochain/lair"
+documentation = "https://docs.rs/lair"
+authors = [ "Holochain Core Dev Team <devcore@holochain.org>" ]
+keywords = [ "holochain", "holo", "keystore", "secret", "cryptography" ]
+categories = [ "cryptography" ]
+edition = "2018"
+
+[dependencies]
+lair_keystore_api = { version = "0.0.1-alpha.1", path = "../lair_keystore_api" }
+tracing = "0.1"

@@ -1,4 +1,4 @@
-# lair_api
+# lair_keystore_api
 
 secret lair private keystore types
 

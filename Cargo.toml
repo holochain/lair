@@ -1,8 +1,8 @@
 [workspace]
 members = [
-  "crates/lair",
-  "crates/lair_api",
-  "crates/lair_client",
+  "crates/lair_keystore",
+  "crates/lair_keystore_api",
+  "crates/lair_keystore_client",
 ]
 
 [patch.crates-io]

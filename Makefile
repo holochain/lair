@@ -18,14 +18,14 @@ bump:
 	@for toml in $$(find crates -name Cargo.toml); do \
 		echo "# updating version in $${toml} to $(ver)"; \
 		sed -i'' 's/^version = \"[^"]*"$$/version = "$(ver)"/g' $${toml}; \
-		sed -i'' 's/^lair_api = { version = \"[^"]*"/lair_api = { version = "$(ver)"/g' $${toml}; \
+		sed -i'' 's/^lair_keystore_api = { version = \"[^"]*"/lair_keystore_api = { version = "$(ver)"/g' $${toml}; \
 	done
 
 publish: tools
 	git diff --exit-code
-	cargo publish --manifest-path crates/lair_api/Cargo.toml
-	cargo publish --manifest-path crates/lair/Cargo.toml
-#	cargo publish --manifest-path crates/lair_client/Cargo.toml
+	cargo publish --manifest-path crates/lair_keystore_api/Cargo.toml
+	cargo publish --manifest-path crates/lair_keystore/Cargo.toml
+#	cargo publish --manifest-path crates/lair_keystore_client/Cargo.toml
 	VER="v$$(grep version crates/lair/Cargo.toml | head -1 | cut -d ' ' -f 3 | cut -d \" -f 2)"; git tag -a $$VER -m $$VER
 	git push --tags
 
@@ -33,10 +33,10 @@ test: tools
 	$(ENV) cargo fmt -- --check
 	$(ENV) cargo clippy
 	$(ENV) RUST_BACKTRACE=1 cargo test
-	$(ENV) cargo readme -r crates/lair_api -o README.md
-	$(ENV) cargo readme -r crates/lair -o README.md
-	$(ENV) cargo readme -r crates/lair -o ../../README.md
-	$(ENV) cargo readme -r crates/lair_client -o README.md
+	$(ENV) cargo readme -r crates/lair_keystore_api -o README.md
+	$(ENV) cargo readme -r crates/lair_keystore -o README.md
+	$(ENV) cargo readme -r crates/lair_keystore -o ../../README.md
+	$(ENV) cargo readme -r crates/lair_keystore_client -o README.md
 	@if [ "${CI}x" != "x" ]; then git diff --exit-code; fi
 
 fmt: tools

@@ -3,8 +3,8 @@
 use crate::*;
 use derive_more::*;
 
-use lair_api::actor::*;
-use lair_api::internal::codec;
+use lair_keystore_api::actor::*;
+use lair_keystore_api::internal::codec;
 
 pub(crate) const ENTRY_SIZE: usize = 1024;
 

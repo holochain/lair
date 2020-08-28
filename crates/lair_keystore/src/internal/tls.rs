@@ -1,7 +1,7 @@
 //! Utilities for generating / managing TLS certificates and keypairs.
 
 use crate::*;
-use lair_api::actor::{TlsCertAlg, TlsCertOptions};
+use lair_keystore_api::actor::{TlsCertAlg, TlsCertOptions};
 
 /// Generate a new random Tls keypair and self signed certificate.
 pub async fn tls_cert_self_signed_new_from_entropy(
