@@ -3,22 +3,23 @@
 use crate::*;
 use entry::LairEntry;
 use futures::future::FutureExt;
+use lair_api::actor::*;
 use std::collections::HashMap;
-
-/// Keystore index type.
-pub type KeystoreIndex = u32;
 
 ghost_actor::ghost_chan! {
     /// persistence manager for entry storage
     pub chan EntryStore<LairError> {
         /// generate a new tls cert entry && return it
         fn tls_cert_self_signed_new_from_entropy(
-            options: internal::tls::TlsCertOptions,
+            options: TlsCertOptions,
         ) -> (KeystoreIndex, Arc<LairEntry>);
 
         /// generate a new signature ed25519 keypair entry && return it
         fn sign_ed25519_keypair_new_from_entropy() ->
             (KeystoreIndex, Arc<LairEntry>);
+
+        /// fetch the highest / most recently added keystore_index
+        fn get_last_entry_index() -> KeystoreIndex;
 
         /// fetch an entry from the store by keystore index
         fn get_entry_by_index(index: KeystoreIndex) -> Arc<LairEntry>;
@@ -29,7 +30,7 @@ ghost_actor::ghost_chan! {
         fn get_entry_by_pub_id(id: Arc<Vec<u8>>) -> (KeystoreIndex, Arc<LairEntry>);
 
         /// get a tls cert entry by sni
-        fn get_entry_by_sni(sni: Arc<String>) -> (KeystoreIndex, Arc<LairEntry>);
+        fn get_entry_by_sni(sni: CertSni) -> (KeystoreIndex, Arc<LairEntry>);
     }
 }
 
@@ -71,14 +72,15 @@ pub async fn spawn_entry_store_actor(
 mod store_file;
 use store_file::EntryStoreFileSender;
 
-#[allow(dead_code)]
 struct EntryStoreImpl {
     i_s: ghost_actor::GhostSender<EntryStoreInternal>,
+    #[allow(dead_code)]
     config: Arc<Config>,
     store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
+    last_entry_index: KeystoreIndex,
     entries_by_index: HashMap<KeystoreIndex, Arc<LairEntry>>,
     entries_by_pub_id: HashMap<Arc<Vec<u8>>, (KeystoreIndex, Arc<LairEntry>)>,
-    entries_by_sni: HashMap<Arc<String>, (KeystoreIndex, Arc<LairEntry>)>,
+    entries_by_sni: HashMap<CertSni, (KeystoreIndex, Arc<LairEntry>)>,
 }
 
 impl EntryStoreImpl {
@@ -105,6 +107,7 @@ impl EntryStoreImpl {
             i_s,
             config,
             store_file,
+            last_entry_index: 0.into(),
             entries_by_index: HashMap::new(),
             entries_by_pub_id: HashMap::new(),
             entries_by_sni: HashMap::new(),
@@ -114,6 +117,9 @@ impl EntryStoreImpl {
         for (entry_index, entry) in out.store_file.load_all_entries().await? {
             let entry = Arc::new(entry::LairEntry::decode(&entry)?);
             out.track_new_entry(entry_index, entry);
+            if entry_index.0 > out.last_entry_index.0 {
+                out.last_entry_index = entry_index;
+            }
         }
 
         Ok(out)
@@ -131,12 +137,16 @@ impl EntryStoreImpl {
                 self.entries_by_sni
                     .insert(e.sni.clone(), (entry_index, entry.clone()));
                 self.entries_by_pub_id
-                    .insert(e.cert_digest.clone(), (entry_index, entry));
+                    .insert(e.cert_digest.0.clone(), (entry_index, entry));
             }
             LairEntry::SignEd25519(e) => {
                 self.entries_by_pub_id
-                    .insert(e.pub_key.clone(), (entry_index, entry));
+                    .insert(e.pub_key.0.clone(), (entry_index, entry));
             }
+        }
+
+        if entry_index.0 > self.last_entry_index.0 {
+            self.last_entry_index = entry_index;
         }
     }
 }
@@ -148,7 +158,7 @@ impl ghost_actor::GhostHandler<EntryStore> for EntryStoreImpl {}
 impl EntryStoreHandler for EntryStoreImpl {
     fn handle_tls_cert_self_signed_new_from_entropy(
         &mut self,
-        options: internal::tls::TlsCertOptions,
+        options: TlsCertOptions,
     ) -> EntryStoreHandlerResult<(KeystoreIndex, Arc<LairEntry>)> {
         Ok(
             new_tls_cert(self.i_s.clone(), self.store_file.clone(), options)
@@ -165,6 +175,13 @@ impl EntryStoreHandler for EntryStoreImpl {
                 .boxed()
                 .into(),
         )
+    }
+
+    fn handle_get_last_entry_index(
+        &mut self,
+    ) -> EntryStoreHandlerResult<KeystoreIndex> {
+        let idx = self.last_entry_index;
+        Ok(async move { Ok(idx) }.boxed().into())
     }
 
     fn handle_get_entry_by_index(
@@ -195,14 +212,14 @@ impl EntryStoreHandler for EntryStoreImpl {
 
     fn handle_get_entry_by_sni(
         &mut self,
-        sni: Arc<String>,
+        sni: CertSni,
     ) -> EntryStoreHandlerResult<(KeystoreIndex, Arc<LairEntry>)> {
         match self.entries_by_sni.get(&sni) {
             Some(entry) => {
                 let entry = entry.clone();
                 Ok(async move { Ok(entry) }.boxed().into())
             }
-            None => Err(format!("invalid sni: {}", sni).into()),
+            None => Err(format!("invalid sni: {:?}", sni).into()),
         }
     }
 }
@@ -223,7 +240,7 @@ impl EntryStoreInternalHandler for EntryStoreImpl {
 async fn new_tls_cert(
     i_s: ghost_actor::GhostSender<EntryStoreInternal>,
     store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
-    options: internal::tls::TlsCertOptions,
+    options: TlsCertOptions,
 ) -> LairResult<(KeystoreIndex, Arc<LairEntry>)> {
     let cert = Arc::new(LairEntry::TlsCert(
         internal::tls::tls_cert_self_signed_new_from_entropy(options).await?,
@@ -284,17 +301,18 @@ mod tests {
             let store =
                 spawn_entry_store_actor(config, store_file).await.unwrap();
 
-            let (cert_index, cert) = store
-                .tls_cert_self_signed_new_from_entropy(
-                    internal::tls::TlsCertOptions::default(),
-                )
-                .await
-                .unwrap();
-            assert_eq!(1, cert_index);
+            let (cert_index, cert) =
+                store
+                    .tls_cert_self_signed_new_from_entropy(
+                        TlsCertOptions::default(),
+                    )
+                    .await
+                    .unwrap();
+            assert_eq!(1, cert_index.0);
 
             let (sign_index, sign) =
                 store.sign_ed25519_keypair_new_from_entropy().await.unwrap();
-            assert_eq!(2, sign_index);
+            assert_eq!(2, sign_index.0);
 
             use ghost_actor::GhostControlSender;
             store.ghost_actor_shutdown().await.unwrap();
@@ -316,8 +334,8 @@ mod tests {
 
         let store = spawn_entry_store_actor(config, store_file).await.unwrap();
 
-        let r_cert = store.get_entry_by_index(1).await.unwrap();
-        let r_sign = store.get_entry_by_index(2).await.unwrap();
+        let r_cert = store.get_entry_by_index(1.into()).await.unwrap();
+        let r_sign = store.get_entry_by_index(2.into()).await.unwrap();
         as_cert!(r_cert);
         as_sign!(r_sign);
 
@@ -325,25 +343,25 @@ mod tests {
         assert_eq!(sign.pub_key, r_sign.pub_key);
 
         let (r_cert_index, r_cert) = store
-            .get_entry_by_pub_id(cert.cert_digest.clone())
+            .get_entry_by_pub_id(cert.cert_digest.0.clone())
             .await
             .unwrap();
         as_cert!(r_cert);
-        assert_eq!(1, r_cert_index);
+        assert_eq!(1, r_cert_index.0);
         assert_eq!(cert.cert_digest, r_cert.cert_digest);
 
         let (r_sign_index, r_sign) = store
-            .get_entry_by_pub_id(sign.pub_key.clone())
+            .get_entry_by_pub_id(sign.pub_key.0.clone())
             .await
             .unwrap();
         as_sign!(r_sign);
-        assert_eq!(2, r_sign_index);
+        assert_eq!(2, r_sign_index.0);
         assert_eq!(sign.pub_key, r_sign.pub_key);
 
         let (r_cert_index, r_cert) =
             store.get_entry_by_sni(cert.sni.clone()).await.unwrap();
         as_cert!(r_cert);
-        assert_eq!(1, r_cert_index);
+        assert_eq!(1, r_cert_index.0);
         assert_eq!(cert.cert_digest, r_cert.cert_digest);
 
         use ghost_actor::GhostControlSender;

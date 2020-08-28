@@ -1,26 +1,7 @@
 //! Utilities for generating / managing TLS certificates and keypairs.
 
 use crate::*;
-
-/// Tls keypair algorithm to use.
-pub enum TlsCertAlg {
-    /// Ed25519 Curve.
-    PkcsEd25519,
-}
-
-/// Configuration for Tls Certificate Generation.
-pub struct TlsCertOptions {
-    /// Tls keypair algorithm to use.
-    pub alg: TlsCertAlg,
-}
-
-impl Default for TlsCertOptions {
-    fn default() -> Self {
-        Self {
-            alg: TlsCertAlg::PkcsEd25519,
-        }
-    }
-}
+use lair_api::actor::{TlsCertAlg, TlsCertOptions};
 
 /// Generate a new random Tls keypair and self signed certificate.
 pub async fn tls_cert_self_signed_new_from_entropy(
@@ -31,6 +12,11 @@ pub async fn tls_cert_self_signed_new_from_entropy(
         let mut params = rcgen::CertificateParams::new(vec![sni.clone()]);
         match options.alg {
             TlsCertAlg::PkcsEd25519 => params.alg = &rcgen::PKCS_ED25519,
+            _ => {
+                return Err(
+                    format!("unhandled cert alg: {:?}", options.alg).into()
+                )
+            }
         };
         let cert = rcgen::Certificate::from_params(params)
             .map_err(LairError::other)?;
@@ -44,10 +30,10 @@ pub async fn tls_cert_self_signed_new_from_entropy(
             .as_bytes()
             .to_vec();
         Ok(entry::EntryTlsCert {
-            sni: Arc::new(sni),
-            priv_key_der: Arc::new(priv_key_der),
-            cert_der: Arc::new(cert_der),
-            cert_digest: Arc::new(cert_digest),
+            sni: sni.into(),
+            priv_key_der: priv_key_der.into(),
+            cert_der: cert_der.into(),
+            cert_digest: cert_digest.into(),
         })
     })
     .await

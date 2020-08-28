@@ -21,6 +21,7 @@ pub type LairClientEventReceiver =
     futures::channel::mpsc::Receiver<LairClientEvent>;
 
 /// Tls keypair algorithm to use.
+#[non_exhaustive]
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum TlsCertAlg {
@@ -46,6 +47,7 @@ impl TlsCertAlg {
 }
 
 /// Configuration for Tls Certificate Generation.
+#[non_exhaustive]
 pub struct TlsCertOptions {
     /// Tls keypair algorithm to use.
     pub alg: TlsCertAlg,
@@ -149,6 +151,7 @@ impl From<Vec<u8>> for SignEd25519Signature {
 }
 
 /// The entry type for a given entry.
+#[non_exhaustive]
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum LairEntryType {
