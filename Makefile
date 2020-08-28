@@ -21,13 +21,13 @@ bump:
 		sed -i'' 's/^lair_api = { version = \"[^"]*"/lair_api = { version = "$(ver)"/g' $${toml}; \
 	done
 
-#publish: tools
-#	git diff --exit-code
-#	cargo publish --manifest-path crates/lair_api/Cargo.toml
-#	cargo publish --manifest-path crates/lair/Cargo.toml
+publish: tools
+	git diff --exit-code
+	cargo publish --manifest-path crates/lair_api/Cargo.toml
+	cargo publish --manifest-path crates/lair/Cargo.toml
 #	cargo publish --manifest-path crates/lair_client/Cargo.toml
-#	VER="v$$(grep version crates/lair/Cargo.toml | head -1 | cut -d ' ' -f 3 | cut -d \" -f 2)"; git tag -a $$VER -m $$VER
-#	git push --tags
+	VER="v$$(grep version crates/lair/Cargo.toml | head -1 | cut -d ' ' -f 3 | cut -d \" -f 2)"; git tag -a $$VER -m $$VER
+	git push --tags
 
 test: tools
 	$(ENV) cargo fmt -- --check
