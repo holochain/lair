@@ -159,7 +159,7 @@ async fn load_all_entries(
             .read_exact(&mut buf)
             .await
             .map_err(LairError::other)?;
-        out.push((i, buf));
+        out.push((i.into(), buf));
     }
 
     Ok(out)
@@ -196,5 +196,5 @@ async fn write_next_entry(
 
     store_file.sync_all().await.map_err(LairError::other)?;
 
-    Ok(entry_count as u32)
+    Ok((entry_count as u32).into())
 }

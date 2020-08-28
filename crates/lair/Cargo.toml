@@ -13,6 +13,7 @@ edition = "2018"
 [dependencies]
 blake2b_simd = "0.5.10"
 byteorder = "1"
+derive_more = "0.99"
 futures = "0.3"
 ghost_actor = "0.2.0"
 lair_api = { version = "0.0.1-alpha.1", path = "../lair_api" }

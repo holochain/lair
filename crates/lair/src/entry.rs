@@ -1,7 +1,9 @@
 //! File format entry structs.
 
 use crate::*;
+use derive_more::*;
 
+use lair_api::actor::*;
 use lair_api::internal::codec;
 
 pub(crate) const ENTRY_SIZE: usize = 1024;
@@ -76,18 +78,18 @@ fn entry_decode_tls_cert(
     let cert_digest = reader.read_bytes(32)?.to_vec();
 
     Ok(EntryTlsCert {
-        sni: Arc::new(sni),
-        priv_key_der: Arc::new(priv_key_der),
-        cert_der: Arc::new(cert_der),
-        cert_digest: Arc::new(cert_digest),
+        sni: sni.into(),
+        priv_key_der: priv_key_der.into(),
+        cert_der: cert_der.into(),
+        cert_digest: cert_digest.into(),
     })
 }
 
 fn entry_decode_sign_ed25519(
     mut reader: codec::CodecReader<'_>,
 ) -> LairResult<EntrySignEd25519> {
-    let priv_key = Arc::new(reader.read_bytes(32)?.to_vec());
-    let pub_key = Arc::new(reader.read_bytes(32)?.to_vec());
+    let priv_key = reader.read_bytes(32)?.to_vec().into();
+    let pub_key = reader.read_bytes(32)?.to_vec().into();
 
     Ok(EntrySignEd25519 { priv_key, pub_key })
 }
@@ -96,17 +98,17 @@ fn entry_decode_sign_ed25519(
 #[derive(Debug, Clone)]
 pub struct EntryTlsCert {
     /// The random sni that will be built into the self-signed certificate
-    pub sni: Arc<String>,
+    pub sni: CertSni,
 
     /// Private key bytes.
     /// @todo - once we're integrated with sodoken, make this a priv buffer.
-    pub priv_key_der: Arc<Vec<u8>>,
+    pub priv_key_der: CertPrivKey,
 
     /// Certificate bytes.
-    pub cert_der: Arc<Vec<u8>>,
+    pub cert_der: Cert,
 
     /// 32 byte blake2b certificate digest.
-    pub cert_digest: Arc<Vec<u8>>,
+    pub cert_digest: CertDigest,
 }
 
 impl EntryTlsCert {
@@ -142,15 +144,27 @@ impl EntryTlsCert {
     }
 }
 
+/// The 64 byte signature ed25519 public key.
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
+)]
+pub struct SignEd25519PrivKey(pub Arc<Vec<u8>>);
+
+impl From<Vec<u8>> for SignEd25519PrivKey {
+    fn from(d: Vec<u8>) -> Self {
+        Self(Arc::new(d))
+    }
+}
+
 /// File format entry representing Sign Ed25519 Keypair data.
 #[derive(Debug, Clone)]
 pub struct EntrySignEd25519 {
     /// Private key bytes.
     /// @todo - once we're integrated with sodoken, make this a priv buffer.
-    pub priv_key: Arc<Vec<u8>>,
+    pub priv_key: SignEd25519PrivKey,
 
     /// Public key bytes.
-    pub pub_key: Arc<Vec<u8>>,
+    pub pub_key: SignEd25519PubKey,
 }
 
 impl EntrySignEd25519 {
@@ -179,7 +193,7 @@ impl EntrySignEd25519 {
     pub fn sign(
         &self,
         message: Arc<Vec<u8>>,
-    ) -> impl std::future::Future<Output = LairResult<Arc<Vec<u8>>>> + 'static
+    ) -> impl std::future::Future<Output = LairResult<SignEd25519Signature>> + 'static
     {
         let priv_key = self.priv_key.clone();
         internal::sign_ed25519::sign_ed25519(priv_key, message)
@@ -193,8 +207,8 @@ mod tests {
     #[test]
     fn it_can_encode_and_decode_sign_ed25519_entry() {
         let e = EntrySignEd25519 {
-            priv_key: Arc::new(vec![0xdb; 32]),
-            pub_key: Arc::new(vec![0x42; 32]),
+            priv_key: vec![0xdb; 32].into(),
+            pub_key: vec![0x42; 32].into(),
         };
         let d = LairEntry::from(e.clone()).encode().unwrap();
         let e2 = match LairEntry::decode(&d).unwrap() {
@@ -208,10 +222,10 @@ mod tests {
     #[test]
     fn it_can_encode_and_decode_tls_cert_entry() {
         let e = EntryTlsCert {
-            sni: Arc::new("test".to_string()),
-            priv_key_der: Arc::new(vec![1, 2]),
-            cert_der: Arc::new(vec![3, 4]),
-            cert_digest: Arc::new(vec![0x42; 32]),
+            sni: "test".to_string().into(),
+            priv_key_der: vec![1, 2].into(),
+            cert_der: vec![3, 4].into(),
+            cert_digest: vec![0x42; 32].into(),
         };
         let d = LairEntry::from(e.clone()).encode().unwrap();
         let e2 = match LairEntry::decode(&d).unwrap() {

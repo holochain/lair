@@ -14,6 +14,8 @@ pub mod entry;
 
 pub mod store;
 
+pub mod ipc;
+
 /// Main loop of lair executable.
 pub async fn execute_lair() -> LairResult<()> {
     let mut config = Config::builder();
@@ -24,8 +26,10 @@ pub async fn execute_lair() -> LairResult<()> {
 
     let config = config.build();
 
-    let internal::pid_check::PidCheckResult { .. } =
+    let internal::pid_check::PidCheckResult { store_file } =
         internal::pid_check::pid_check(&config)?;
+
+    ipc::spawn_bind_server_ipc(config, store_file).await?;
 
     // wait forever... i.e. ctrl-c
     futures::future::pending::<()>().await;
