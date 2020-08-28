@@ -1,6 +1,6 @@
 use futures::{future::FutureExt, stream::StreamExt};
 use ghost_actor::dependencies::tracing;
-use lair_api::actor::LairClientApiSender;
+use lair_keystore_api::actor::LairClientApiSender;
 
 fn init_tracing() {
     let _ = tracing::subscriber::set_global_default(
@@ -12,7 +12,7 @@ fn init_tracing() {
 }
 
 #[tokio::test(threaded_scheduler)]
-async fn lair_integration_test() -> lair_api::LairResult<()> {
+async fn lair_integration_test() -> lair_keystore_api::LairResult<()> {
     init_tracing();
 
     let tmpdir = tempfile::tempdir().unwrap();
@@ -20,7 +20,7 @@ async fn lair_integration_test() -> lair_api::LairResult<()> {
 
     lair::execute_lair().await?;
 
-    let config = lair_api::Config::builder()
+    let config = lair_keystore_api::Config::builder()
         .set_root_path(tmpdir.path())
         .build();
 
@@ -33,12 +33,12 @@ async fn lair_integration_test() -> lair_api::LairResult<()> {
     }
 
     let (api_send, mut evt_recv) =
-        lair_api::ipc::spawn_client_ipc(config).await?;
+        lair_keystore_api::ipc::spawn_client_ipc(config).await?;
 
     tokio::task::spawn(async move {
         while let Some(msg) = evt_recv.next().await {
             match msg {
-                lair_api::actor::LairClientEvent::RequestUnlockPassphrase {
+                lair_keystore_api::actor::LairClientEvent::RequestUnlockPassphrase {
                     respond,
                     ..
                 } => {
@@ -54,20 +54,20 @@ async fn lair_integration_test() -> lair_api::LairResult<()> {
 
     assert_eq!(0, api_send.lair_get_last_entry_index().await?.0);
     assert_eq!(
-        lair_api::actor::LairEntryType::Invalid,
+        lair_keystore_api::actor::LairEntryType::Invalid,
         api_send.lair_get_entry_type(0.into()).await?,
     );
 
     let (cert_index, cert_sni, cert_digest) = api_send
         .tls_cert_new_self_signed_from_entropy(
-            lair_api::actor::TlsCertOptions::default(),
+            lair_keystore_api::actor::TlsCertOptions::default(),
         )
         .await?;
 
     assert_eq!(1, cert_index.0);
     assert_eq!(1, api_send.lair_get_last_entry_index().await?.0);
     assert_eq!(
-        lair_api::actor::LairEntryType::TlsCert,
+        lair_keystore_api::actor::LairEntryType::TlsCert,
         api_send.lair_get_entry_type(1.into()).await?,
     );
 
@@ -97,7 +97,7 @@ async fn lair_integration_test() -> lair_api::LairResult<()> {
     assert_eq!(2, sign_index.0);
     assert_eq!(2, api_send.lair_get_last_entry_index().await?.0);
     assert_eq!(
-        lair_api::actor::LairEntryType::SignEd25519,
+        lair_keystore_api::actor::LairEntryType::SignEd25519,
         api_send.lair_get_entry_type(2.into()).await?,
     );
 

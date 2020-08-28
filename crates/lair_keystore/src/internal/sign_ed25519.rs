@@ -4,7 +4,7 @@
 use crate::entry::SignEd25519PrivKey;
 use crate::*;
 
-use lair_api::actor::{SignEd25519PubKey, SignEd25519Signature};
+use lair_keystore_api::actor::{SignEd25519PubKey, SignEd25519Signature};
 
 /// Generate a new random ed25519 signature keypair.
 pub async fn sign_ed25519_keypair_new_from_entropy(

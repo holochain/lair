@@ -2,7 +2,7 @@
 #![deny(warnings)]
 //! secret lair private keystore
 
-use lair_api::{Config, LairError, LairResult};
+use lair_keystore_api::{Config, LairError, LairResult};
 use std::sync::Arc;
 
 mod statics;
