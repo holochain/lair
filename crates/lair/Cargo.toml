@@ -30,6 +30,7 @@ tracing = "0.1"
 
 [dev-dependencies]
 tempfile = "3"
+tracing-subscriber = "0.2"
 
 [lib]
 name = "lair"

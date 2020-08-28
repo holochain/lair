@@ -3,7 +3,7 @@
 use crate::entry::LairEntry;
 use crate::store::EntryStoreSender;
 use crate::*;
-use futures::future::FutureExt;
+use futures::{future::FutureExt, stream::StreamExt};
 use lair_api::actor::*;
 
 /// Spawn a new IPC server binding to serve out the Lair client api.
@@ -16,19 +16,45 @@ pub async fn spawn_bind_server_ipc(
 
     let builder = ghost_actor::actor_builder::GhostActorBuilder::new();
 
-    let _api_sender = builder
+    let api_sender = builder
         .channel_factory()
         .create_channel::<LairClientApi>()
         .await?;
 
-    tokio::task::spawn(builder.spawn(Internal::new(config, store_actor)?));
+    let i_s = builder
+        .channel_factory()
+        .create_channel::<InternalApi>()
+        .await?;
+
+    let mut con_recv =
+        lair_api::ipc::spawn_bind_server_ipc(config.clone(), api_sender)
+            .await?;
+
+    tokio::task::spawn(async move {
+        while let Some(con) = con_recv.next().await {
+            i_s.incoming_con(con).await?;
+        }
+        LairResult::<()>::Ok(())
+    });
+
+    tokio::task::spawn(
+        builder.spawn(Internal::new(config.clone(), store_actor)?),
+    );
 
     Ok(())
+}
+
+ghost_actor::ghost_chan! {
+    chan InternalApi<LairError> {
+        fn incoming_con(evt_send: futures::channel::mpsc::Sender<LairClientEvent>) -> ();
+    }
 }
 
 struct Internal {
     #[allow(dead_code)]
     store_actor: ghost_actor::GhostSender<store::EntryStore>,
+    // TODO FIXME
+    memory_leak: Vec<futures::channel::mpsc::Sender<LairClientEvent>>,
 }
 
 impl Internal {
@@ -36,11 +62,29 @@ impl Internal {
         _config: Arc<Config>,
         store_actor: ghost_actor::GhostSender<store::EntryStore>,
     ) -> LairResult<Self> {
-        Ok(Internal { store_actor })
+        Ok(Internal {
+            store_actor,
+            memory_leak: Vec::new(),
+        })
     }
 }
 
 impl ghost_actor::GhostControlHandler for Internal {}
+
+impl ghost_actor::GhostHandler<InternalApi> for Internal {}
+
+impl InternalApiHandler for Internal {
+    fn handle_incoming_con(
+        &mut self,
+        evt_send: futures::channel::mpsc::Sender<LairClientEvent>,
+    ) -> InternalApiHandlerResult<()> {
+        self.memory_leak.push(evt_send.clone());
+        tokio::task::spawn(async move {
+            let _passphrase = evt_send.request_unlock_passphrase().await;
+        });
+        Ok(async move { Ok(()) }.boxed().into())
+    }
+}
 
 impl ghost_actor::GhostHandler<LairClientApi> for Internal {}
 

@@ -31,8 +31,5 @@ pub async fn execute_lair() -> LairResult<()> {
 
     ipc::spawn_bind_server_ipc(config, store_file).await?;
 
-    // wait forever... i.e. ctrl-c
-    futures::future::pending::<()>().await;
-
     Ok(())
 }
