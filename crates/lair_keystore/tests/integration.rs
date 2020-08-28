@@ -18,7 +18,7 @@ async fn lair_integration_test() -> lair_keystore_api::LairResult<()> {
     let tmpdir = tempfile::tempdir().unwrap();
     std::env::set_var("LAIR_DIR", tmpdir.path());
 
-    lair::execute_lair().await?;
+    lair_keystore::execute_lair().await?;
 
     let config = lair_keystore_api::Config::builder()
         .set_root_path(tmpdir.path())
@@ -51,6 +51,10 @@ async fn lair_integration_test() -> lair_keystore_api::LairResult<()> {
             }
         }
     });
+
+    let info = api_send.lair_get_server_info().await?;
+    assert_eq!("lair-keystore", &info.name);
+    assert_eq!(lair_keystore::LAIR_VER, &info.version);
 
     assert_eq!(0, api_send.lair_get_last_entry_index().await?.0);
     assert_eq!(

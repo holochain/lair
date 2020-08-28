@@ -148,6 +148,19 @@ where
         msg: LairWire,
     ) -> IpcWireApiHandlerResult<LairWire> {
         match msg {
+            LairWire::ToLairLairGetServerInfo { msg_id } => {
+                let fut = self.api_sender.lair_get_server_info();
+                Ok(async move {
+                    fut.await.map(|info| {
+                        LairWire::ToCliLairGetServerInfoResponse {
+                            msg_id,
+                            info,
+                        }
+                    })
+                }
+                .boxed()
+                .into())
+            }
             LairWire::ToLairLairGetLastEntryIndex { msg_id } => {
                 let fut = self.api_sender.lair_get_last_entry_index();
                 Ok(async move {

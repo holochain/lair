@@ -5,7 +5,7 @@
 /// main entry point
 #[tokio::main]
 pub async fn main() -> lair_keystore_api::LairResult<()> {
-    lair::execute_lair().await?;
+    lair_keystore::execute_lair().await?;
 
     // wait forever... i.e. until a ctrl-c
     futures::future::pending::<()>().await;

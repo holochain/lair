@@ -67,6 +67,24 @@ impl ghost_actor::GhostControlHandler for Internal {}
 impl ghost_actor::GhostHandler<LairClientApi> for Internal {}
 
 impl LairClientApiHandler for Internal {
+    fn handle_lair_get_server_info(
+        &mut self,
+    ) -> LairClientApiHandlerResult<LairServerInfo> {
+        let fut = self.ipc_send.request(LairWire::ToLairLairGetServerInfo {
+            msg_id: next_msg_id(),
+        });
+        Ok(async move {
+            match fut.await? {
+                LairWire::ToCliLairGetServerInfoResponse { info, .. } => {
+                    Ok(info)
+                }
+                o => Err(format!("unexpected: {:?}", o).into()),
+            }
+        }
+        .boxed()
+        .into())
+    }
+
     fn handle_lair_get_last_entry_index(
         &mut self,
     ) -> LairClientApiHandlerResult<KeystoreIndex> {
