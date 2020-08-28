@@ -12,6 +12,11 @@ pub async fn tls_cert_self_signed_new_from_entropy(
         let mut params = rcgen::CertificateParams::new(vec![sni.clone()]);
         match options.alg {
             TlsCertAlg::PkcsEd25519 => params.alg = &rcgen::PKCS_ED25519,
+            _ => {
+                return Err(
+                    format!("unhandled cert alg: {:?}", options.alg).into()
+                )
+            }
         };
         let cert = rcgen::Certificate::from_params(params)
             .map_err(LairError::other)?;

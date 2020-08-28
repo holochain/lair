@@ -65,6 +65,11 @@ async fn lair_integration_test() -> lair_api::LairResult<()> {
         .await?;
 
     assert_eq!(1, cert_index.0);
+    assert_eq!(1, api_send.lair_get_last_entry_index().await?.0);
+    assert_eq!(
+        lair_api::actor::LairEntryType::TlsCert,
+        api_send.lair_get_entry_type(1.into()).await?,
+    );
 
     let (cert_sni2, cert_digest2) = api_send.tls_cert_get(cert_index).await?;
     assert_eq!(cert_sni, cert_sni2);
@@ -90,6 +95,11 @@ async fn lair_integration_test() -> lair_api::LairResult<()> {
         api_send.sign_ed25519_new_from_entropy().await?;
 
     assert_eq!(2, sign_index.0);
+    assert_eq!(2, api_send.lair_get_last_entry_index().await?.0);
+    assert_eq!(
+        lair_api::actor::LairEntryType::SignEd25519,
+        api_send.lair_get_entry_type(2.into()).await?,
+    );
 
     let sign_pub_key2 = api_send.sign_ed25519_get(sign_index).await?;
 

@@ -9,6 +9,7 @@ use lair_api::internal::codec;
 pub(crate) const ENTRY_SIZE: usize = 1024;
 
 /// Enum of lair entry types for decoding.
+#[non_exhaustive]
 #[derive(Debug, Clone)]
 pub enum LairEntry {
     /// Tls Cert
