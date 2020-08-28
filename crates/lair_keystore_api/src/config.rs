@@ -9,6 +9,8 @@ pub struct Config {
     store_path: PathBuf,
     pid_path: PathBuf,
     socket_path: PathBuf,
+    stdout_path: PathBuf,
+    stderr_path: PathBuf,
 }
 
 impl Config {
@@ -25,6 +27,10 @@ impl Config {
         self.pid_path.push("pid");
         self.socket_path = self.root_path.clone();
         self.socket_path.push("socket");
+        self.stdout_path = self.root_path.clone();
+        self.stdout_path.push("stdout");
+        self.stderr_path = self.root_path.clone();
+        self.stderr_path.push("stderr");
         Arc::new(self)
     }
 
@@ -52,6 +58,16 @@ impl Config {
     pub fn get_socket_path(&self) -> &Path {
         self.socket_path.as_path()
     }
+
+    /// Get the path to the lair stdout file.
+    pub fn get_stdout_path(&self) -> &Path {
+        self.stdout_path.as_path()
+    }
+
+    /// Get the path to the lair stderr file.
+    pub fn get_stderr_path(&self) -> &Path {
+        self.stderr_path.as_path()
+    }
 }
 
 /// Lair configuration builder.
@@ -66,6 +82,8 @@ impl Default for ConfigBuilder {
             store_path: PathBuf::new(),
             pid_path: PathBuf::new(),
             socket_path: PathBuf::new(),
+            stdout_path: PathBuf::new(),
+            stderr_path: PathBuf::new(),
         })
     }
 }
