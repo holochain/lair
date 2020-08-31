@@ -5,7 +5,8 @@ use crate::*;
 #[allow(dead_code)]
 pub(crate) struct IpcRead {
     config: Arc<Config>,
-    read_half: tokio::net::unix::OwnedReadHalf,
+    //read_half: tokio::net::unix::OwnedReadHalf,
+    read_half: tokio::io::ReadHalf<tokio::net::UnixStream>,
 }
 
 impl tokio::io::AsyncRead for IpcRead {
@@ -23,7 +24,8 @@ impl tokio::io::AsyncRead for IpcRead {
 #[allow(dead_code)]
 pub(crate) struct IpcWrite {
     config: Arc<Config>,
-    write_half: tokio::net::unix::OwnedWriteHalf,
+    //write_half: tokio::net::unix::OwnedWriteHalf,
+    write_half: tokio::io::WriteHalf<tokio::net::UnixStream>,
 }
 
 impl tokio::io::AsyncWrite for IpcWrite {
@@ -62,7 +64,8 @@ pub(crate) async fn ipc_connect(
     let socket = tokio::net::UnixStream::connect(config.get_socket_path())
         .await
         .map_err(LairError::other)?;
-    let (read_half, write_half) = socket.into_split();
+    //let (read_half, write_half) = socket.into_split();
+    let (read_half, write_half) = tokio::io::split(socket);
     Ok((
         IpcRead {
             config: config.clone(),
@@ -88,7 +91,8 @@ impl IpcServer {
 
     pub async fn accept(&mut self) -> LairResult<(IpcRead, IpcWrite)> {
         let (con, _) = self.socket.accept().await.map_err(LairError::other)?;
-        let (read_half, write_half) = con.into_split();
+        //let (read_half, write_half) = con.into_split();
+        let (read_half, write_half) = tokio::io::split(con);
         Ok((
             IpcRead {
                 config: self.config.clone(),
