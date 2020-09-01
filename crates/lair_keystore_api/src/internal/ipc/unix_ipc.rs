@@ -63,7 +63,12 @@ pub(crate) async fn ipc_connect(
 ) -> LairResult<(IpcRead, IpcWrite)> {
     let socket = tokio::net::UnixStream::connect(config.get_socket_path())
         .await
-        .map_err(LairError::other)?;
+        .map_err(|e| {
+            LairError::IpcClientConnectError(
+                config.get_socket_path().to_string_lossy().to_string(),
+                e.into(),
+            )
+        })?;
     //let (read_half, write_half) = socket.into_split();
     let (read_half, write_half) = tokio::io::split(socket);
     Ok((

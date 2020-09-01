@@ -25,13 +25,17 @@ publish: tools
 	git diff --exit-code
 	cargo publish --manifest-path crates/lair_keystore_api/Cargo.toml
 	cargo publish --manifest-path crates/lair_keystore/Cargo.toml
-#	cargo publish --manifest-path crates/lair_keystore_client/Cargo.toml
+	cargo publish --manifest-path crates/lair_keystore_client/Cargo.toml
 	VER="v$$(grep version crates/lair/Cargo.toml | head -1 | cut -d ' ' -f 3 | cut -d \" -f 2)"; git tag -a $$VER -m $$VER
 	git push --tags
 
 test: tools
 	$(ENV) cargo fmt -- --check
 	$(ENV) cargo clippy
+	if [ "${CI}x" != "x" ]; then \
+		cargo test --manifest-path=crates/lair_keystore_client/Cargo.toml \
+			--features=cargo-compile-test cargo_compile_test; \
+	fi
 	$(ENV) RUST_BACKTRACE=1 cargo test
 	$(ENV) cargo readme -r crates/lair_keystore_api -o README.md
 	$(ENV) cargo readme -r crates/lair_keystore -o README.md

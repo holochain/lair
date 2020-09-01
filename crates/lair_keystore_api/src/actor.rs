@@ -184,9 +184,23 @@ impl LairEntryType {
     }
 }
 
+/// Get information about the server we are connected to.
+#[non_exhaustive]
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct LairServerInfo {
+    /// Server name / identifier.
+    pub name: String,
+
+    /// Server version.
+    pub version: String,
+}
+
 ghost_actor::ghost_chan! {
     /// Lair Client Actor Api.
     pub chan LairClientApi<LairError> {
+        /// Get lair server info.
+        fn lair_get_server_info() -> LairServerInfo;
+
         /// Get the highest entry index.
         /// Note, some entries my be stubs / erased values.
         fn lair_get_last_entry_index() -> KeystoreIndex;

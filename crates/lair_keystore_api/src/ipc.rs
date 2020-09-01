@@ -75,6 +75,11 @@ mod tests {
         impl ghost_actor::GhostControlHandler for TestServer {}
         impl ghost_actor::GhostHandler<LairClientApi> for TestServer {}
         impl LairClientApiHandler for TestServer {
+            fn handle_lair_get_server_info(
+                &mut self,
+            ) -> LairClientApiHandlerResult<LairServerInfo> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
             fn handle_lair_get_last_entry_index(
                 &mut self,
             ) -> LairClientApiHandlerResult<KeystoreIndex> {
@@ -219,6 +224,10 @@ mod tests {
             Ok(())
         });
 
+        assert_eq!(
+            LairServerInfo::test_val(),
+            cli_send.lair_get_server_info().await?
+        );
         assert_eq!(
             KeystoreIndex::test_val(),
             cli_send.lair_get_last_entry_index().await?

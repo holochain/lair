@@ -2,6 +2,8 @@
 #![deny(warnings)]
 //! secret lair private keystore
 
+include!(concat!(env!("OUT_DIR"), "/ver.rs"));
+
 use lair_keystore_api::{Config, LairError, LairResult};
 use std::sync::Arc;
 

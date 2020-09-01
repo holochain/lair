@@ -87,6 +87,30 @@ macro_rules! wire_type_meta_macro {
                     lair_entry_type,
                 }
             },
+            ToLairLairGetServerInfo 0x00000030 false true {
+            } |msg_id, wire_type| {
+                let writer = default_encode_setup!(msg_id, wire_type);
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                LairWire::ToLairLairGetServerInfo { msg_id }
+            },
+            ToCliLairGetServerInfoResponse 0x00000031 false false {
+                info: LairServerInfo,
+            } |msg_id, wire_type| {
+                let mut writer = default_encode_setup!(msg_id, wire_type);
+                writer.write_str(&info.name, 64)?;
+                writer.write_str(&info.version, 64)?;
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                let name = reader.read_str()?;
+                let version = reader.read_str()?;
+                LairWire::ToCliLairGetServerInfoResponse {
+                    msg_id,
+                    info: LairServerInfo { name, version },
+                }
+            },
             ToLairTlsCertNewSelfSignedFromEntropy 0x00000110 false true {
                 cert_alg: TlsCertAlg,
             } |msg_id, wire_type| {
@@ -705,6 +729,7 @@ pub(crate) mod tests {
     }
     test_val!(String, "test-val".to_string());
     test_val!(Vec<u8>, vec![0x42; 32]);
+    test_val!(LairServerInfo, Default::default());
     test_val!(LairEntryType, Default::default());
     test_val!(TlsCertAlg, Default::default());
     test_val!(KeystoreIndex, 42.into());
