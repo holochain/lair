@@ -6,7 +6,7 @@
 
 SHELL = /usr/bin/env sh
 
-ENV = RUSTFLAGS='$(RUSTFLAGS)' CARGO_BUILD_JOBS='$(shell nproc || sysctl -n hw.physicalcpu)' NUM_JOBS='$(shell nproc || sysctl -n hw.physicalcpu)'
+ENV = RUSTFLAGS='$(RUSTFLAGS)' CARGO_BUILD_JOBS='$(shell nproc || sysctl -n hw.physicalcpu)' NUM_JOBS='$(shell nproc || sysctl -n hw.physicalcpu)' CARGO_TARGET_DIR='$(shell pwd)/target'
 
 all: test
 
@@ -33,8 +33,7 @@ test: tools
 	$(ENV) cargo fmt -- --check
 	$(ENV) cargo clippy
 	if [ "${CI}x" != "x" ]; then \
-		cargo test --manifest-path=crates/lair_keystore_client/Cargo.toml \
-			--features=cargo-compile-test cargo_compile_test; \
+		$(ENV) cargo install --debug -f --path crates/lair_keystore; \
 	fi
 	$(ENV) RUST_BACKTRACE=1 cargo test
 	$(ENV) cargo readme -r crates/lair_keystore_api -o README.md

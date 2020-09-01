@@ -2,16 +2,11 @@ use crate::*;
 
 /// If cargo exists on the system, try to build lair manually.
 pub fn cargo_build_lair_executable() -> LairResult<()> {
-    // TODO FIXME - once we publish to crates.io - remove `--git` and `--branch`
     match std::process::Command::new("cargo")
         .args(&[
             "install",
             "lair_keystore",
             "-f",
-            "--git",
-            "https://github.com/holochain/lair.git",
-            "--branch",
-            "lair-client",
             "--version",
             crate::LAIR_VER,
             "--bin",
