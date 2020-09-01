@@ -2,7 +2,7 @@ use crate::*;
 
 /// Manually run a lair executable.
 /// Child returned mainly so tests can kill the process.
-pub fn run_lair_executable(
+pub async fn run_lair_executable(
     config: Arc<Config>,
 ) -> LairResult<std::process::Child> {
     let stdout = std::fs::OpenOptions::new()
@@ -24,13 +24,37 @@ pub fn run_lair_executable(
         .stdin(std::process::Stdio::null())
         .spawn()
         .map_err(LairError::other)?;
+    wait_ready(config.get_stdout_path()).await?;
     Ok(cmd)
+}
+
+async fn wait_ready(stdout_path: &std::path::Path) -> LairResult<()> {
+    let mut stdout = tokio::fs::OpenOptions::new()
+        .read(true)
+        .open(stdout_path)
+        .await
+        .map_err(LairError::other)?;
+    let now = std::time::Instant::now();
+    let mut buf = String::new();
+    while now.elapsed().as_millis() < 2000 {
+        use tokio::io::AsyncReadExt;
+        stdout
+            .read_to_string(&mut buf)
+            .await
+            .map_err(LairError::other)?;
+        if buf.contains("#lair-keystore-ready#") {
+            return Ok(());
+        }
+    }
+    Err("timout waiting for lair-keystore ready".into())
 }
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn spawn_process() {
+    use super::*;
+
+    #[tokio::test(threaded_scheduler)]
+    async fn spawn_process() -> LairResult<()> {
         let tmpdir = tempfile::tempdir().unwrap();
         std::env::set_var("LAIR_DIR", tmpdir.path());
 
@@ -38,8 +62,10 @@ mod tests {
             .set_root_path(tmpdir.path())
             .build();
 
-        let mut child = super::run_lair_executable(config).unwrap();
+        let mut child = super::run_lair_executable(config).await?;
 
         child.kill().unwrap();
+
+        Ok(())
     }
 }

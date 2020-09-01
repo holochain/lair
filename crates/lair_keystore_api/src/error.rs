@@ -9,6 +9,10 @@ pub enum LairError {
     #[error("Lair pidfile/process already exists")]
     ProcessAlreadyExists,
 
+    /// Failure to establish client connection to Lair IPC.
+    #[error("IpcClientConnectError: {0} {1}")]
+    IpcClientConnectError(String, Box<dyn std::error::Error + Send + Sync>),
+
     /// Unspecified Internal error.
     #[error(transparent)]
     Other(Box<dyn std::error::Error + Send + Sync>),

@@ -29,7 +29,8 @@ pub fn cargo_build_lair_executable() -> LairResult<()> {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn cargo_build_lair_executable() {
+    #[cfg(feature = "cargo-compile-test")]
+    fn cargo_compile_test() {
         super::cargo_build_lair_executable().unwrap();
     }
 }

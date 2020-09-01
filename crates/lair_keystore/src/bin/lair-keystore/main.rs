@@ -32,6 +32,10 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
 
     lair_keystore::execute_lair().await?;
 
+    // print our "ready to accept connections" message
+    println!("#lair-keystore-ready#");
+    println!("#lair-keystore-version:{}#", lair_keystore::LAIR_VER);
+
     // wait forever... i.e. until a ctrl-c
     futures::future::pending::<()>().await;
 
