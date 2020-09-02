@@ -32,27 +32,39 @@ async fn lair_integration_test() -> lair_keystore_api::LairResult<()> {
         );
     }
 
-    let (api_send, mut evt_recv) =
-        lair_keystore_api::ipc::spawn_client_ipc(config).await?;
+    let spawn = || async {
+        let (api_send, mut evt_recv) =
+            lair_keystore_api::ipc::spawn_client_ipc(config.clone()).await?;
 
-    tokio::task::spawn(async move {
-        while let Some(msg) = evt_recv.next().await {
-            match msg {
-                lair_keystore_api::actor::LairClientEvent::RequestUnlockPassphrase {
-                    respond,
-                    ..
-                } => {
-                    respond.respond(Ok(
-                        async move { Ok("passphrase".to_string()) }
-                            .boxed()
-                            .into(),
-                    ));
+        tokio::task::spawn(async move {
+            while let Some(msg) = evt_recv.next().await {
+                match msg {
+                    lair_keystore_api::actor::LairClientEvent::RequestUnlockPassphrase {
+                        respond,
+                        ..
+                    } => {
+                        respond.respond(Ok(
+                            async move { Ok("passphrase".to_string()) }
+                                .boxed()
+                                .into(),
+                        ));
+                    }
                 }
             }
-        }
-    });
+        });
+
+        lair_keystore_api::LairResult::<_>::Ok(api_send)
+    };
+
+    let api_send = spawn().await?;
+
+    let api_send2 = spawn().await?;
 
     let info = api_send.lair_get_server_info().await?;
+    assert_eq!("lair-keystore", &info.name);
+    assert_eq!(lair_keystore::LAIR_VER, &info.version);
+
+    let info = api_send2.lair_get_server_info().await?;
     assert_eq!("lair-keystore", &info.name);
     assert_eq!(lair_keystore::LAIR_VER, &info.version);
 
@@ -115,10 +127,20 @@ async fn lair_integration_test() -> lair_keystore_api::LairResult<()> {
         .sign_ed25519_sign_by_index(sign_index, data.clone())
         .await?;
     let sign2 = api_send
-        .sign_ed25519_sign_by_pub_key(sign_pub_key, data.clone())
+        .sign_ed25519_sign_by_pub_key(sign_pub_key.clone(), data.clone())
         .await?;
 
     assert_eq!(sign1, sign2);
+
+    let sign3 = api_send2
+        .sign_ed25519_sign_by_index(sign_index, data.clone())
+        .await?;
+    let sign4 = api_send2
+        .sign_ed25519_sign_by_pub_key(sign_pub_key, data.clone())
+        .await?;
+
+    assert_eq!(sign2, sign3);
+    assert_eq!(sign3, sign4);
 
     drop(tmpdir);
 

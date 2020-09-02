@@ -7,7 +7,6 @@ fn main() {
     let ver_file = std::path::Path::new(&out_dir).join(VER_FILE_PATH);
     println!("cargo:rerun-if-changed={}", BUILD_RS_PATH);
     println!("cargo:rerun-if-changed={}", CARGO_TOML_PATH);
-    println!("cargo:rerun-if-changed={}", ver_file.to_string_lossy());
 
     let cargo_toml: toml::Value =
         toml::from_slice(&std::fs::read(CARGO_TOML_PATH).unwrap()).unwrap();
