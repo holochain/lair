@@ -72,7 +72,8 @@ async fn srv_main_bind_task(
     mut srv: IpcServer,
     mut in_send: IncomingIpcSender,
 ) -> LairResult<()> {
-    while let Ok((read_half, write_half)) = srv.accept().await {
+    while let Ok((read_half, write_half)) = kill_switch.mix(srv.accept()).await
+    {
         let (con_kill_switch, send, recv) = kill_switch
             .mix(async { spawn_connection_pair(read_half, write_half).await })
             .await?;
@@ -112,22 +113,34 @@ async fn spawn_connection_pair(
 )> {
     let kill_switch = KillSwitch::new();
 
-    let writer = spawn_low_level_write_half(kill_switch.clone(), write_half)?;
-    let reader = spawn_low_level_read_half(kill_switch.clone(), read_half)?;
-
     let (evt_send, evt_recv) = futures::channel::mpsc::channel(10);
 
     let builder = ghost_actor::actor_builder::GhostActorBuilder::new();
-
-    builder.channel_factory().attach_receiver(reader).await?;
 
     let sender = builder
         .channel_factory()
         .create_channel::<IpcWireApi>()
         .await?;
 
+    let kill_sender = sender.clone();
+    kill_switch
+        .register_kill_callback(Box::new(move || {
+            Box::pin(async move {
+                use ghost_actor::GhostControlSender;
+                if let Err(err) = kill_sender.ghost_actor_shutdown().await {
+                    ghost_actor::dependencies::tracing::error!(?err);
+                }
+            })
+        }))
+        .await;
+
+    let reader = spawn_low_level_read_half(kill_switch.clone(), read_half)?;
+    builder.channel_factory().attach_receiver(reader).await?;
+
+    let writer = spawn_low_level_write_half(kill_switch.clone(), write_half)?;
+
     tokio::task::spawn(builder.spawn(Internal {
-        _kill_switch: kill_switch.clone(),
+        kill_switch: kill_switch.clone(),
         pending: HashMap::new(),
         writer,
         evt_send,
@@ -137,7 +150,7 @@ async fn spawn_connection_pair(
 }
 
 struct Internal {
-    _kill_switch: KillSwitch,
+    kill_switch: KillSwitch,
     pending: HashMap<u64, tokio::sync::oneshot::Sender<LairWire>>,
     writer: futures::channel::mpsc::Sender<LowLevelWireApi>,
     evt_send: futures::channel::mpsc::Sender<IpcWireApi>,
@@ -153,11 +166,14 @@ impl LowLevelWireApiHandler for Internal {
         msg: LairWire,
     ) -> LowLevelWireApiHandlerResult<()> {
         if msg.is_req() {
-            let fut = self.evt_send.request(msg);
+            let fut = self.kill_switch.mix_static(self.evt_send.request(msg));
             let writer_clone = self.writer.clone();
+            let weak_kill_switch = self.kill_switch.weak();
             Ok(async move {
                 if let Ok(res) = fut.await {
-                    let _ = writer_clone.low_level_send(res).await;
+                    let _ = weak_kill_switch
+                        .mix(writer_clone.low_level_send(res))
+                        .await;
                 }
                 // TODO - send errors back so we don't have dangling reqs!!
                 Ok(())
@@ -183,10 +199,13 @@ impl IpcWireApiHandler for Internal {
         let (send, recv) = tokio::sync::oneshot::channel();
         self.pending.insert(msg.get_msg_id(), send);
         tracing::trace!("con write {:?}", msg);
-        let fut = self.writer.low_level_send(msg);
+        let fut = self.kill_switch.mix_static(self.writer.low_level_send(msg));
+        let weak_kill_switch = self.kill_switch.weak();
         Ok(async move {
             fut.await?;
-            Ok(recv.await.map_err(LairError::other)?)
+            Ok(weak_kill_switch
+                .mix(async move { recv.await.map_err(LairError::other) })
+                .await?)
         }
         .boxed()
         .into())
@@ -311,9 +330,13 @@ mod tests {
             _ => panic!("unexpected: {:?}", res),
         }
 
+        println!("COMPLETE - DROPPING ITEMS");
+
         drop(cli_kill);
         drop(srv_kill);
         drop(tmpdir);
+
+        println!("COMPLETE - ITEMS DROPPED - exiting test");
 
         Ok(())
     }

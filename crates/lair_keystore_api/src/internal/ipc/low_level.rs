@@ -23,7 +23,14 @@ pub(crate) fn spawn_low_level_write_half(
     let (s, mut r) = futures::channel::mpsc::channel(10);
 
     err_spawn("ll-write", async move {
-        while let Some(msg) = r.next().await {
+        while let Ok(msg) = kill_switch
+            .mix(async {
+                r.next()
+                    .await
+                    .ok_or_else::<LairError, _>(|| "stream end".into())
+            })
+            .await
+        {
             match msg {
                 LowLevelWireApi::LowLevelSend { respond, msg, .. } => {
                     let res = kill_switch
