@@ -5,10 +5,12 @@ use crate::*;
 /// You can `mix` in a future that will abort
 /// if the kill switch is triggered.
 #[derive(Clone)]
-pub struct KillSwitch(Arc<(
-    std::sync::atomic::AtomicBool,
-    tokio::sync::broadcast::Sender<()>,
-)>);
+pub struct KillSwitch(
+    Arc<(
+        std::sync::atomic::AtomicBool,
+        tokio::sync::broadcast::Sender<()>,
+    )>,
+);
 
 impl Drop for KillSwitch {
     fn drop(&mut self) {
@@ -21,10 +23,7 @@ impl KillSwitch {
     /// Create a new kill switch
     pub fn new() -> Self {
         let (tx, _) = tokio::sync::broadcast::channel(10);
-        Self(Arc::new((
-            std::sync::atomic::AtomicBool::new(true),
-            tx,
-        )))
+        Self(Arc::new((std::sync::atomic::AtomicBool::new(true), tx)))
     }
 
     /// Should we continue?

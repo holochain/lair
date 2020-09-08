@@ -22,37 +22,32 @@ use win_ipc::*;
 mod low_level;
 pub(crate) use low_level::*;
 
-/// IpcRespond
-type IpcRespond = ghost_actor::GhostRespond<IpcWireApiHandlerResult<LairWire>>;
-
 /// IpcSender
-pub type IpcSender = futures::channel::mpsc::Sender<IpcWireApi>;
+pub type IpcSender = ghost_actor::GhostSender<IpcWireApi>;
 
 /// IpcReceiver
 pub type IpcReceiver = futures::channel::mpsc::Receiver<IpcWireApi>;
 
 /// IncomingIpcReceiver
-pub type IncomingIpcSender =
-    futures::channel::mpsc::Sender<(KillSwitch, IpcSender, IpcReceiver)>;
+pub type IncomingIpcSender = futures::channel::mpsc::Sender<(
+    KillSwitch,
+    ghost_actor::GhostSender<IpcWireApi>,
+    IpcReceiver,
+)>;
 
 /// IncomingIpcReceiver
-pub type IncomingIpcReceiver =
-    futures::channel::mpsc::Receiver<(KillSwitch, IpcSender, IpcReceiver)>;
+pub type IncomingIpcReceiver = futures::channel::mpsc::Receiver<(
+    KillSwitch,
+    ghost_actor::GhostSender<IpcWireApi>,
+    IpcReceiver,
+)>;
 
-/// IncomingIpcReceiver
-pub type IncomingIpcSender2 =
-    futures::channel::mpsc::Sender<(KillSwitch, ghost_actor::GhostSender<IpcWireApi>, IpcReceiver)>;
-
-/// IncomingIpcReceiver
-pub type IncomingIpcReceiver2 =
-    futures::channel::mpsc::Receiver<(KillSwitch, ghost_actor::GhostSender<IpcWireApi>, IpcReceiver)>;
-
-/// Establish an outgoing client ipc connection to a lair server.
-pub async fn spawn_ipc_connection(
-    config: Arc<Config>,
-) -> LairResult<(KillSwitch, IpcSender, IpcReceiver)> {
-    let (read_half, write_half) = ipc_connect(config).await?;
-    spawn_connection_pair(read_half, write_half)
+ghost_actor::ghost_chan! {
+    /// Ipc wire api for both incoming api requsets and outgoing event requests.
+    pub chan IpcWireApi<LairError> {
+        /// Make an Ipc request.
+        fn request(msg: LairWire) -> LairWire;
+    }
 }
 
 /// Spawn/bind a new ipc listener connection awaiting incomming clients.
@@ -77,62 +72,25 @@ async fn srv_main_bind_task(
     mut srv: IpcServer,
     mut in_send: IncomingIpcSender,
 ) -> LairResult<()> {
-    loop {
-        if let Ok((read_half, write_half)) = srv.accept().await {
-            let (con_kill_switch, send, recv) =
-                spawn_connection_pair(read_half, write_half)?;
-
-            in_send
-                .send((con_kill_switch, send, recv))
-                .await
-                .map_err(LairError::other)?;
-        }
-        if !kill_switch.cont() {
-            break;
-        }
-    }
-    Ok(())
-}
-
-/// hack
-pub async fn spawn_bind_ipc_2(
-    config: Arc<Config>,
-) -> LairResult<(KillSwitch, IncomingIpcReceiver2)> {
-    let kill_switch = KillSwitch::new();
-    let (in_send, in_recv) = futures::channel::mpsc::channel(10);
-
-    let srv = IpcServer::bind(config)?;
-
-    err_spawn(
-        "srv-bind",
-        srv_main_bind_task_2(kill_switch.clone(), srv, in_send),
-    );
-
-    Ok((kill_switch, in_recv))
-}
-
-async fn srv_main_bind_task_2(
-    kill_switch: KillSwitch,
-    mut srv: IpcServer,
-    mut in_send: IncomingIpcSender2,
-) -> LairResult<()> {
     while let Ok((read_half, write_half)) = srv.accept().await {
-        let (con_kill_switch, send, recv) = kill_switch.mix(async {
-            spawn_connection_pair_2(read_half, write_half).await
-        }).await?;
+        let (con_kill_switch, send, recv) = kill_switch
+            .mix(async { spawn_connection_pair(read_half, write_half).await })
+            .await?;
 
-        kill_switch.mix(async {
-            in_send
-                .send((con_kill_switch, send, recv))
-                .await
-                .map_err(LairError::other)
-        }).await?;
+        kill_switch
+            .mix(async {
+                in_send
+                    .send((con_kill_switch, send, recv))
+                    .await
+                    .map_err(LairError::other)
+            })
+            .await?;
     }
     Ok(())
 }
 
-/// hack
-pub async fn spawn_ipc_connection_2(
+/// Establish an outgoing client ipc connection to a lair server.
+pub async fn spawn_ipc_connection(
     config: Arc<Config>,
 ) -> LairResult<(
     KillSwitch,
@@ -141,10 +99,10 @@ pub async fn spawn_ipc_connection_2(
 )> {
     let (read_half, write_half) = ipc_connect(config).await?;
 
-    spawn_connection_pair_2(read_half, write_half).await
+    spawn_connection_pair(read_half, write_half).await
 }
 
-async fn spawn_connection_pair_2(
+async fn spawn_connection_pair(
     read_half: IpcRead,
     write_half: IpcWrite,
 ) -> LairResult<(
@@ -157,18 +115,16 @@ async fn spawn_connection_pair_2(
     let writer = spawn_low_level_write_half(kill_switch.clone(), write_half)?;
     let reader = spawn_low_level_read_half(kill_switch.clone(), read_half)?;
 
-    let (evt_send, evt_recv) =
-        futures::channel::mpsc::channel(10);
+    let (evt_send, evt_recv) = futures::channel::mpsc::channel(10);
 
     let builder = ghost_actor::actor_builder::GhostActorBuilder::new();
 
-    builder
-        .channel_factory()
-        .attach_receiver(reader).await?;
+    builder.channel_factory().attach_receiver(reader).await?;
 
     let sender = builder
         .channel_factory()
-        .create_channel::<IpcWireApi>().await?;
+        .create_channel::<IpcWireApi>()
+        .await?;
 
     tokio::task::spawn(builder.spawn(Internal {
         _kill_switch: kill_switch.clone(),
@@ -184,7 +140,7 @@ struct Internal {
     _kill_switch: KillSwitch,
     pending: HashMap<u64, tokio::sync::oneshot::Sender<LairWire>>,
     writer: futures::channel::mpsc::Sender<LowLevelWireApi>,
-    evt_send: IpcSender,
+    evt_send: futures::channel::mpsc::Sender<IpcWireApi>,
 }
 
 impl ghost_actor::GhostControlHandler for Internal {}
@@ -205,7 +161,9 @@ impl LowLevelWireApiHandler for Internal {
                 }
                 // TODO - send errors back so we don't have dangling reqs!!
                 Ok(())
-            }.boxed().into())
+            }
+            .boxed()
+            .into())
         } else {
             if let Some(send) = self.pending.remove(&msg.get_msg_id()) {
                 let _ = send.send(msg);
@@ -229,131 +187,9 @@ impl IpcWireApiHandler for Internal {
         Ok(async move {
             fut.await?;
             Ok(recv.await.map_err(LairError::other)?)
-        }.boxed().into())
-    }
-}
-
-fn spawn_connection_pair(
-    read_half: IpcRead,
-    write_half: IpcWrite,
-) -> LairResult<(KillSwitch, IpcSender, IpcReceiver)> {
-    let respond_track = RespondTrack::new();
-    let kill_switch = KillSwitch::new();
-
-    let writer = spawn_low_level_write_half(kill_switch.clone(), write_half)?;
-    let reader = spawn_low_level_read_half(kill_switch.clone(), read_half)?;
-
-    let (outgoing_msg_send, outgoing_msg_recv) =
-        futures::channel::mpsc::channel(10);
-    let (incoming_msg_send, incoming_msg_recv) =
-        futures::channel::mpsc::channel(10);
-
-    err_spawn(
-        "con-write",
-        spawn_write_task(
-            respond_track.clone(),
-            kill_switch.clone(),
-            outgoing_msg_recv,
-            writer.clone(),
-        ),
-    );
-    err_spawn(
-        "con-read",
-        spawn_read_task(
-            respond_track,
-            kill_switch.clone(),
-            incoming_msg_send,
-            reader,
-            writer,
-        ),
-    );
-
-    Ok((kill_switch, outgoing_msg_send, incoming_msg_recv))
-}
-
-async fn spawn_write_task(
-    respond_track: RespondTrack,
-    kill_switch: KillSwitch,
-    mut outgoing_msg_recv: IpcReceiver,
-    writer: LowLevelWireSender,
-) -> LairResult<()> {
-    while let Some(msg) = outgoing_msg_recv.next().await {
-        match msg {
-            IpcWireApi::Request { respond, msg, .. } => {
-                respond_track.register(msg.get_msg_id(), respond).await;
-                tracing::trace!("con write {:?}", msg);
-                writer.low_level_send(msg).await?;
-            }
         }
-        if !kill_switch.cont() {
-            break;
-        }
-    }
-    Ok(())
-}
-
-async fn spawn_read_task(
-    respond_track: RespondTrack,
-    kill_switch: KillSwitch,
-    incoming_msg_send: IpcSender,
-    mut reader: LowLevelWireReceiver,
-    writer: LowLevelWireSender,
-) -> LairResult<()> {
-    while let Some(msg) = reader.next().await {
-        match msg {
-            LowLevelWireApi::LowLevelSend { respond, msg, .. } => {
-                // respond right away, so it can start processing the
-                // next message.
-                respond.respond(Ok(async move { Ok(()) }.boxed().into()));
-
-                if msg.is_req() {
-                    let fut = incoming_msg_send.request(msg);
-                    let writer_clone = writer.clone();
-                    err_spawn("req-mini", async move {
-                        if let Ok(res) = fut.await {
-                            let _ = writer_clone.low_level_send(res).await;
-                        }
-                        LairResult::<()>::Ok(())
-                    });
-                } else {
-                    respond_track.respond(msg).await;
-                }
-            }
-        }
-        if !kill_switch.cont() {
-            break;
-        }
-    }
-    Ok(())
-}
-
-#[derive(Clone)]
-struct RespondTrack(Arc<tokio::sync::Mutex<HashMap<u64, IpcRespond>>>);
-
-impl RespondTrack {
-    pub fn new() -> Self {
-        Self(Arc::new(tokio::sync::Mutex::new(HashMap::new())))
-    }
-
-    pub async fn register(&self, msg_id: u64, respond: IpcRespond) {
-        let mut lock = self.0.lock().await;
-        lock.insert(msg_id, respond);
-    }
-
-    pub async fn respond(&self, msg: LairWire) {
-        let mut lock = self.0.lock().await;
-        let msg_id = msg.get_msg_id();
-        if let Some(respond) = lock.remove(&msg_id) {
-            respond.respond(Ok(async move { Ok(msg) }.boxed().into()));
-        }
-    }
-}
-
-ghost_actor::ghost_chan! {
-    /// Ipc wire api for both incoming api requsets and outgoing event requests.
-    pub chan IpcWireApi<LairError> {
-        /// Make an Ipc request.
-        fn request(msg: LairWire) -> LairWire;
+        .boxed()
+        .into())
     }
 }
 

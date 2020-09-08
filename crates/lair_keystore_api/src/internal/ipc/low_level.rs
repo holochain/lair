@@ -26,15 +26,17 @@ pub(crate) fn spawn_low_level_write_half(
         while let Some(msg) = r.next().await {
             match msg {
                 LowLevelWireApi::LowLevelSend { respond, msg, .. } => {
-                    let res = kill_switch.mix(async {
-                        tracing::trace!("ll write {:?}", msg);
-                        let msg = msg.encode()?;
-                        write_half
-                            .write_all(&msg)
-                            .await
-                            .map_err(LairError::other)?;
-                        Ok(())
-                    }).await;
+                    let res = kill_switch
+                        .mix(async {
+                            tracing::trace!("ll write {:?}", msg);
+                            let msg = msg.encode()?;
+                            write_half
+                                .write_all(&msg)
+                                .await
+                                .map_err(LairError::other)?;
+                            Ok(())
+                        })
+                        .await;
                     let should_break = res.is_err();
                     respond.respond(Ok(async move { res }.boxed().into()));
                     if should_break {
@@ -61,11 +63,11 @@ pub(crate) fn spawn_low_level_read_half(
         let mut pending_data = Vec::new();
         let mut buffer = [0_u8; 4096];
         loop {
-            let read = kill_switch.mix(async {
-                read_half
-                    .read(&mut buffer).await
-                    .map_err(LairError::other)
-            }).await?;
+            let read = kill_switch
+                .mix(async {
+                    read_half.read(&mut buffer).await.map_err(LairError::other)
+                })
+                .await?;
             pending_data.extend_from_slice(&buffer[..read]);
             while let Ok(size) = LairWire::peek_size(&pending_data) {
                 if pending_data.len() < size {
