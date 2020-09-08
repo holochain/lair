@@ -3,6 +3,7 @@
 //! main entry point
 
 use structopt::StructOpt;
+use tracing::*;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "lair-keystore")]
@@ -17,8 +18,15 @@ struct Opt {
 }
 
 /// main entry point
-#[tokio::main]
+#[tokio::main(threaded_scheduler)]
 pub async fn main() -> lair_keystore_api::LairResult<()> {
+    let _ = subscriber::set_global_default(
+        tracing_subscriber::FmtSubscriber::builder()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .finish(),
+    );
+    trace!("tracing initialized");
+
     let opt = Opt::from_args();
 
     if opt.version {
@@ -30,7 +38,10 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
         std::env::set_var("LAIR_DIR", lair_dir);
     }
 
+    trace!("executing lair main tasks");
     lair_keystore::execute_lair().await?;
+
+    info!("lair-keystore up and running");
 
     // print our "ready to accept connections" message
     println!("#lair-keystore-ready#");

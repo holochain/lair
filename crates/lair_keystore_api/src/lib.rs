@@ -2,6 +2,7 @@
 #![deny(warnings)]
 //! secret lair private keystore types
 
+use ghost_actor::dependencies::tracing::*;
 use std::sync::Arc;
 
 mod error;

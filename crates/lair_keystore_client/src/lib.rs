@@ -7,6 +7,7 @@ include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 use lair_keystore_api::actor::*;
 use lair_keystore_api::*;
 use std::sync::Arc;
+use tracing::*;
 
 pub mod internal;
 
@@ -15,7 +16,7 @@ macro_rules! e {
         match $e {
             Ok(r) => Ok(r),
             Err(e) => {
-                tracing::error!(
+                error!(
                     error = ?e,
                     file = file!(),
                     line = line!(),
@@ -39,6 +40,7 @@ pub async fn assert_running_lair_and_connect(
 )> {
     // step 1 - just try to connect
     if let Ok(r) = e!(check_ipc_connect(config.clone()).await) {
+        trace!("first try check Ok");
         return Ok(r);
     }
 
@@ -48,6 +50,7 @@ pub async fn assert_running_lair_and_connect(
     {
         // step 2.1 - if the executable ran, try to connect to it.
         if let Ok(r) = e!(check_ipc_connect(config.clone()).await) {
+            trace!("second try (run executable) check Ok");
             return Ok(r);
         }
 
@@ -63,6 +66,7 @@ pub async fn assert_running_lair_and_connect(
 
     // step 3.2 - if the executable ran, try to connect to it.
     if let Ok(r) = e!(check_ipc_connect(config).await) {
+        trace!("third try (build executable) check Ok");
         return Ok(r);
     }
 
@@ -80,7 +84,9 @@ async fn check_ipc_connect(
 )> {
     let (api, evt) = ipc::spawn_client_ipc(config.clone()).await?;
 
+    trace!("send check server info");
     let srv_info = api.lair_get_server_info().await?;
+    trace!(?srv_info, "got check server info");
 
     if srv_info.version != LAIR_VER {
         return Err(format!(
@@ -98,7 +104,7 @@ mod tests {
     use super::*;
 
     fn init_tracing() {
-        let _ = tracing::subscriber::set_global_default(
+        let _ = subscriber::set_global_default(
             tracing_subscriber::FmtSubscriber::builder()
                 .with_env_filter(
                     tracing_subscriber::EnvFilter::from_default_env(),
@@ -114,19 +120,28 @@ mod tests {
         let tmpdir = tempfile::tempdir().unwrap();
         std::env::set_var("LAIR_DIR", tmpdir.path());
 
+        trace!(lair_dir = ?tmpdir.path(), "RUNNING WITH LAIR_DIR");
+
         let config = lair_keystore_api::Config::builder()
             .set_root_path(tmpdir.path())
             .build();
 
+        trace!("running executable...");
         let mut child = internal::run_lair_executable(config.clone()).await?;
+        trace!("executable running.");
 
+        trace!("connecting...");
         let (api, _evt) = assert_running_lair_and_connect(config).await?;
+        trace!("connected.");
 
+        trace!("checking version...");
         let srv_info = api.lair_get_server_info().await?;
-
         assert_eq!(LAIR_VER, srv_info.version);
+        trace!("version checked.");
 
+        trace!("killing executable...");
         child.kill().unwrap();
+        trace!("executable killed.");
 
         Ok(())
     }

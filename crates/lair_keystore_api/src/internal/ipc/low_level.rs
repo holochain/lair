@@ -35,12 +35,12 @@ pub(crate) fn spawn_low_level_write_half(
                 LowLevelWireApi::LowLevelSend { respond, msg, .. } => {
                     let res = kill_switch
                         .mix(async {
-                            tracing::trace!("ll write {:?}", msg);
-                            let msg = msg.encode()?;
+                            let msg_enc = msg.encode()?;
                             write_half
-                                .write_all(&msg)
+                                .write_all(&msg_enc)
                                 .await
                                 .map_err(LairError::other)?;
+                            trace!("ll wrote {:?}", msg);
                             Ok(())
                         })
                         .await;
@@ -70,20 +70,35 @@ pub(crate) fn spawn_low_level_read_half(
         let mut pending_data = Vec::new();
         let mut buffer = [0_u8; 4096];
         loop {
+            trace!("ll read tick");
             let read = kill_switch
                 .mix(async {
                     read_half.read(&mut buffer).await.map_err(LairError::other)
                 })
                 .await?;
+            trace!(?read, "ll read count");
+            if read == 0 {
+                trace!("ll read end");
+                return Err("read returned 0 bytes".into());
+            }
             pending_data.extend_from_slice(&buffer[..read]);
             while let Ok(size) = LairWire::peek_size(&pending_data) {
+                trace!(?size, "ll read peek size");
                 if pending_data.len() < size {
                     break;
                 }
                 let msg = LairWire::decode(&pending_data)?;
-                tracing::trace!("ll read {:?}", msg);
                 let _ = pending_data.drain(..size);
-                kill_switch.mix(s.low_level_send(msg)).await?;
+                trace!("ll read {:?}", msg);
+                // run this in a task so we don't hold up the read loop
+                let weak_kill_switch = kill_switch.weak();
+                let task_sender = s.clone();
+                tokio::task::spawn(async move {
+                    let _ = weak_kill_switch
+                        .mix(task_sender.low_level_send(msg))
+                        .await;
+                    trace!("ll read send done");
+                });
             }
         }
     });

@@ -5,7 +5,6 @@ use crate::internal::wire::*;
 use crate::*;
 
 use futures::{future::FutureExt, sink::SinkExt, stream::StreamExt};
-use ghost_actor::dependencies::tracing;
 use std::collections::HashMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -80,6 +79,7 @@ async fn srv_main_bind_task(
 
         kill_switch
             .mix(async {
+                trace!("notify new connection");
                 in_send
                     .send((con_kill_switch, send, recv))
                     .await
@@ -128,7 +128,7 @@ async fn spawn_connection_pair(
             Box::pin(async move {
                 use ghost_actor::GhostControlSender;
                 if let Err(err) = kill_sender.ghost_actor_shutdown().await {
-                    ghost_actor::dependencies::tracing::error!(?err);
+                    error!(?err);
                 }
             })
         }))
@@ -165,6 +165,7 @@ impl LowLevelWireApiHandler for Internal {
         &mut self,
         msg: LairWire,
     ) -> LowLevelWireApiHandlerResult<()> {
+        trace!(?msg, "RECV MSG");
         if msg.is_req() {
             let fut = self.kill_switch.mix_static(self.evt_send.request(msg));
             let writer_clone = self.writer.clone();
@@ -182,6 +183,7 @@ impl LowLevelWireApiHandler for Internal {
             .into())
         } else {
             if let Some(send) = self.pending.remove(&msg.get_msg_id()) {
+                trace!("outgoing response received");
                 let _ = send.send(msg);
             }
             Ok(async move { Ok(()) }.boxed().into())
@@ -198,13 +200,18 @@ impl IpcWireApiHandler for Internal {
     ) -> IpcWireApiHandlerResult<LairWire> {
         let (send, recv) = tokio::sync::oneshot::channel();
         self.pending.insert(msg.get_msg_id(), send);
-        tracing::trace!("con write {:?}", msg);
+        trace!("con write {:?}", msg);
         let fut = self.kill_switch.mix_static(self.writer.low_level_send(msg));
         let weak_kill_switch = self.kill_switch.weak();
         Ok(async move {
             fut.await?;
             Ok(weak_kill_switch
-                .mix(async move { recv.await.map_err(LairError::other) })
+                .mix(async move {
+                    trace!("await incoming request...");
+                    let res = recv.await.map_err(LairError::other);
+                    trace!(?res, "respond to incoming request");
+                    res
+                })
                 .await?)
         }
         .boxed()
@@ -217,7 +224,7 @@ mod tests {
     use super::*;
 
     fn init_tracing() {
-        let _ = tracing::subscriber::set_global_default(
+        let _ = subscriber::set_global_default(
             tracing_subscriber::FmtSubscriber::builder()
                 .with_env_filter(
                     tracing_subscriber::EnvFilter::from_default_env(),

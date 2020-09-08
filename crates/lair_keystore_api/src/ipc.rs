@@ -51,10 +51,10 @@ mod tests {
     use super::*;
     use crate::internal::wire::tests::TestVal;
     use futures::{future::FutureExt, stream::StreamExt};
-    use ghost_actor::{dependencies::tracing, GhostControlSender};
+    use ghost_actor::GhostControlSender;
 
     fn init_tracing() {
-        let _ = tracing::subscriber::set_global_default(
+        let _ = subscriber::set_global_default(
             tracing_subscriber::FmtSubscriber::builder()
                 .with_env_filter(
                     tracing_subscriber::EnvFilter::from_default_env(),

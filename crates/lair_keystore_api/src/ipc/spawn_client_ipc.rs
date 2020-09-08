@@ -93,8 +93,10 @@ impl LairClientApiHandler for Internal {
             },
         ));
         Ok(async move {
+            trace!("awaiting server info");
             match fut.await? {
                 LairWire::ToCliLairGetServerInfoResponse { info, .. } => {
+                    trace!(?info, "GOT SERVER INFO");
                     Ok(info)
                 }
                 o => Err(format!("unexpected: {:?}", o).into()),
