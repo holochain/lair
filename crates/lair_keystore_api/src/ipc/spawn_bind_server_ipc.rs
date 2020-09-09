@@ -11,7 +11,7 @@ pub(crate) async fn spawn_bind_server_ipc<S>(
 where
     S: ghost_actor::GhostChannelSender<LairClientApi>,
 {
-    let (_kill_switch, mut incoming_ipc_recv) = spawn_bind_ipc(config).await?;
+    let (kill_switch, mut incoming_ipc_recv) = spawn_bind_ipc(config).await?;
 
     let builder = ghost_actor::actor_builder::GhostActorBuilder::new();
 
@@ -19,13 +19,30 @@ where
 
     let i_s = channel_factory.create_channel::<InternalApi>().await?;
 
-    let i_kill_switch = _kill_switch.clone();
+    let kill_sender = i_s.clone();
+    kill_switch
+        .register_kill_callback(Box::new(move || {
+            Box::pin(async move {
+                use ghost_actor::GhostControlSender;
+                if let Err(err) = kill_sender.ghost_actor_shutdown().await {
+                    ghost_actor::dependencies::tracing::error!(?err);
+                }
+            })
+        }))
+        .await;
+
+    let i_kill_switch = kill_switch.clone();
     err_spawn("srv-ipc-incoming-loop", async move {
-        while let Some((k, s, r)) = incoming_ipc_recv.next().await {
-            if i_s.incoming(k, s, r).await.is_err() {
-                break;
-            }
-            if !i_kill_switch.cont() {
+        while let Ok((k, s, r)) = i_kill_switch
+            .mix(async {
+                incoming_ipc_recv
+                    .next()
+                    .await
+                    .ok_or_else::<LairError, _>(|| "stream end".into())
+            })
+            .await
+        {
+            if i_kill_switch.mix(i_s.incoming(k, s, r)).await.is_err() {
                 break;
             }
         }
@@ -35,7 +52,7 @@ where
     err_spawn("srv-ipc-actor", async move {
         builder
             .spawn(Internal {
-                _kill_switch,
+                kill_switch,
                 channel_factory,
                 api_sender,
                 incoming_send,
@@ -61,7 +78,7 @@ struct Internal<S>
 where
     S: ghost_actor::GhostChannelSender<LairClientApi>,
 {
-    _kill_switch: KillSwitch,
+    kill_switch: KillSwitch,
     channel_factory: ghost_actor::actor_builder::GhostActorChannelFactory<Self>,
     api_sender: S,
     incoming_send: futures::channel::mpsc::Sender<LairClientEventSenderType>,
@@ -84,15 +101,22 @@ where
     #[allow(clippy::single_match)]
     fn handle_incoming(
         &mut self,
-        con_kill_switch: KillSwitch,
+        mut con_kill_switch: KillSwitch,
         ipc_send: IpcSender,
         ipc_recv: IpcReceiver,
     ) -> InternalApiHandlerResult<()> {
+        // We don't actually want to kill this connection if the server
+        // decides to drop the event sender. Make this kill switch weak.
+        con_kill_switch.make_weak();
+
         let (evt_send, mut evt_recv) = futures::channel::mpsc::channel(10);
-        let evt_kill_switch = con_kill_switch;
         let evt_ipc_send = ipc_send;
         err_spawn("srv-con-evt-loop", async move {
-            while let Some(msg) = evt_recv.next().await {
+            while let Ok(msg) = evt_recv
+                .next()
+                .await
+                .ok_or_else::<LairError, _>(|| "stream end".into())
+            {
                 match msg {
                     LairClientEvent::RequestUnlockPassphrase {
                         respond,
@@ -112,9 +136,6 @@ where
                             _ => (),
                         }
                     }
-                }
-                if !evt_kill_switch.cont() {
-                    break;
                 }
             }
             Ok(())
@@ -149,7 +170,9 @@ where
     ) -> IpcWireApiHandlerResult<LairWire> {
         match msg {
             LairWire::ToLairLairGetServerInfo { msg_id } => {
-                let fut = self.api_sender.lair_get_server_info();
+                let fut = self
+                    .kill_switch
+                    .mix_static(self.api_sender.lair_get_server_info());
                 Ok(async move {
                     fut.await.map(|info| {
                         LairWire::ToCliLairGetServerInfoResponse {
@@ -162,7 +185,9 @@ where
                 .into())
             }
             LairWire::ToLairLairGetLastEntryIndex { msg_id } => {
-                let fut = self.api_sender.lair_get_last_entry_index();
+                let fut = self
+                    .kill_switch
+                    .mix_static(self.api_sender.lair_get_last_entry_index());
                 Ok(async move {
                     fut.await.map(|last_keystore_index| {
                         LairWire::ToCliLairGetLastEntryIndexResponse {
@@ -178,7 +203,9 @@ where
                 msg_id,
                 keystore_index,
             } => {
-                let fut = self.api_sender.lair_get_entry_type(keystore_index);
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender.lair_get_entry_type(keystore_index),
+                );
                 Ok(async move {
                     fut.await.map(|lair_entry_type| {
                         LairWire::ToCliLairGetEntryTypeResponse {
@@ -195,9 +222,10 @@ where
                 cert_alg,
             } => {
                 let options = TlsCertOptions { alg: cert_alg };
-                let fut = self
-                    .api_sender
-                    .tls_cert_new_self_signed_from_entropy(options);
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender
+                        .tls_cert_new_self_signed_from_entropy(options),
+                );
                 Ok(async move {
                     fut.await.map(|(keystore_index, cert_sni, cert_digest)| {
                         LairWire::ToCliTlsCertNewSelfSignedFromEntropyResponse {
@@ -215,7 +243,9 @@ where
                 msg_id,
                 keystore_index,
             } => {
-                let fut = self.api_sender.tls_cert_get(keystore_index);
+                let fut = self
+                    .kill_switch
+                    .mix_static(self.api_sender.tls_cert_get(keystore_index));
                 Ok(async move {
                     fut.await.map(|(cert_sni, cert_digest)| {
                         LairWire::ToCliTlsCertGetResponse {
@@ -232,8 +262,9 @@ where
                 msg_id,
                 keystore_index,
             } => {
-                let fut =
-                    self.api_sender.tls_cert_get_cert_by_index(keystore_index);
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender.tls_cert_get_cert_by_index(keystore_index),
+                );
                 Ok(async move {
                     fut.await.map(|cert| {
                         LairWire::ToCliTlsCertGetCertByIndexResponse {
@@ -249,8 +280,9 @@ where
                 msg_id,
                 cert_digest,
             } => {
-                let fut =
-                    self.api_sender.tls_cert_get_cert_by_digest(cert_digest);
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender.tls_cert_get_cert_by_digest(cert_digest),
+                );
                 Ok(async move {
                     fut.await.map(|cert| {
                         LairWire::ToCliTlsCertGetCertByDigestResponse {
@@ -263,7 +295,9 @@ where
                 .into())
             }
             LairWire::ToLairTlsCertGetCertBySni { msg_id, cert_sni } => {
-                let fut = self.api_sender.tls_cert_get_cert_by_sni(cert_sni);
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender.tls_cert_get_cert_by_sni(cert_sni),
+                );
                 Ok(async move {
                     fut.await.map(|cert| {
                         LairWire::ToCliTlsCertGetCertBySniResponse {
@@ -279,9 +313,10 @@ where
                 msg_id,
                 keystore_index,
             } => {
-                let fut = self
-                    .api_sender
-                    .tls_cert_get_priv_key_by_index(keystore_index);
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender
+                        .tls_cert_get_priv_key_by_index(keystore_index),
+                );
                 Ok(async move {
                     fut.await.map(|cert_priv_key| {
                         LairWire::ToCliTlsCertGetPrivKeyByIndexResponse {
@@ -297,9 +332,10 @@ where
                 msg_id,
                 cert_digest,
             } => {
-                let fut = self
-                    .api_sender
-                    .tls_cert_get_priv_key_by_digest(cert_digest);
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender
+                        .tls_cert_get_priv_key_by_digest(cert_digest),
+                );
                 Ok(async move {
                     fut.await.map(|cert_priv_key| {
                         LairWire::ToCliTlsCertGetPrivKeyByDigestResponse {
@@ -312,8 +348,9 @@ where
                 .into())
             }
             LairWire::ToLairTlsCertGetPrivKeyBySni { msg_id, cert_sni } => {
-                let fut =
-                    self.api_sender.tls_cert_get_priv_key_by_sni(cert_sni);
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender.tls_cert_get_priv_key_by_sni(cert_sni),
+                );
                 Ok(async move {
                     fut.await.map(|cert_priv_key| {
                         LairWire::ToCliTlsCertGetPrivKeyBySniResponse {
@@ -326,7 +363,9 @@ where
                 .into())
             }
             LairWire::ToLairSignEd25519NewFromEntropy { msg_id } => {
-                let fut = self.api_sender.sign_ed25519_new_from_entropy();
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender.sign_ed25519_new_from_entropy(),
+                );
                 Ok(async move {
                     fut.await.map(|(keystore_index, pub_key)| {
                         LairWire::ToCliSignEd25519NewFromEntropyResponse {
@@ -343,7 +382,9 @@ where
                 msg_id,
                 keystore_index,
             } => {
-                let fut = self.api_sender.sign_ed25519_get(keystore_index);
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender.sign_ed25519_get(keystore_index),
+                );
                 Ok(async move {
                     fut.await.map(|pub_key| {
                         LairWire::ToCliSignEd25519GetResponse {
@@ -360,9 +401,10 @@ where
                 keystore_index,
                 message,
             } => {
-                let fut = self
-                    .api_sender
-                    .sign_ed25519_sign_by_index(keystore_index, message);
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender
+                        .sign_ed25519_sign_by_index(keystore_index, message),
+                );
                 Ok(async move {
                     fut.await.map(|signature| {
                         LairWire::ToCliSignEd25519SignByIndexResponse {
@@ -379,9 +421,10 @@ where
                 pub_key,
                 message,
             } => {
-                let fut = self
-                    .api_sender
-                    .sign_ed25519_sign_by_pub_key(pub_key, message);
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender
+                        .sign_ed25519_sign_by_pub_key(pub_key, message),
+                );
                 Ok(async move {
                     fut.await.map(|signature| {
                         LairWire::ToCliSignEd25519SignByPubKeyResponse {

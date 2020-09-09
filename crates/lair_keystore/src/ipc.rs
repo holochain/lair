@@ -55,8 +55,6 @@ ghost_actor::ghost_chan! {
 struct Internal {
     #[allow(dead_code)]
     store_actor: ghost_actor::GhostSender<store::EntryStore>,
-    // TODO FIXME
-    memory_leak: Vec<futures::channel::mpsc::Sender<LairClientEvent>>,
 }
 
 impl Internal {
@@ -64,10 +62,7 @@ impl Internal {
         _config: Arc<Config>,
         store_actor: ghost_actor::GhostSender<store::EntryStore>,
     ) -> LairResult<Self> {
-        Ok(Internal {
-            store_actor,
-            memory_leak: Vec::new(),
-        })
+        Ok(Internal { store_actor })
     }
 }
 
@@ -80,7 +75,6 @@ impl InternalApiHandler for Internal {
         &mut self,
         evt_send: futures::channel::mpsc::Sender<LairClientEvent>,
     ) -> InternalApiHandlerResult<()> {
-        self.memory_leak.push(evt_send.clone());
         tokio::task::spawn(async move {
             let _passphrase = evt_send.request_unlock_passphrase().await;
         });
