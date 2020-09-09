@@ -101,31 +101,30 @@ where
     #[allow(clippy::single_match)]
     fn handle_incoming(
         &mut self,
-        con_kill_switch: KillSwitch,
+        mut con_kill_switch: KillSwitch,
         ipc_send: IpcSender,
         ipc_recv: IpcReceiver,
     ) -> InternalApiHandlerResult<()> {
+        // We don't actually want to kill this connection if the server
+        // decides to drop the event sender. Make this kill switch weak.
+        con_kill_switch.make_weak();
+
         let (evt_send, mut evt_recv) = futures::channel::mpsc::channel(10);
-        let evt_kill_switch = con_kill_switch;
         let evt_ipc_send = ipc_send;
         err_spawn("srv-con-evt-loop", async move {
-            while let Ok(msg) = evt_kill_switch
-                .mix(async {
-                    evt_recv
-                        .next()
-                        .await
-                        .ok_or_else::<LairError, _>(|| "stream end".into())
-                })
+            while let Ok(msg) = evt_recv
+                .next()
                 .await
+                .ok_or_else::<LairError, _>(|| "stream end".into())
             {
                 match msg {
                     LairClientEvent::RequestUnlockPassphrase {
                         respond,
                         ..
                     } => {
-                        match evt_kill_switch.mix(evt_ipc_send.request(LairWire::ToCliRequestUnlockPassphrase {
+                        match evt_ipc_send.request(LairWire::ToCliRequestUnlockPassphrase {
                             msg_id: next_msg_id(),
-                        })).await {
+                        }).await {
                             Ok(LairWire::ToLairRequestUnlockPassphraseResponse {
                                 passphrase,
                                 ..

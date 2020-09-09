@@ -90,6 +90,12 @@ impl KillSwitch {
         out
     }
 
+    /// Convert this kill_switch to a "Weak" version that will
+    /// not kill other insances when dropped.
+    pub fn make_weak(&mut self) {
+        self.is_weak = true;
+    }
+
     /// Register an async callback that will be invoked on kill.
     pub async fn register_kill_callback(&self, cb: KillCallback) {
         let mut lock = self.inner.2.lock().await;
