@@ -4,7 +4,7 @@ use crate::entry::LairEntry;
 use crate::store::EntryStoreSender;
 use crate::*;
 use futures::{future::FutureExt, stream::StreamExt};
-use lair_keystore_api::actor::*;
+use lair_keystore_api::{actor::*, internal::*};
 
 /// Spawn a new IPC server binding to serve out the Lair client api.
 pub async fn spawn_bind_server_ipc(
@@ -112,6 +112,9 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
                 Ok(entry) => match &*entry {
                     LairEntry::TlsCert(_) => Ok(LairEntryType::TlsCert),
                     LairEntry::SignEd25519(_) => Ok(LairEntryType::SignEd25519),
+                    _ => {
+                        Err(format!("unhandled entry type {:?}", entry).into())
+                    }
                 },
             }
         }
@@ -298,11 +301,8 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
             let entry = fut.await?;
             match &*entry {
                 LairEntry::SignEd25519(entry) => {
-                    internal::sign_ed25519::sign_ed25519(
-                        entry.priv_key.clone(),
-                        message,
-                    )
-                    .await
+                    sign_ed25519::sign_ed25519(entry.priv_key.clone(), message)
+                        .await
                 }
                 _ => Err("invalid entry type".into()),
             }
@@ -321,11 +321,8 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
             let (_, entry) = fut.await?;
             match &*entry {
                 LairEntry::SignEd25519(entry) => {
-                    internal::sign_ed25519::sign_ed25519(
-                        entry.priv_key.clone(),
-                        message,
-                    )
-                    .await
+                    sign_ed25519::sign_ed25519(entry.priv_key.clone(), message)
+                        .await
                 }
                 _ => Err("invalid entry type".into()),
             }

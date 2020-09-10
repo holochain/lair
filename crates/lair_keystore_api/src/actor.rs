@@ -138,6 +138,22 @@ impl From<Vec<u8>> for SignEd25519PubKey {
     }
 }
 
+impl SignEd25519PubKey {
+    /// Verify signature on given message with given public key.
+    pub async fn verify(
+        &self,
+        message: Arc<Vec<u8>>,
+        signature: SignEd25519Signature,
+    ) -> LairResult<bool> {
+        internal::sign_ed25519::sign_ed25519_verify(
+            self.clone(),
+            message,
+            signature,
+        )
+        .await
+    }
+}
+
 /// The 64 byte detached ed25519 signature data.
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,

@@ -1,12 +1,13 @@
 //! File format entry structs.
 
 use crate::*;
-use derive_more::*;
 
-use lair_keystore_api::actor::*;
-use lair_keystore_api::internal::codec;
+use actor::*;
+use internal::codec;
+use internal::sign_ed25519::SignEd25519PrivKey;
 
-pub(crate) const ENTRY_SIZE: usize = 1024;
+/// Fixed serialized entry byte count.
+pub const ENTRY_SIZE: usize = 1024;
 
 /// Enum of lair entry types for decoding.
 #[non_exhaustive]
@@ -142,18 +143,6 @@ impl EntryTlsCert {
         writer.write_bytes(&self.cert_digest[0..32])?;
 
         Ok(writer.into_vec())
-    }
-}
-
-/// The 64 byte signature ed25519 public key.
-#[derive(
-    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
-)]
-pub struct SignEd25519PrivKey(pub Arc<Vec<u8>>);
-
-impl From<Vec<u8>> for SignEd25519PrivKey {
-    fn from(d: Vec<u8>) -> Self {
-        Self(Arc::new(d))
     }
 }
 

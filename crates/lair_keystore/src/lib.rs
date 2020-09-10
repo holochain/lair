@@ -4,15 +4,10 @@
 
 include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 
-use lair_keystore_api::{Config, LairError, LairResult};
+use lair_keystore_api::*;
 use std::sync::Arc;
 
-mod statics;
-pub use statics::*;
-
 pub mod internal;
-
-pub mod entry;
 
 pub mod store;
 
