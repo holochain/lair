@@ -1,5 +1,5 @@
-include!("../../common/build_ver.rs");
+include!("./src/internal/build.rs");
 
 pub fn main() {
-    build_ver::build_ver();
+    build_ver();
 }
