@@ -14,7 +14,7 @@ static RAYON: OnceCell<Arc<rayon::ThreadPool>> = OnceCell::new();
 /// # Example
 ///
 /// ```
-/// # use lair_keystore::*;
+/// # use lair_keystore_api::*;
 /// # use std::sync::Arc;
 /// init_once_rayon_thread_pool(|| Arc::new(rayon::ThreadPoolBuilder::new().build().unwrap()));
 /// ```

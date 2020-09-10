@@ -1,10 +1,22 @@
 //! Ed25519 Signature Utilities
 //! NOTE - temporarily using RING crate until we switch to sodoken
 
-use crate::entry::SignEd25519PrivKey;
 use crate::*;
+use derive_more::*;
 
-use lair_keystore_api::actor::{SignEd25519PubKey, SignEd25519Signature};
+/// The 64 byte signature ed25519 public key.
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
+)]
+pub struct SignEd25519PrivKey(pub Arc<Vec<u8>>);
+
+impl From<Vec<u8>> for SignEd25519PrivKey {
+    fn from(d: Vec<u8>) -> Self {
+        Self(Arc::new(d))
+    }
+}
+
+use actor::{SignEd25519PubKey, SignEd25519Signature};
 
 /// Generate a new random ed25519 signature keypair.
 pub async fn sign_ed25519_keypair_new_from_entropy(

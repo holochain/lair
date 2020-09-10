@@ -3,5 +3,8 @@
 
 pub mod codec;
 pub mod ipc;
+pub(crate) mod rayon;
+pub mod sign_ed25519;
+pub mod tls;
 pub mod util;
 pub mod wire;

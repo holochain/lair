@@ -3,7 +3,7 @@
 use crate::*;
 use entry::LairEntry;
 use futures::future::FutureExt;
-use lair_keystore_api::actor::*;
+use lair_keystore_api::{actor::*, internal::*};
 use std::collections::HashMap;
 
 ghost_actor::ghost_chan! {
@@ -143,6 +143,12 @@ impl EntryStoreImpl {
                 self.entries_by_pub_id
                     .insert(e.pub_key.0.clone(), (entry_index, entry));
             }
+            _ => {
+                tracing::warn!(
+                    "silently ignoring unhandled entry type {:?}",
+                    entry
+                );
+            }
         }
 
         if entry_index.0 > self.last_entry_index.0 {
@@ -243,7 +249,7 @@ async fn new_tls_cert(
     options: TlsCertOptions,
 ) -> LairResult<(KeystoreIndex, Arc<LairEntry>)> {
     let cert = Arc::new(LairEntry::TlsCert(
-        internal::tls::tls_cert_self_signed_new_from_entropy(options).await?,
+        tls::tls_cert_self_signed_new_from_entropy(options).await?,
     ));
     let encoded_cert = cert.encode()?;
     let entry_index = store_file.write_next_entry(encoded_cert).await?;
@@ -256,7 +262,7 @@ async fn new_sign_ed25519_keypair(
     store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
 ) -> LairResult<(KeystoreIndex, Arc<LairEntry>)> {
     let entry = Arc::new(LairEntry::SignEd25519(
-        internal::sign_ed25519::sign_ed25519_keypair_new_from_entropy().await?,
+        sign_ed25519::sign_ed25519_keypair_new_from_entropy().await?,
     ));
     let encoded_entry = entry.encode()?;
     let entry_index = store_file.write_next_entry(encoded_entry).await?;
