@@ -24,7 +24,7 @@ bump:
 publish: tools
 	git diff --exit-code
 	cargo publish --manifest-path crates/lair_keystore_api/Cargo.toml
-	echo "-- wait for crates.io... --"; sleep 20
+	echo "-- wait for crates.io... --"; sleep 30
 	cargo publish --manifest-path crates/lair_keystore/Cargo.toml
 	cargo publish --manifest-path crates/lair_keystore_client/Cargo.toml
 	VER="v$$(grep version crates/lair_keystore/Cargo.toml | head -1 | cut -d ' ' -f 3 | cut -d \" -f 2)"; git tag -a $$VER -m $$VER
