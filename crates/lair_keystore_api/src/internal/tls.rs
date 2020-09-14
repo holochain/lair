@@ -13,6 +13,13 @@ pub async fn tls_cert_self_signed_new_from_entropy(
         #[allow(unreachable_patterns)]
         match options.alg {
             TlsCertAlg::PkcsEd25519 => params.alg = &rcgen::PKCS_ED25519,
+            TlsCertAlg::PkcsEcdsaP256Sha256 => {
+                params.alg = &rcgen::PKCS_ECDSA_P256_SHA256
+            }
+            TlsCertAlg::PkcsEcdsaP384Sha384 => {
+                params.alg = &rcgen::PKCS_ECDSA_P384_SHA384
+            }
+            TlsCertAlg::PkcsEd25519 => params.alg = &rcgen::PKCS_ED25519,
             _ => {
                 return Err(
                     format!("unhandled cert alg: {:?}", options.alg).into()

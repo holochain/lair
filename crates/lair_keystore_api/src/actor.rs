@@ -27,6 +27,10 @@ pub type LairClientEventReceiver =
 pub enum TlsCertAlg {
     /// Ed25519 Curve.
     PkcsEd25519 = 0x00000200,
+    /// Ecdsa Curve 256.
+    PkcsEcdsaP256Sha256 = 0x00000201,
+    /// Ecdsa Curve 384.
+    PkcsEcdsaP384Sha384 = 0x00000202,
 }
 
 impl Default for TlsCertAlg {
@@ -41,6 +45,8 @@ impl TlsCertAlg {
         use TlsCertAlg::*;
         Ok(match d {
             x if x == PkcsEd25519 as u32 => PkcsEd25519,
+            x if x == PkcsEcdsaP256Sha256 as u32 => PkcsEcdsaP256Sha256,
+            x if x == PkcsEcdsaP384Sha384 as u32 => PkcsEcdsaP384Sha384,
             _ => return Err("invalide tls cert alg".into()),
         })
     }
