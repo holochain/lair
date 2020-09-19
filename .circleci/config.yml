@@ -6,7 +6,7 @@ jobs:
    - image: holochain/holonix:latest.develop
   steps:
    - checkout
-   - run: nix-shell --run make
+   - run: nix-shell --run ./test.sh
 
 workflows:
  version: 2.1
