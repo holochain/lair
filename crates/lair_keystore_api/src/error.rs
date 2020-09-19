@@ -13,6 +13,10 @@ pub enum LairError {
     #[error("IpcClientConnectError: {0} {1}")]
     IpcClientConnectError(String, Box<dyn std::error::Error + Send + Sync>),
 
+    /// A public key was provided (e.g. for signing) that cannot be found in the keystore
+    #[error("Public key not found")]
+    PubKeyNotFound,
+
     /// Unspecified Internal error.
     #[error(transparent)]
     Other(Box<dyn std::error::Error + Send + Sync>),
