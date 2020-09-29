@@ -32,13 +32,13 @@ jobs:
      with:
        toolchain: ${{ matrix.toolchain }}
 
-   # smoke test a build
+   # smoke test a release build
    - uses: actions-rs/cargo@v1
      with:
        command: build
        args: --release --all-features
 
-   # the binary can't be fully tested without it being installed
+   # the binary can't be fully tested without a debug install
    - uses: actions-rs/cargo@v1
      with:
        command: install
