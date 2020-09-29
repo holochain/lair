@@ -24,7 +24,12 @@ jobs:
   runs-on: ${{ matrix.os }}
   strategy:
    matrix:
-    os: [ ubuntu-latest, macos-latest, windows-latest ]
+    os: [
+     ubuntu-latest,
+     macos-latest,
+     # @todo windows support 
+     # windows-latest
+    ]
     toolchain: [ stable, 1.45.1 ]
   steps:
    - uses: actions/checkout@v2
