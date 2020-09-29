@@ -38,6 +38,12 @@ jobs:
        command: build
        args: --release --all-features
 
+   # the binary can't be fully tested without it being installed
+   - uses: actions-rs/cargo@v1
+     with:
+       command: install
+       args: --release --all-features
+
    # run all the tests
    - uses: actions-rs/cargo@v1
      with:
