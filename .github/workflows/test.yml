@@ -14,6 +14,14 @@ jobs:
    - uses: actions-rs/toolchain@v1
      with:
        toolchain: ${{ matrix.toolchain }}
+
+   # smoke test a build
+   - uses: actions-rs/cargo@v1
+     with:
+       command: build
+       args: --release --all-features
+
+   # run all the tests
    - uses: actions-rs/cargo@v1
      with:
        command: test
