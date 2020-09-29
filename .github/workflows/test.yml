@@ -42,7 +42,7 @@ jobs:
    - uses: actions-rs/cargo@v1
      with:
        command: install
-       args: --release --all-features
+       args: --debug -f --path crates/lair_keystore
 
    # run all the tests
    - uses: actions-rs/cargo@v1
