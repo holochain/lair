@@ -14,6 +14,11 @@ jobs:
    - uses: actions-rs/toolchain@v1
      with:
        toolchain: ${{ matrix.toolchain }}
+       components: rustfmt, clippy
+   - uses: actions-rs/cargo@v1
+     with:
+       command: fmt
+       args: -- --check
    - uses: actions-rs/cargo@v1
      with:
        command: clippy
