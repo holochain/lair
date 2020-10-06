@@ -20,8 +20,8 @@ jobs:
         target
       key: ${{ runner.os }}-cargo-${{ env.cache-name }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('crates/**/Cargo.toml') }}
       restore-keys: |
-       ${{ runner.os }}-build-${{ env.cache-name }}-
-       ${{ runner.os }}-build-
+       ${{ runner.os }}-cargo-${{ env.cache-name }}-
+       ${{ runner.os }}-cargo-
        ${{ runner.os }}-
 
    - uses: actions-rs/toolchain@v1

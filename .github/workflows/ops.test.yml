@@ -29,8 +29,8 @@ jobs:
         target
       key: ${{ matrix.os }}-cargo-${{ matrix.toolchain }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('crates/**/Cargo.toml') }}
       restore-keys: |
-       ${{ runner.os }}-build-${{ env.cache-name }}-
-       ${{ runner.os }}-build-
+       ${{ runner.os }}-cargo-${{ env.cache-name }}-
+       ${{ runner.os }}-cargo-
        ${{ runner.os }}-
 
    - uses: actions-rs/toolchain@v1
