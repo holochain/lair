@@ -47,4 +47,4 @@ jobs:
    - uses: actions-rs/cargo@v1
      with:
        command: test
-       args: --release --manifest-path crates/lair_keystore/Cargo.toml --features="bin_tests"
+       args: --release --manifest-path crates/lair_keystore/Cargo.toml --features="bin-tests"

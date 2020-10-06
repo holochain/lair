@@ -100,7 +100,7 @@ async fn check_ipc_connect(
 }
 
 #[cfg(test)]
-#[cfg(feature = "bin_tests")]
+#[cfg(feature = "bin-tests")]
 mod bin_tests {
     use super::*;
 

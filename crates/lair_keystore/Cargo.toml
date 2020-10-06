@@ -35,7 +35,7 @@ path = "src/lib.rs"
 
 [features]
 # Run the tests that require an installed binary.
-bin_tests = []
+bin-tests = []
 
 [[bin]]
 name = "lair-keystore"
