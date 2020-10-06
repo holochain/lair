@@ -27,12 +27,6 @@ jobs:
        command: build
        args: --release
 
-   # the binary can't be fully tested without a debug install
-   # - uses: actions-rs/cargo@v1
-   #   with:
-   #     command: install
-   #     args: --debug -f --path crates/lair_keystore
-
    # run all the tests
    - uses: actions-rs/cargo@v1
      with:
