@@ -15,7 +15,7 @@ jobs:
       cache-name: cache-rust
      with:
       path: $CARGO_TARGET_DIR
-      key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('./Cargo.toml') }}-{{ hashFiles('./crates/**/Cargo.toml') }}
+      key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('./Cargo.toml') }}-${{ hashFiles('./crates/**/Cargo.toml') }}
       restore-keys: |
        ${{ runner.os }}-build-${{ env.cache-name }}-
        ${{ runner.os }}-build-
