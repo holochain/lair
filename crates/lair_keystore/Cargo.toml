@@ -33,10 +33,6 @@ tempfile = "3"
 name = "lair_keystore"
 path = "src/lib.rs"
 
-[features]
-# Run the tests that require an installed binary.
-bin-tests = []
-
 [[bin]]
 name = "lair-keystore"
 path = "src/bin/lair-keystore/main.rs"
