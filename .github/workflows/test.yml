@@ -1,24 +1,8 @@
 name: test
 
-on: [push]
+on: [ push ]
 
 jobs:
-
- fmt:
-  runs-on: ubuntu-latest
-  steps:
-   - uses: actions/checkout@v2
-   - uses: actions-rs/toolchain@v1
-     with:
-      toolchain: stable
-      components: rustfmt, clippy
-   - uses: actions-rs/cargo@v1
-     with:
-      command: fmt
-      args: -- --check
-   - uses: actions-rs/cargo@v1
-     with:
-      command: clippy
 
  test:
   runs-on: ${{ matrix.os }}
@@ -27,10 +11,10 @@ jobs:
     os: [
      ubuntu-latest,
      macos-latest,
-     # @todo windows support 
+     # @todo windows support
      # windows-latest
     ]
-    toolchain: [ stable, 1.45.1 ]
+    toolchain: [ stable, beta, nightly ]
   steps:
    - uses: actions/checkout@v2
    - uses: actions-rs/toolchain@v1
@@ -44,10 +28,10 @@ jobs:
        args: --release --all-features
 
    # the binary can't be fully tested without a debug install
-   - uses: actions-rs/cargo@v1
-     with:
-       command: install
-       args: --debug -f --path crates/lair_keystore
+   # - uses: actions-rs/cargo@v1
+   #   with:
+   #     command: install
+   #     args: --debug -f --path crates/lair_keystore
 
    # run all the tests
    - uses: actions-rs/cargo@v1
