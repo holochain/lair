@@ -25,7 +25,7 @@ jobs:
    - uses: actions-rs/cargo@v1
      with:
        command: build
-       args: --release --all-features
+       args: --release
 
    # the binary can't be fully tested without a debug install
    # - uses: actions-rs/cargo@v1
@@ -37,4 +37,4 @@ jobs:
    - uses: actions-rs/cargo@v1
      with:
        command: test
-       args: --release --all-features
+       args: --release
