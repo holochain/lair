@@ -100,7 +100,8 @@ async fn check_ipc_connect(
 }
 
 #[cfg(test)]
-mod tests {
+#[cfg(feature = "bin-tests")]
+mod bin_tests {
     use super::*;
 
     fn init_tracing() {

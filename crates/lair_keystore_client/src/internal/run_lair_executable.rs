@@ -50,7 +50,8 @@ async fn wait_ready(stdout_path: &std::path::Path) -> LairResult<()> {
 }
 
 #[cfg(test)]
-mod tests {
+#[cfg(feature = "bin-tests")]
+mod bin_tests {
     use super::*;
 
     #[tokio::test(threaded_scheduler)]
