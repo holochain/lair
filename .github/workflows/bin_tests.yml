@@ -27,7 +27,7 @@ jobs:
         ~/.cargo/registry
         ~/.cargo/git
         target
-      key: ${{ runner.os }}-cargo-${{ env.cache-name }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('crates/**/Cargo.toml') }}
+      key: ${{ matrix.os }}-cargo-${{ matrix.toolchain }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('crates/**/Cargo.toml') }}
       restore-keys: |
        ${{ runner.os }}-build-${{ env.cache-name }}-
        ${{ runner.os }}-build-
@@ -38,13 +38,13 @@ jobs:
        toolchain: ${{ matrix.toolchain }}
 
    # the binary can't be fully tested without an install
-   - uses: actions-rs/cargo@v1
-     with:
-       command: install
-       args: -f --path crates/lair_keystore
+   # - uses: actions-rs/cargo@v1
+   #   with:
+   #     command: install
+   #     args: -f --path crates/lair_keystore
 
    # run the binary tests
    - uses: actions-rs/cargo@v1
      with:
        command: test
-       args: --release --features="bin_tests"
+       args: --release --manifest-path crates/lair_keystore/Cargo.toml --features="bin_tests"
