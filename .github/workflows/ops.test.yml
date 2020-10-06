@@ -1,0 +1,40 @@
+name: test
+
+on: [ push ]
+
+jobs:
+
+ test:
+  runs-on: ${{ matrix.os }}
+  strategy:
+   matrix:
+    os: [
+     ubuntu-latest,
+     macos-latest,
+     # @todo windows support
+     # windows-latest
+    ]
+    toolchain: [ stable, beta, nightly ]
+  steps:
+   - uses: actions/checkout@v2
+   - uses: actions-rs/toolchain@v1
+     with:
+       toolchain: ${{ matrix.toolchain }}
+
+   # smoke test a release build
+   - uses: actions-rs/cargo@v1
+     with:
+       command: build
+       args: --release
+
+   # the binary can't be fully tested without a debug install
+   # - uses: actions-rs/cargo@v1
+   #   with:
+   #     command: install
+   #     args: --debug -f --path crates/lair_keystore
+
+   # run all the tests
+   - uses: actions-rs/cargo@v1
+     with:
+       command: test
+       args: --release
