@@ -362,7 +362,7 @@ impl LairClientApiHandler for Internal {
     ) -> LairClientApiHandlerResult<SignEd25519Signature> {
         let priv_key = match self.sign_by_pub.get(&pub_key) {
             Some(keypair) => keypair.priv_key.clone(),
-            None => return Err("bad type".into()),
+            None => return Err(LairError::PubKeyNotFound),
         };
         Ok(
             async move { sign_ed25519::sign_ed25519(priv_key, message).await }

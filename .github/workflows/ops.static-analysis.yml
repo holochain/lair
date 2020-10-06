@@ -1,0 +1,39 @@
+name: static analysis
+
+on: [ push ]
+
+jobs:
+
+ static-analysis:
+  runs-on: ubuntu-latest
+  steps:
+   - uses: actions/checkout@v2
+
+   - name: rust cache
+     uses: actions/cache@v2
+     env:
+      cache-name: cache-rust
+     with:
+      path: |
+        ~/.cargo/registry
+        ~/.cargo/git
+        target
+      key: ${{ runner.os }}-cargo-${{ env.cache-name }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('crates/**/Cargo.toml') }}
+      restore-keys: |
+       ${{ runner.os }}-cargo-${{ env.cache-name }}-
+       ${{ runner.os }}-cargo-
+       ${{ runner.os }}-
+
+   - uses: actions-rs/toolchain@v1
+     with:
+      toolchain: stable
+      components: rustfmt, clippy
+
+   - uses: actions-rs/cargo@v1
+     with:
+      command: fmt
+      args: -- --check
+
+   - uses: actions-rs/cargo@v1
+     with:
+      command: clippy

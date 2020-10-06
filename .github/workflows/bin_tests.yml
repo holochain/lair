@@ -1,0 +1,50 @@
+name: binary tests
+
+on: [ push ]
+
+jobs:
+
+ test:
+  runs-on: ${{ matrix.os }}
+  strategy:
+   matrix:
+    os: [
+     ubuntu-latest,
+     macos-latest,
+     # @todo windows support
+     # windows-latest
+    ]
+    toolchain: [ stable ]
+  steps:
+   - uses: actions/checkout@v2
+
+   - name: rust cache
+     uses: actions/cache@v2
+     env:
+      cache-name: cache-rust
+     with:
+      path: |
+        ~/.cargo/registry
+        ~/.cargo/git
+        target
+      key: ${{ matrix.os }}-cargo-bin-${{ matrix.toolchain }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('crates/**/Cargo.toml') }}
+      restore-keys: |
+       ${{ runner.os }}-cargo-${{ env.cache-name }}-
+       ${{ runner.os }}-cargo-
+       ${{ runner.os }}-
+
+   - uses: actions-rs/toolchain@v1
+     with:
+       toolchain: ${{ matrix.toolchain }}
+
+   # the binary can't be fully tested without an install
+   - uses: actions-rs/cargo@v1
+     with:
+       command: install
+       args: -f --path crates/lair_keystore
+
+   # run the binary tests
+   - uses: actions-rs/cargo@v1
+     with:
+       command: test
+       args: --manifest-path crates/lair_keystore_client/Cargo.toml --features=bin-tests
