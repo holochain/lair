@@ -234,7 +234,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(threaded_scheduler)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_ipc_raw_wire() -> LairResult<()> {
         init_tracing();
 

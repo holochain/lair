@@ -72,7 +72,7 @@ async fn entry_store_file_task(
 async fn init_load_unlock(
     store_file: &mut tokio::fs::File,
 ) -> LairResult<Option<Vec<u8>>> {
-    use tokio::io::AsyncReadExt;
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
     let meta = store_file.metadata().await.map_err(LairError::other)?;
     let total_size = meta.len();
@@ -98,7 +98,7 @@ async fn write_unlock(
     store_file: &mut tokio::fs::File,
     entry_data: Vec<u8>,
 ) -> LairResult<()> {
-    use tokio::io::AsyncWriteExt;
+    use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
     store_file
         .seek(std::io::SeekFrom::Start(0))
@@ -138,7 +138,7 @@ async fn query_entry_count(
 async fn load_all_entries(
     store_file: &mut tokio::fs::File,
 ) -> LairResult<Vec<(super::KeystoreIndex, Vec<u8>)>> {
-    use tokio::io::AsyncReadExt;
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
     let entry_count = query_entry_count(store_file).await?;
 
@@ -169,7 +169,7 @@ async fn write_next_entry(
     store_file: &mut tokio::fs::File,
     entry_data: Vec<u8>,
 ) -> LairResult<super::KeystoreIndex> {
-    use tokio::io::AsyncWriteExt;
+    use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
     if entry_data.len() != entry::ENTRY_SIZE {
         return Err(format!(
