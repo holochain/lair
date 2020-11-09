@@ -22,18 +22,18 @@ jobs:
   steps:
    - uses: actions/checkout@v2
 
-   - name: rust cache
-     uses: actions/cache@v2
-     env:
-      cache-name: cache-rust-test
-     with:
-      path: |
-        ~/.cargo/registry
-        ~/.cargo/git
-        target
-      key: ${{ runner.os }}-cargo-${{ env.cache-name }}-${{ matrix.toolchain }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('crates/**/Cargo.toml') }}
-      restore-keys: |
-       ${{ runner.os }}-cargo-${{ env.cache-name }}-${{ matrix.toolchain }}-
+#   - name: rust cache
+#     uses: actions/cache@v2
+#     env:
+#      cache-name: cache-rust-test
+#     with:
+#      path: |
+#        ~/.cargo/registry
+#        ~/.cargo/git
+#        target
+#      key: ${{ runner.os }}-cargo-${{ env.cache-name }}-${{ matrix.toolchain }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('crates/**/Cargo.toml') }}
+#      restore-keys: |
+#       ${{ runner.os }}-cargo-${{ env.cache-name }}-${{ matrix.toolchain }}-
 
    - uses: actions-rs/toolchain@v1
      with:
