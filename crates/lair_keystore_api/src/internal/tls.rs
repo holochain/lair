@@ -120,7 +120,7 @@ pub async fn tls_cert_self_signed_new_from_entropy(
 mod tests {
     use super::*;
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(threaded_scheduler)]
     async fn it_can_tls_cert_gen() {
         let cert_res =
             tls_cert_self_signed_new_from_entropy(TlsCertOptions::default())

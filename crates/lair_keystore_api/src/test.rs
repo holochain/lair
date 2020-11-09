@@ -456,7 +456,7 @@ mod tests {
         Ok(api)
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(threaded_scheduler)]
     async fn test_test_keystore_signing() -> LairResult<()> {
         let api = setup().await?;
         let api2 = api.clone();
@@ -505,7 +505,7 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(threaded_scheduler)]
     async fn test_test_keystore_tls() -> LairResult<()> {
         let api = setup().await?;
 

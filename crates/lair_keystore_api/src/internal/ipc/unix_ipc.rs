@@ -13,8 +13,8 @@ impl tokio::io::AsyncRead for IpcRead {
     fn poll_read(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
-        buf: &mut tokio::io::ReadBuf,
-    ) -> std::task::Poll<tokio::io::Result<()>> {
+        buf: &mut [u8],
+    ) -> std::task::Poll<tokio::io::Result<usize>> {
         let r = &mut self.read_half;
         tokio::pin!(r);
         tokio::io::AsyncRead::poll_read(r, cx, buf)

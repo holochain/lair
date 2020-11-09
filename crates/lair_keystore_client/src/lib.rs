@@ -114,7 +114,7 @@ mod bin_tests {
         );
     }
 
-    #[tokio::test(flavor = "multi_thread")]
+    #[tokio::test(threaded_scheduler)]
     async fn basic_running_connect() -> LairResult<()> {
         init_tracing();
 
