@@ -11,7 +11,8 @@ jobs:
     os: [
      ubuntu-latest,
      macos-latest,
-     windows-latest,
+     # @todo windows support
+     #windows-latest,
     ]
     toolchain: [
      stable,
@@ -19,20 +20,18 @@ jobs:
   steps:
    - uses: actions/checkout@v2
 
-#   - name: rust cache
-#     uses: actions/cache@v2
-#     env:
-#      cache-name: cache-rust
-#     with:
-#      path: |
-#        ~/.cargo/registry
-#        ~/.cargo/git
-#        target
-#      key: ${{ runner.os }}-cargo-bin-${{ env.cache-name }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('crates/**/Cargo.toml') }}
-#      restore-keys: |
-#       ${{ runner.os }}-cargo-${{ env.cache-name }}-
-#       ${{ runner.os }}-cargo-
-#       ${{ runner.os }}-
+   - name: rust cache
+     uses: actions/cache@v2
+     env:
+      cache-name: cache-rust-bin-test
+     with:
+      path: |
+        ~/.cargo/registry
+        ~/.cargo/git
+        target
+      key: ${{ runner.os }}-cargo-bin-${{ env.cache-name }}-${{ matrix.toolchain }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('crates/**/Cargo.toml') }}
+      restore-keys: |
+       ${{ runner.os }}-cargo-${{ env.cache-name }}-${{ matrix.toolchain }}-
 
    - uses: actions-rs/toolchain@v1
      with:
