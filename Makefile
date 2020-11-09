@@ -18,7 +18,7 @@ bump:
 	@for toml in $$(find crates -name Cargo.toml); do \
 		echo "# updating version in $${toml} to $(ver)"; \
 		sed -i'' 's/^version = \"[^"]*"$$/version = "$(ver)"/g' $${toml}; \
-		sed -i'' 's/^lair_keystore_api = { version = \"[^"]*"/lair_keystore_api = { version = "$(ver)"/g' $${toml}; \
+		sed -i'' 's/^lair_keystore_api = { version = \"[^"]*"/lair_keystore_api = { version = "=$(ver)"/g' $${toml}; \
 	done
 
 publish: tools
