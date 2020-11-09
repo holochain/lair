@@ -1,6 +1,6 @@
 [package]
 name = "lair_keystore_api"
-version = "0.0.1-alpha.6"
+version = "0.0.1-alpha.7"
 description = "secret lair private keystore types"
 license = "Apache-2.0"
 repository = "https://github.com/holochain/lair"
