@@ -18,7 +18,7 @@ struct Opt {
 }
 
 /// main entry point
-#[tokio::main(flavor = "multi_thread")]
+#[tokio::main(threaded_scheduler)]
 pub async fn main() -> lair_keystore_api::LairResult<()> {
     let _ = subscriber::set_global_default(
         tracing_subscriber::FmtSubscriber::builder()
