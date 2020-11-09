@@ -533,7 +533,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore"
-version = "0.0.1-alpha.6"
+version = "0.0.1-alpha.7"
 dependencies = [
  "criterion",
  "futures",
@@ -551,7 +551,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_api"
-version = "0.0.1-alpha.6"
+version = "0.0.1-alpha.7"
 dependencies = [
  "blake2b_simd",
  "byteorder",
@@ -574,7 +574,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_client"
-version = "0.0.1-alpha.6"
+version = "0.0.1-alpha.7"
 dependencies = [
  "ghost_actor",
  "lair_keystore_api",

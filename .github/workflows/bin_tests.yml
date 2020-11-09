@@ -11,10 +11,11 @@ jobs:
     os: [
      ubuntu-latest,
      macos-latest,
-     # @todo windows support
-     # windows-latest
+     windows-latest,
     ]
-    toolchain: [ stable ]
+    toolchain: [
+     stable,
+    ]
   steps:
    - uses: actions/checkout@v2
 
@@ -27,7 +28,7 @@ jobs:
         ~/.cargo/registry
         ~/.cargo/git
         target
-      key: ${{ matrix.os }}-cargo-bin-${{ matrix.toolchain }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('crates/**/Cargo.toml') }}
+      key: ${{ runner.os }}-cargo-bin-${{ env.cache-name }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('crates/**/Cargo.toml') }}
       restore-keys: |
        ${{ runner.os }}-cargo-${{ env.cache-name }}-
        ${{ runner.os }}-cargo-
