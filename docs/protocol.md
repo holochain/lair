@@ -8,9 +8,9 @@ The essential blocks of every message have 16 bytes of header information follow
 bytes.
 
 - Headers (16 bytes)
-  - Message length (4 bytes)
-  - Wire type (4 bytes)
-  - Message ID (8 bytes)
+  - Message length (4 bytes - LE)
+  - Wire type (4 bytes - LE)
+  - Message ID (8 bytes - opaque/implementation-specific)
 - Body
   - Payload data (bytes based on message length from Header)
 
@@ -73,7 +73,7 @@ Can be any number of bytes.  The payload format is determined by the wire type.
 #### `0xff000011` Response payload
 
 - `8+` byte - passphrase (string)
-  - `8` bytes for length
+  - `8` bytes (LE) for length
   - `+` bytes for `utf8` encoded passphrase
 
 ### Get Last Entry
@@ -84,17 +84,17 @@ Can be any number of bytes.  The payload format is determined by the wire type.
 
 #### `0x00000011` Response payload
 
-- `4` byte - last keystore index
+- `4` byte (LE) - last keystore index
 
 ### Get Entry Type
 
 #### `0x00000020` Request payload
 
-- `4` byte - keystore index
+- `4` byte (LE) - keystore index
 
 #### `0x00000021` Response payload
 
-- `4` byte - entry type
+- `4` byte (LE) - entry type
   - `0x00000000` - Invalid
   - `0x00000100` - TLS Certificate
   - `0x00000200` - Ed25519
@@ -108,26 +108,26 @@ Can be any number of bytes.  The payload format is determined by the wire type.
 #### `0x00000031` Response payload
 
 - `8+` byte - server name
-  - `8` bytes for length
+  - `8` bytes (LE) for length
   - `+` bytes for `utf8` encoded server name
 - `8+` byte - server version
-  - `8` bytes for length
+  - `8` bytes (LE) for length
   - `+` bytes for `utf8` encoded server version
 
 ### TLS - Create Self-signed Certificate from Entropy
 
 #### `0x00000110` Request payload
 
-- `4` byte - TLS certificate algorithm
+- `4` byte (LE) - TLS certificate algorithm
   - `0x00000200` - Ed25519
   - `0x00000201` - EcDSA P-256
   - `0x00000202` - EcDSA P-384
 
 #### `0x00000111` Response payload
 
-- `4` byte - keystore index
+- `4` byte (LE) - keystore index
 - `8+` byte - certificate SNI
-  - `8` bytes for length
+  - `8` bytes (LE) for length
   - `+` bytes for `utf8` encoded certificate SNI
 - `32` byte - certificate digest
 
@@ -135,12 +135,12 @@ Can be any number of bytes.  The payload format is determined by the wire type.
 
 #### `0x00000120` Request payload
 
-- `4` byte - keystore index
+- `4` byte (LE) - keystore index
 
 #### `0x00000121` Response payload
 
 - `8+` byte - certificate SNI
-  - `8` bytes for length
+  - `8` bytes (LE) for length
   - `+` bytes for `utf8` encoded certificate SNI
 - `32` byte - certificate digest
 
@@ -149,11 +149,11 @@ Can be any number of bytes.  The payload format is determined by the wire type.
 
 #### `0x00000130` Request payload
 
-- `4` byte - keystore index
+- `4` byte (LE) - keystore index
 
 #### `0x00000131` Response payload
 
-- `8` byte - certificate length
+- `8` byte (LE) - certificate length
 - `+` byte - certificate
 
 
@@ -165,7 +165,7 @@ Can be any number of bytes.  The payload format is determined by the wire type.
 
 #### `0x00000141` Response payload
 
-- `8` byte - certificate length
+- `8` byte (LE) - certificate length
 - `+` byte - certificate
 
 
@@ -174,12 +174,12 @@ Can be any number of bytes.  The payload format is determined by the wire type.
 #### `0x00000150` Request payload
 
 - `8+` byte - certificate SNI
-  - `8` bytes for length
+  - `8` bytes (LE) for length
   - `+` bytes for `utf8` encoded certificate SNI
 
 #### `0x00000151` Response payload
 
-- `8` byte - certificate length
+- `8` byte (LE) - certificate length
 - `+` byte - certificate
 
 
@@ -187,11 +187,11 @@ Can be any number of bytes.  The payload format is determined by the wire type.
 
 #### `0x00000160` Request payload
 
-- `4` byte - keystore index
+- `4` byte (LE) - keystore index
 
 #### `0x00000161` Response payload
 
-- `8` byte - certificate private key length
+- `8` byte (LE) - certificate private key length
 - `+` byte - certificate private key
 
 
@@ -203,7 +203,7 @@ Can be any number of bytes.  The payload format is determined by the wire type.
 
 #### `0x00000171` Response payload
 
-- `8` byte - certificate private key length
+- `8` byte (LE) - certificate private key length
 - `+` byte - certificate private key
 
 
@@ -212,12 +212,12 @@ Can be any number of bytes.  The payload format is determined by the wire type.
 #### `0x00000180` Request payload
 
 - `8+` byte - certificate SNI
-  - `8` bytes for length
+  - `8` bytes (LE) for length
   - `+` bytes for `utf8` encoded certificate SNI
 
 #### `0x00000181` Response payload
 
-- `8` byte - certificate private key length
+- `8` byte (LE) - certificate private key length
 - `+` byte - certificate private key
 
 
@@ -229,7 +229,7 @@ Can be any number of bytes.  The payload format is determined by the wire type.
 
 #### `0x00000211` Response payload
 
-- `4` byte - keystore index
+- `4` byte (LE) - keystore index
 - `32` byte - public key
 
 
@@ -237,7 +237,7 @@ Can be any number of bytes.  The payload format is determined by the wire type.
 
 #### `0x00000220` Request payload
 
-- `4` byte - keystore index
+- `4` byte (LE) - keystore index
 
 #### `0x00000221` Response payload
 
@@ -248,8 +248,8 @@ Can be any number of bytes.  The payload format is determined by the wire type.
 
 #### `0x00000230` Request payload
 
-- `4` byte - keystore index
-- `8` byte - message length
+- `4` byte (LE) - keystore index
+- `8` byte (LE) - message length
 - `+` byte - message
 
 #### `0x00000231` Response payload
@@ -262,7 +262,7 @@ Can be any number of bytes.  The payload format is determined by the wire type.
 #### `0x00000230` Request payload
 
 - `32` byte - public key
-- `8` byte - message length
+- `8` byte (LE) - message length
 - `+` byte - message
 
 #### `0x00000231` Response payload
