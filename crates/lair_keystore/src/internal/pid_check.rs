@@ -5,7 +5,7 @@ use std::{
     io::{Read, Write},
     str::FromStr,
 };
-use sysinfo::SystemExt;
+use sysinfo::{ProcessExt, SystemExt};
 
 /// Result from invoking `pid_check()` function.
 pub struct PidCheckResult {
@@ -75,17 +75,19 @@ fn pid_check_write(
                     sysinfo::Pid::from_str(&String::from_utf8_lossy(&buf))
                         .map_err(LairError::other)?;
                 sys.refresh_process(pid);
-                if sys.get_process(pid).is_some() {
-                    // a lair process is already running-abort running this one
-                    // note - after a system restart the pid may have been
-                    // reused perhaps we should check the unix socket for a
-                    // valid lair process on the other end??
-                    return Err(LairError::ProcessAlreadyExists);
-                } else {
-                    // there was not a process running under this pid
-                    // we can remove it as stale.
-                    std::fs::remove_file(config.get_pid_path())
-                        .map_err(LairError::other)?;
+                match sys.get_process(pid) {
+                    Some(process)
+                        if process.name() == env!("CARGO_PKG_NAME") =>
+                    {
+                        // a lair process is already running-abort running this one
+                        return Err(LairError::ProcessAlreadyExists);
+                    }
+                    _ => {
+                        // there was not a process running under this pid
+                        // we can remove it as stale.
+                        std::fs::remove_file(config.get_pid_path())
+                            .map_err(LairError::other)?;
+                    }
                 }
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
