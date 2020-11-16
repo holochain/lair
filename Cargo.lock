@@ -577,7 +577,8 @@ dependencies = [
 [[package]]
 name = "ghost_actor"
 version = "0.3.0-alpha.1"
-source = "git+https://github.com/holochain/ghost_actor.git?branch=add_observability#d400de8a3b22dbc3fd2a78943cb4f6b2e4cc5b84"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d5180a86962ed70e36dd39b469d1c17d1a4cfefa610e63be5bbb10a4cec9bcc"
 dependencies = [
  "futures",
  "must_future",
