@@ -1,6 +1,7 @@
 use super::*;
 use crate::internal::ipc::*;
 use crate::internal::wire::*;
+use crate::internal::sign_ed25519;
 use futures::{future::FutureExt, stream::StreamExt};
 
 #[allow(clippy::single_match)]
@@ -336,7 +337,7 @@ impl LairClientApiHandler for Internal {
 
     fn handle_sign_ed25519_new_from_entropy(
         &mut self,
-    ) -> LairClientApiHandlerResult<(KeystoreIndex, SignEd25519PubKey)> {
+    ) -> LairClientApiHandlerResult<(KeystoreIndex, sign_ed25519::SignEd25519PubKey)> {
         let fut = self.kill_switch.mix_static(self.ipc_send.request(
             LairWire::ToLairSignEd25519NewFromEntropy {
                 msg_id: next_msg_id(),
@@ -359,7 +360,7 @@ impl LairClientApiHandler for Internal {
     fn handle_sign_ed25519_get(
         &mut self,
         keystore_index: KeystoreIndex,
-    ) -> LairClientApiHandlerResult<SignEd25519PubKey> {
+    ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519PubKey> {
         let fut = self.kill_switch.mix_static(self.ipc_send.request(
             LairWire::ToLairSignEd25519Get {
                 msg_id: next_msg_id(),
@@ -382,7 +383,7 @@ impl LairClientApiHandler for Internal {
         &mut self,
         keystore_index: KeystoreIndex,
         message: Arc<Vec<u8>>,
-    ) -> LairClientApiHandlerResult<SignEd25519Signature> {
+    ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519Signature> {
         let fut = self.kill_switch.mix_static(self.ipc_send.request(
             LairWire::ToLairSignEd25519SignByIndex {
                 msg_id: next_msg_id(),
@@ -405,9 +406,9 @@ impl LairClientApiHandler for Internal {
 
     fn handle_sign_ed25519_sign_by_pub_key(
         &mut self,
-        pub_key: SignEd25519PubKey,
+        pub_key: sign_ed25519::SignEd25519PubKey,
         message: Arc<Vec<u8>>,
-    ) -> LairClientApiHandlerResult<SignEd25519Signature> {
+    ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519Signature> {
         let fut = self.kill_switch.mix_static(self.ipc_send.request(
             LairWire::ToLairSignEd25519SignByPubKey {
                 msg_id: next_msg_id(),

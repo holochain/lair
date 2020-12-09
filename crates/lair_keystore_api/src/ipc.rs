@@ -50,6 +50,7 @@ where
 mod tests {
     use super::*;
     use crate::internal::wire::tests::TestVal;
+    use crate::internal::sign_ed25519;
     use futures::{future::FutureExt, stream::StreamExt};
     use ghost_actor::GhostControlSender;
 
@@ -153,7 +154,7 @@ mod tests {
             }
             fn handle_sign_ed25519_new_from_entropy(
                 &mut self,
-            ) -> LairClientApiHandlerResult<(KeystoreIndex, SignEd25519PubKey)>
+            ) -> LairClientApiHandlerResult<(KeystoreIndex, sign_ed25519::SignEd25519PubKey)>
             {
                 Ok(async move { Ok((
                     TestVal::test_val(),
@@ -163,21 +164,21 @@ mod tests {
             fn handle_sign_ed25519_get(
                 &mut self,
                 _keystore_index: KeystoreIndex,
-            ) -> LairClientApiHandlerResult<SignEd25519PubKey> {
+            ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519PubKey> {
                 Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
             }
             fn handle_sign_ed25519_sign_by_index(
                 &mut self,
                 _keystore_index: KeystoreIndex,
                 _message: Arc<Vec<u8>>,
-            ) -> LairClientApiHandlerResult<SignEd25519Signature> {
+            ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519Signature> {
                 Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
             }
             fn handle_sign_ed25519_sign_by_pub_key(
                 &mut self,
-                _pub_key: SignEd25519PubKey,
+                _pub_key: sign_ed25519::SignEd25519PubKey,
                 _message: Arc<Vec<u8>>,
-            ) -> LairClientApiHandlerResult<SignEd25519Signature> {
+            ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519Signature> {
                 Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
             }
         }
@@ -285,24 +286,24 @@ mod tests {
                 .await?,
         );
         assert_eq!(
-            (KeystoreIndex::test_val(), SignEd25519PubKey::test_val(),),
+            (KeystoreIndex::test_val(), sign_ed25519::SignEd25519PubKey::test_val(),),
             cli_send.sign_ed25519_new_from_entropy().await?,
         );
         assert_eq!(
-            SignEd25519PubKey::test_val(),
+            sign_ed25519::SignEd25519PubKey::test_val(),
             cli_send.sign_ed25519_get(0.into()).await?,
         );
         assert_eq!(
-            SignEd25519Signature::test_val(),
+            sign_ed25519::SignEd25519Signature::test_val(),
             cli_send
                 .sign_ed25519_sign_by_index(0.into(), b"".to_vec().into())
                 .await?,
         );
         assert_eq!(
-            SignEd25519Signature::test_val(),
+            sign_ed25519::SignEd25519Signature::test_val(),
             cli_send
                 .sign_ed25519_sign_by_pub_key(
-                    SignEd25519PubKey::test_val(),
+                    sign_ed25519::SignEd25519PubKey::test_val(),
                     b"".to_vec().into()
                 )
                 .await?,

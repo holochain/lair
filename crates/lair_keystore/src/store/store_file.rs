@@ -29,7 +29,7 @@ pub(crate) async fn spawn_entry_store_file_task(
     Ok(s)
 }
 
-/// this is not an actor, because we cannot do paralel file access
+/// this is not an actor, because we cannot do parallel file access
 /// we actually need to process requests in series.
 async fn entry_store_file_task(
     mut store_file: tokio::fs::File,

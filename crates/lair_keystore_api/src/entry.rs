@@ -4,7 +4,8 @@ use crate::*;
 
 use actor::*;
 use internal::codec;
-use internal::sign_ed25519::SignEd25519PrivKey;
+use internal::sign_ed25519;
+use internal::x25519;
 
 /// Fixed serialized entry byte count.
 pub const ENTRY_SIZE: usize = 1024;
@@ -13,11 +14,14 @@ pub const ENTRY_SIZE: usize = 1024;
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub enum LairEntry {
-    /// Tls Cert
+    /// Tls Cert Keypair
     TlsCert(EntryTlsCert),
 
-    /// Sign Ed25519
+    /// Sign Ed25519 Keypair
     SignEd25519(EntrySignEd25519),
+
+    /// X25519 Keypair
+    X25519(EntryX25519),
 }
 
 impl From<EntryTlsCert> for LairEntry {
@@ -51,6 +55,9 @@ impl LairEntry {
             codec::EntryType::SignEd25519 => {
                 LairEntry::SignEd25519(entry_decode_sign_ed25519(reader)?)
             }
+            codec::EntryType::X25519 => {
+                LairEntry::X25519(entry_decode_x25519(reader)?)
+            }
         })
     }
 
@@ -61,6 +68,7 @@ impl LairEntry {
         match self {
             LairEntry::TlsCert(e) => e.encode(),
             LairEntry::SignEd25519(e) => e.encode(),
+            LairEntry::X25519(e) => e.encode(),
         }
     }
 }
@@ -94,6 +102,15 @@ fn entry_decode_sign_ed25519(
     let pub_key = reader.read_bytes(32)?.to_vec().into();
 
     Ok(EntrySignEd25519 { priv_key, pub_key })
+}
+
+fn entry_decode_x25519(
+    mut reader: codec::CodecReader<'_>,
+) -> LairResult<EntryX25519> {
+    let priv_key = reader.read_bytes(x25519::PRIV_KEY_BYTES as _)?.to_vec().into();
+    let pub_key = reader.read_bytes(x25519::PUB_KEY_BYTES as _)?.to_vec().into();
+
+    Ok(EntryX25519 { priv_key, pub_key } )
 }
 
 /// File format entry representing Tls Certificate data.
@@ -146,15 +163,47 @@ impl EntryTlsCert {
     }
 }
 
+/// Keypair struct for X25519 ECDH.
+#[derive(Debug, Clone)]
+pub struct EntryX25519 {
+    /// Private key bytes.
+    /// @todo security
+    pub priv_key: x25519::X25519PrivKey,
+
+    /// Public key bytes.
+    pub pub_key: x25519::X25519PubKey,
+}
+
+impl EntryX25519 {
+    /// Encode an X25519 keypair for storage.
+    pub fn encode(&self) -> LairResult<Vec<u8>> {
+        let mut writer = codec::CodecWriter::new(ENTRY_SIZE)?;
+
+        // pre padding
+        writer.write_pre_padding(64)?;
+
+        // x25519 entry type
+        writer.write_entry_type(codec::EntryType::X25519)?;
+
+        // write priv_key (always 32 bytes)
+        writer.write_bytes(&self.priv_key[0..32])?;
+
+        // write pub_key (always 32 bytes)
+        writer.write_bytes(&self.pub_key[0..32])?;
+
+        Ok(writer.into_vec())
+    }
+}
+
 /// File format entry representing Sign Ed25519 Keypair data.
 #[derive(Debug, Clone)]
 pub struct EntrySignEd25519 {
     /// Private key bytes.
     /// @todo - once we're integrated with sodoken, make this a priv buffer.
-    pub priv_key: SignEd25519PrivKey,
+    pub priv_key: sign_ed25519::SignEd25519PrivKey,
 
     /// Public key bytes.
-    pub pub_key: SignEd25519PubKey,
+    pub pub_key: sign_ed25519::SignEd25519PubKey,
 }
 
 impl EntrySignEd25519 {
@@ -183,10 +232,10 @@ impl EntrySignEd25519 {
     pub fn sign(
         &self,
         message: Arc<Vec<u8>>,
-    ) -> impl std::future::Future<Output = LairResult<SignEd25519Signature>> + 'static
+    ) -> impl std::future::Future<Output = LairResult<sign_ed25519::SignEd25519Signature>> + 'static
     {
         let priv_key = self.priv_key.clone();
-        internal::sign_ed25519::sign_ed25519(priv_key, message)
+        sign_ed25519::sign_ed25519(priv_key, message)
     }
 }
 

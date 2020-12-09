@@ -1,6 +1,6 @@
 //! Lair Wire Protocol Utilities
 
-use crate::{actor::*, internal::codec, *};
+use crate::{actor::*, internal::codec, *, internal::sign_ed25519};
 
 macro_rules! default_encode_setup {
     ($msg_id:ident, $wire_type:ident) => {{
@@ -366,7 +366,7 @@ macro_rules! wire_type_meta_macro {
             },
             ToCliSignEd25519NewFromEntropyResponse 0x00000211 false false {
                 keystore_index: KeystoreIndex,
-                pub_key: SignEd25519PubKey,
+                pub_key: sign_ed25519::SignEd25519PubKey,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
                 writer.write_u32(**keystore_index)?;
@@ -397,7 +397,7 @@ macro_rules! wire_type_meta_macro {
                 }
             },
             ToCliSignEd25519GetResponse 0x00000221 false false {
-                pub_key: SignEd25519PubKey,
+                pub_key: sign_ed25519::SignEd25519PubKey,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
                 writer.write_bytes_exact(pub_key, 32)?;
@@ -439,7 +439,7 @@ macro_rules! wire_type_meta_macro {
                 }
             },
             ToCliSignEd25519SignByIndexResponse 0x00000231 false false {
-                signature: SignEd25519Signature,
+                signature: sign_ed25519::SignEd25519Signature,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
                 writer.write_bytes_exact(signature, 64)?;
@@ -453,7 +453,7 @@ macro_rules! wire_type_meta_macro {
                 }
             },
             ToLairSignEd25519SignByPubKey 0x00000240 false true {
-                pub_key: SignEd25519PubKey,
+                pub_key: sign_ed25519::SignEd25519PubKey,
                 message: Arc<Vec<u8>>,
             } |msg_id, wire_type| {
                 // outgoing sig requests just need to be the right size...
@@ -481,7 +481,7 @@ macro_rules! wire_type_meta_macro {
                 }
             },
             ToCliSignEd25519SignByPubKeyResponse 0x00000241 false false {
-                signature: SignEd25519Signature,
+                signature: sign_ed25519::SignEd25519Signature,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
                 writer.write_bytes_exact(signature, 64)?;
@@ -737,8 +737,8 @@ pub(crate) mod tests {
     test_val!(CertPrivKey, vec![0x42; 32].into());
     test_val!(CertSni, "test-val".to_string().into());
     test_val!(CertDigest, vec![0x42; 32].into());
-    test_val!(SignEd25519PubKey, vec![0x42; 32].into());
-    test_val!(SignEd25519Signature, vec![0x42; 64].into());
+    test_val!(sign_ed25519::SignEd25519PubKey, vec![0x42; 32].into());
+    test_val!(sign_ed25519::SignEd25519Signature, vec![0x42; 64].into());
 
     macro_rules! lair_wire_enum_test {
         ($(

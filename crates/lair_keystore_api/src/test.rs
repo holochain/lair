@@ -72,6 +72,7 @@ pub async fn spawn_test_keystore(
         cert_by_digest: HashMap::new(),
         cert_by_sni: HashMap::new(),
         sign_by_pub: HashMap::new(),
+        x25519_by_pub: HashMap::new(),
         last_idx: 0.into(),
     }));
 
@@ -85,7 +86,8 @@ struct Internal {
     by_idx: HashMap<KeystoreIndex, entry::LairEntry>,
     cert_by_digest: HashMap<CertDigest, entry::EntryTlsCert>,
     cert_by_sni: HashMap<CertSni, entry::EntryTlsCert>,
-    sign_by_pub: HashMap<SignEd25519PubKey, entry::EntrySignEd25519>,
+    sign_by_pub: HashMap<sign_ed25519::SignEd25519PubKey, entry::EntrySignEd25519>,
+    x25519_by_pub: HashMap<x25519::X25519PubKey, entry::EntryX25519>,
     last_idx: KeystoreIndex,
 }
 
@@ -120,6 +122,9 @@ impl InternalApiHandler for Internal {
             }
             entry::LairEntry::SignEd25519(keypair) => {
                 self.sign_by_pub.insert(keypair.pub_key.clone(), keypair);
+            }
+            entry::LairEntry::X25519(keypair) => {
+                self.x25519_by_pub.insert(keypair.pub_key.clone(), keypair);
             }
         }
         Ok(async move { Ok(()) }.boxed().into())
@@ -157,6 +162,7 @@ impl LairClientApiHandler for Internal {
         let t = match entry {
             entry::LairEntry::TlsCert(_) => LairEntryType::TlsCert,
             entry::LairEntry::SignEd25519(_) => LairEntryType::SignEd25519,
+            entry::LairEntry::X25519(_) => LairEntryType::X25519,
         };
         Ok(async move { Ok(t) }.boxed().into())
     }
@@ -290,7 +296,7 @@ impl LairClientApiHandler for Internal {
 
     fn handle_sign_ed25519_new_from_entropy(
         &mut self,
-    ) -> LairClientApiHandlerResult<(KeystoreIndex, SignEd25519PubKey)> {
+    ) -> LairClientApiHandlerResult<(KeystoreIndex, sign_ed25519::SignEd25519PubKey)> {
         if !self.fixture_sign_ed25519_keypairs.is_empty() {
             let keypair = self.fixture_sign_ed25519_keypairs.remove(0);
             let i_s = self.i_s.clone();
@@ -325,7 +331,7 @@ impl LairClientApiHandler for Internal {
     fn handle_sign_ed25519_get(
         &mut self,
         keystore_index: KeystoreIndex,
-    ) -> LairClientApiHandlerResult<SignEd25519PubKey> {
+    ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519PubKey> {
         let out = match match self.by_idx.get(&keystore_index) {
             Some(entry) => entry,
             None => return Err("bad index".into()),
@@ -340,7 +346,7 @@ impl LairClientApiHandler for Internal {
         &mut self,
         keystore_index: KeystoreIndex,
         message: Arc<Vec<u8>>,
-    ) -> LairClientApiHandlerResult<SignEd25519Signature> {
+    ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519Signature> {
         let priv_key = match match self.by_idx.get(&keystore_index) {
             Some(entry) => entry,
             None => return Err("bad index".into()),
@@ -357,9 +363,9 @@ impl LairClientApiHandler for Internal {
 
     fn handle_sign_ed25519_sign_by_pub_key(
         &mut self,
-        pub_key: SignEd25519PubKey,
+        pub_key: sign_ed25519::SignEd25519PubKey,
         message: Arc<Vec<u8>>,
-    ) -> LairClientApiHandlerResult<SignEd25519Signature> {
+    ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519Signature> {
         let priv_key = match self.sign_by_pub.get(&pub_key) {
             Some(keypair) => keypair.priv_key.clone(),
             None => return Err(LairError::PubKeyNotFound),

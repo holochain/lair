@@ -2,6 +2,7 @@
 
 use crate::*;
 use derive_more::*;
+use internal::sign_ed25519;
 
 ghost_actor::ghost_chan! {
     /// "Event" types emitted by Lair Client Actor Api.
@@ -132,46 +133,6 @@ impl From<Vec<u8>> for CertDigest {
     }
 }
 
-/// The 32 byte signature ed25519 public key.
-#[derive(
-    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
-)]
-pub struct SignEd25519PubKey(pub Arc<Vec<u8>>);
-
-impl From<Vec<u8>> for SignEd25519PubKey {
-    fn from(d: Vec<u8>) -> Self {
-        Self(Arc::new(d))
-    }
-}
-
-impl SignEd25519PubKey {
-    /// Verify signature on given message with given public key.
-    pub async fn verify(
-        &self,
-        message: Arc<Vec<u8>>,
-        signature: SignEd25519Signature,
-    ) -> LairResult<bool> {
-        internal::sign_ed25519::sign_ed25519_verify(
-            self.clone(),
-            message,
-            signature,
-        )
-        .await
-    }
-}
-
-/// The 64 byte detached ed25519 signature data.
-#[derive(
-    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
-)]
-pub struct SignEd25519Signature(pub Arc<Vec<u8>>);
-
-impl From<Vec<u8>> for SignEd25519Signature {
-    fn from(d: Vec<u8>) -> Self {
-        Self(Arc::new(d))
-    }
-}
-
 /// The entry type for a given entry.
 #[non_exhaustive]
 #[repr(u32)]
@@ -185,6 +146,9 @@ pub enum LairEntryType {
 
     /// Ed25519 algorithm signature keypair.
     SignEd25519 = 0x00000200,
+
+    /// X25519 ECDH keypair.
+    X25519 = 0x00000300,
 }
 
 impl Default for LairEntryType {
@@ -274,24 +238,24 @@ ghost_actor::ghost_chan! {
 
         /// Create a new signature ed25519 keypair from entropy.
         fn sign_ed25519_new_from_entropy(
-        ) -> (KeystoreIndex, SignEd25519PubKey);
+        ) -> (KeystoreIndex, sign_ed25519::SignEd25519PubKey);
 
         /// Get ed25519 keypair info by keystore index.
         fn sign_ed25519_get(
             keystore_index: KeystoreIndex,
-        ) -> SignEd25519PubKey;
+        ) -> sign_ed25519::SignEd25519PubKey;
 
         /// Generate a signature for message by keystore index.
         fn sign_ed25519_sign_by_index(
             keystore_index: KeystoreIndex,
             message: Arc<Vec<u8>>,
-        ) -> SignEd25519Signature;
+        ) -> sign_ed25519::SignEd25519Signature;
 
         /// Generate a signature for message by signature pub key.
         fn sign_ed25519_sign_by_pub_key(
-            pub_key: SignEd25519PubKey,
+            pub_key: sign_ed25519::SignEd25519PubKey,
             message: Arc<Vec<u8>>,
-        ) -> SignEd25519Signature;
+        ) -> sign_ed25519::SignEd25519Signature;
     }
 }
 
