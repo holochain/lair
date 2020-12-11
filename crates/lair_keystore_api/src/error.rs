@@ -1,3 +1,5 @@
+use crypto_box as lib_crypto_box;
+
 /// Keystore Error Type.
 #[derive(Debug, thiserror::Error)]
 pub enum LairError {
@@ -17,9 +19,31 @@ pub enum LairError {
     #[error("Public key not found")]
     PubKeyNotFound,
 
+    /// Error during aead encryption, likely bad data.
+    #[error("Aead error: {0}")]
+    Aead(String),
+
+    /// Nonce byte lengths did not line up internally. Always very bad.
+    #[error("CryptoBox nonce bad length")]
+    CryptoBoxNonceLength,
+
+    /// X25519 pub key lengths did not line up internally. Always very bad.
+    #[error("X25519 pub key bad length")]
+    X25519PubKeyLength,
+
+    /// X25519 priv key lengths did not line up internally. Always very bad.
+    #[error("X25519 priv key bad length")]
+    X25519PrivKeyLength,
+
     /// Unspecified Internal error.
     #[error(transparent)]
     Other(Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl From<lib_crypto_box::aead::Error> for LairError {
+    fn from(aead_error: lib_crypto_box::aead::Error) -> Self {
+        Self::Aead(aead_error.to_string())
+    }
 }
 
 impl LairError {

@@ -36,6 +36,12 @@ impl From<EntrySignEd25519> for LairEntry {
     }
 }
 
+impl From<EntryX25519> for LairEntry {
+    fn from(o: EntryX25519) -> Self {
+        Self::X25519(o)
+    }
+}
+
 impl LairEntry {
     /// Decode a disk entry.
     /// @todo - once we're integrated with sodoken, this should decrypt too
@@ -107,10 +113,15 @@ fn entry_decode_sign_ed25519(
 fn entry_decode_x25519(
     mut reader: codec::CodecReader<'_>,
 ) -> LairResult<EntryX25519> {
-    let priv_key = reader.read_bytes(x25519::PRIV_KEY_BYTES as _)?.to_vec().into();
-    let pub_key = reader.read_bytes(x25519::PUB_KEY_BYTES as _)?.to_vec().into();
+    let priv_key_data = reader.read_bytes(x25519::PRIV_KEY_BYTES as _)?;
+    let mut priv_key = [0_u8; x25519::PRIV_KEY_BYTES];
+    priv_key.copy_from_slice(&priv_key_data);
 
-    Ok(EntryX25519 { priv_key, pub_key } )
+    let pub_key_data = reader.read_bytes(x25519::PUB_KEY_BYTES as _)?;
+    let mut pub_key = [0_u8; x25519::PUB_KEY_BYTES];
+    pub_key.copy_from_slice(&pub_key_data);
+
+    Ok(EntryX25519 { priv_key: priv_key.into(), pub_key: pub_key.into() } )
 }
 
 /// File format entry representing Tls Certificate data.
@@ -186,10 +197,11 @@ impl EntryX25519 {
         writer.write_entry_type(codec::EntryType::X25519)?;
 
         // write priv_key (always 32 bytes)
-        writer.write_bytes(&self.priv_key[0..32])?;
+        // @todo cloning a private key probably not great
+        writer.write_bytes(&self.priv_key.to_bytes())?;
 
         // write pub_key (always 32 bytes)
-        writer.write_bytes(&self.pub_key[0..32])?;
+        writer.write_bytes(&AsRef::<[u8]>::as_ref(&self.pub_key)[0..32])?;
 
         Ok(writer.into_vec())
     }

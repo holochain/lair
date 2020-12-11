@@ -843,6 +843,7 @@ dependencies = [
  "rayon",
  "rcgen",
  "ring",
+ "subtle",
  "tempfile",
  "thiserror",
  "tokio",

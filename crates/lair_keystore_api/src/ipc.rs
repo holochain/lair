@@ -53,6 +53,8 @@ mod tests {
     use crate::internal::sign_ed25519;
     use futures::{future::FutureExt, stream::StreamExt};
     use ghost_actor::GhostControlSender;
+    use crate::internal::x25519;
+    use crate::internal::crypto_box;
 
     fn init_tracing() {
         let _ = subscriber::set_global_default(
@@ -179,6 +181,28 @@ mod tests {
                 _pub_key: sign_ed25519::SignEd25519PubKey,
                 _message: Arc<Vec<u8>>,
             ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519Signature> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_x25519_new_from_entropy(&mut self) -> LairClientApiHandlerResult<(KeystoreIndex, x25519::X25519PubKey)> {
+                Ok(async move { Ok((
+                    TestVal::test_val(),
+                    TestVal::test_val(),
+                )) }.boxed().into())
+            }
+            fn handle_x25519_get(&mut self, _keystore_index: KeystoreIndex,
+            ) -> LairClientApiHandlerResult<x25519::X25519PubKey> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_crypto_box_by_index(&mut self, _keystore_index: KeystoreIndex, _recipient: x25519::X25519PubKey, _data: Arc<crypto_box::CryptoBoxData>) -> LairClientApiHandlerResult<crypto_box::CryptoBoxEncryptedData> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_crypto_box_by_pub_key(&mut self, _pub_key: x25519::X25519PubKey, _recipient: x25519::X25519PubKey, _data: Arc<crypto_box::CryptoBoxData>) -> LairClientApiHandlerResult<crypto_box::CryptoBoxEncryptedData> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_crypto_box_open_by_index(&mut self, _keystore_index: KeystoreIndex, _recipient: x25519::X25519PubKey, _data: Arc<crypto_box::CryptoBoxEncryptedData>) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
+                Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
+            }
+            fn handle_crypto_box_open_by_pub_key(&mut self, _pub_key: x25519::X25519PubKey, _recipient: x25519::X25519PubKey, _data: Arc<crypto_box::CryptoBoxEncryptedData>) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
                 Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
             }
         }

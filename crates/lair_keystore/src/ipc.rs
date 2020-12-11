@@ -369,14 +369,14 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
         &mut self,
         keystore_index: KeystoreIndex,
         recipient: x25519::X25519PubKey,
-        data: Arc<CryptoBoxData>,
-    ) -> LairClientApiHandlerResult<CryptoBoxEncryptedData> {
+        data: Arc<crypto_box::CryptoBoxData>,
+    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxEncryptedData> {
         let fut = self.store_actor.get_entry_by_index(keystore_index);
         Ok(async move {
             let entry = fut.await?;
             match &*entry {
                 LairEntry::X25519(entry) => {
-                    crypto_box::crypto_box(entry.priv_key.clone(), recipient, data).await
+                    crypto_box::crypto_box(entry.priv_key.clone(), recipient, data)
                 }
                 _ => Err("invalid entry type".into()),
             }
@@ -389,14 +389,14 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
         &mut self,
         pub_key: x25519::X25519PubKey,
         recipient: x25519::X25519PubKey,
-        data: Arc<CryptoBoxData>,
-    ) -> LairClientApiHandlerResult<CryptoBoxEncryptedData> {
-        let fut = self.store_actor.get_entry_by_pub_id(pub_key.0);
+        data: Arc<crypto_box::CryptoBoxData>,
+    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxEncryptedData> {
+        let fut = self.store_actor.get_entry_by_pub_id(Arc::new(pub_key.to_bytes().to_vec()));
         Ok(async move {
-            let (_, entry) => fut.await?;
+            let (_, entry) = fut.await?;
             match &*entry {
                 LairEntry::X25519(entry) => {
-                    crypto_box::crypto_box(entry.priv_key.clone(), recipient, data).await
+                    crypto_box::crypto_box(entry.priv_key.clone(), recipient, data)
                 }
                 _ => Err("invalid entry type".into()),
             }
@@ -407,16 +407,16 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
 
     fn handle_crypto_box_open_by_index(
         &mut self,
-        keystone_index: KeystoreIndex,
+        keystore_index: KeystoreIndex,
         sender: x25519::X25519PubKey,
-        encrypted_data: Arc<CryptoBoxEncryptedData>
-    ) -> LairClientApiHandlerResult<Option<CryptoBoxData>> {
+        encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>
+    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
         let fut = self.store_actor.get_entry_by_index(keystore_index);
         Ok(async move {
             let entry = fut.await?;
             match &*entry {
                 LairEntry::X25519(entry) => {
-                    crypto_box::crypto_box_open(entry.priv_key.clone(), sender, encrypted_data).await
+                    crypto_box::crypto_box_open(entry.priv_key.clone(), sender, encrypted_data)
                 }
                 _ => Err("invalid entry type".into()),
             }
@@ -429,14 +429,14 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
         &mut self,
         pub_key: x25519::X25519PubKey,
         sender: x25519::X25519PubKey,
-        encrypted_data: Arc<CryptoBoxEncryptedData>
-    ) -> LairClientApiHandlerResult<Option<CryptoBoxData>> {
-        let fut = self.store_actor.get_entry_by_pub_id(pub_key.0);
+        encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>
+    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
+        let fut = self.store_actor.get_entry_by_pub_id(Arc::new(pub_key.to_bytes().to_vec()));
         Ok(async move {
-            let (_, entry) => fut.await?;
+            let (_, entry) = fut.await?;
             match &*entry {
                 LairEntry::X25519(entry) => {
-                    crypto_box::crypto_box_open(entry.priv_key.clone(), sender, encrypted_data).await
+                    crypto_box::crypto_box_open(entry.priv_key.clone(), sender, encrypted_data)
                 }
                 _ => Err("invalid entry type".into()),
             }

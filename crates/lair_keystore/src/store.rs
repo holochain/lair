@@ -148,7 +148,7 @@ impl EntryStoreImpl {
             }
             LairEntry::X25519(e) => {
                 self.entries_by_pub_id
-                    .insert(e.pub_key.0.clone(), (entry_index, entry));
+                    .insert(Arc::new(e.pub_key.to_bytes().to_vec()), (entry_index, entry));
             }
             _ => {
                 tracing::warn!(
@@ -409,7 +409,7 @@ mod tests {
         assert_eq!(sign.pub_key, r_sign.pub_key);
 
         let (r_x25519_index, r_x25519) = store
-            .get_entry_by_pub_id(x25519.pub_key.0.clone())
+            .get_entry_by_pub_id(Arc::new(x25519.pub_key.to_bytes().to_vec()))
             .await
             .unwrap();
         as_x25519!(r_x25519);
