@@ -119,6 +119,32 @@ impl From<Vec<u8>> for CryptoBoxData {
 /// No BYO algorithms (cipher agility). Algorithm always X25519XSalsa20Poly1305.
 /// Currently no additional associated data but DNA space may be included in the future.
 /// The sender's private key encrypts _for_ the recipient's pubkey.
+///
+/// FYI allowing nonces could be dangerous as it's exposed as a general purpose authenticated
+/// encryption mechanism (or will be) via. crypto_box from libsodium.
+/// The main thing is that if a secret/nonce combination is _ever_ used more than once it
+/// completely breaks encryption.
+//
+/// Example ways a nonce could accidentally be reused:
+/// - If two DNAs are the same or similar (e.g. cloned DNAs) then they will have the same
+///   nonce generation logic, so may create collisions when run in parallel.
+/// - Collision of initialization vectors in a key exchange/crypto session.
+/// - Use of a counter based nonce in a way that isn't 100% reliably incrementing.
+///
+/// Example ways a secret could accidentally be reused:
+/// - If two agents both commit their pubkeys then share them with each other, then the same
+///   shared key will be 'negotiated' by x25519 ECDH every time it is called.
+/// - If a pubkey is used across two different DNAs the secrets will collide at the lair
+///   and the DNAs won't have a way to co-ordinate or detect this.
+///
+/// E.g. Ring is very wary of secret key re-use e.g. it makes explicit the use-case where an
+/// ephemeral (single use) key is generated to establish an ephemeral (single use) shared
+/// key. Our use-case is the libsodium `crypto_box` function that uses an x25519 keypair to
+/// perform authenticated encryption, so it makes more sense for us to be storing our
+/// private keys for later use BUT see above for the dangers of key re-use that the app dev
+/// really needs to be wary of.
+///
+/// @see https://eprint.iacr.org/2019/519.pdf for 'context separable interfaces'
 pub fn crypto_box(sender: x25519::X25519PrivKey, recipient: x25519::X25519PubKey, data: Arc<CryptoBoxData>) -> crate::error::LairResult<CryptoBoxEncryptedData> {
     use lib_crypto_box::aead::Aead;
     let sender_box = lib_crypto_box::SalsaBox::new(recipient.as_ref(), sender.as_ref());
@@ -130,6 +156,7 @@ pub fn crypto_box(sender: x25519::X25519PrivKey, recipient: x25519::X25519PubKey
     let encrypted_data = Arc::new(sender_box.encrypt(AsRef::<[u8; NONCE_BYTES]>::as_ref(&nonce).into(), padded_data.as_slice())?);
 
     // @todo do we want associated data to enforce the originating DHT space?
+    // https://eprint.iacr.org/2019/519.pdf for 'context separable interfaces'
     Ok(CryptoBoxEncryptedData {
         encrypted_data,
         nonce,
