@@ -29,6 +29,7 @@ toml = "0.5"
 rand = "0.7"
 crypto_box = "0.5"
 subtle = "2.3"
+block-padding = "0.2.1"
 
 [dev-dependencies]
 tempfile = "3"

@@ -1,10 +1,18 @@
 use std::sync::Arc;
 use crypto_box as lib_crypto_box;
 use crate::internal::x25519;
+use block_padding::Padding;
 
 /// Length of the crypto box aead nonce.
 /// Ideally this would be exposed from upstream but I didn't see a good way to get at it directly.
 pub const NONCE_BYTES: usize = 24;
+
+/// The size of blocks to pad encrypted data to.
+/// We have no idea how big incoming data is, but probably it is generally smallish.
+/// Devs can always do their own padding on top of this, but we want some safety for unpadded data.
+/// Libsodium optionally supports ISO 7816-4 padding algorithm.
+/// @see https://doc.libsodium.org/padding#algorithm
+pub const BLOCK_PADDING_SIZE: usize = 32;
 
 /// Newtype for the nonce for safety.
 #[derive(Debug, PartialEq)]
@@ -79,7 +87,7 @@ pub struct CryptoBoxEncryptedData {
 
 /// Data to be encrypted.
 /// Not associated with a nonce because we enforce random nonces.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct CryptoBoxData {
     /// Data to be encrypted.
     pub data: Arc<Vec<u8>>,
@@ -116,9 +124,14 @@ pub fn crypto_box(sender: x25519::X25519PrivKey, recipient: x25519::X25519PubKey
     let sender_box = lib_crypto_box::SalsaBox::new(recipient.as_ref(), sender.as_ref());
     let nonce = CryptoBoxNonce::new_random();
 
+    let mut padded_data = data.data.to_vec();
+    block_padding::Iso7816::pad_block(&mut padded_data, BLOCK_PADDING_SIZE)?;
+
+    let encrypted_data = Arc::new(sender_box.encrypt(AsRef::<[u8; NONCE_BYTES]>::as_ref(&nonce).into(), padded_data.as_slice())?);
+
     // @todo do we want associated data to enforce the originating DHT space?
     Ok(CryptoBoxEncryptedData {
-        encrypted_data: Arc::new(sender_box.encrypt(AsRef::<[u8; NONCE_BYTES]>::as_ref(&nonce).into(), (*data).as_ref())?),
+        encrypted_data,
         nonce,
     })
 }
@@ -129,11 +142,11 @@ pub fn crypto_box(sender: x25519::X25519PrivKey, recipient: x25519::X25519PubKey
 pub fn crypto_box_open(recipient: x25519::X25519PrivKey, sender: x25519::X25519PubKey, encrypted_data: Arc<CryptoBoxEncryptedData>) -> crate::error::LairResult<CryptoBoxData> {
     use lib_crypto_box::aead::Aead;
     let recipient_box = lib_crypto_box::SalsaBox::new(sender.as_ref(), recipient.as_ref());
+    let decrypted_data = recipient_box.decrypt(AsRef::<[u8; NONCE_BYTES]>::as_ref(&encrypted_data.nonce).into(), encrypted_data.encrypted_data.as_slice())?;
+    let data = Arc::new(block_padding::Iso7816::unpad(&decrypted_data)?.to_vec());
 
     // @todo do we want associated data to enforce the originating DHT space?
     Ok(CryptoBoxData {
-        data: Arc::new(
-            recipient_box.decrypt(AsRef::<[u8; NONCE_BYTES]>::as_ref(&encrypted_data.nonce).into(), encrypted_data.encrypted_data.as_slice())?
-        ),
+        data,
     })
 }

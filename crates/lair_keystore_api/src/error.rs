@@ -23,6 +23,14 @@ pub enum LairError {
     #[error("Aead error: {0}")]
     Aead(String),
 
+    /// Error adding padding to encrypt data.
+    #[error("Block pad error: {0}")]
+    BlockPad(String),
+
+    /// Error removing padding from decrypted data.
+    #[error("Block unpad error: {0}")]
+    BlockUnpad(String),
+
     /// Nonce byte lengths did not line up internally. Always very bad.
     #[error("CryptoBox nonce bad length")]
     CryptoBoxNonceLength,
@@ -43,6 +51,18 @@ pub enum LairError {
 impl From<lib_crypto_box::aead::Error> for LairError {
     fn from(aead_error: lib_crypto_box::aead::Error) -> Self {
         Self::Aead(aead_error.to_string())
+    }
+}
+
+impl From<block_padding::PadError> for LairError {
+    fn from(error: block_padding::PadError) -> Self {
+        Self::BlockPad(format!("{:?}", error))
+    }
+}
+
+impl From<block_padding::UnpadError> for LairError {
+    fn from(error: block_padding::UnpadError) -> Self {
+        Self::BlockUnpad(format!("{:?}", error))
     }
 }
 

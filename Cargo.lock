@@ -138,6 +138,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "block-padding"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
+
+[[package]]
 name = "bstr"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -830,6 +836,7 @@ name = "lair_keystore_api"
 version = "0.0.1-alpha.8"
 dependencies = [
  "blake2b_simd",
+ "block-padding",
  "byteorder",
  "crypto_box",
  "derive_more",
