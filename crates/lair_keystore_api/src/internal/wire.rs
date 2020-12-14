@@ -609,7 +609,7 @@ macro_rules! wire_type_meta_macro {
                 LairWire::ToCliCryptoBoxByIndexResponse {
                     msg_id,
                     encrypted_data: crypto_box::CryptoBoxEncryptedData{
-                        nonce: nonce,
+                        nonce,
                         encrypted_data,
                     }
                 }

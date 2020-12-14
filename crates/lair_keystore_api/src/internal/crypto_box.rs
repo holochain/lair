@@ -71,6 +71,11 @@ impl CryptoBoxNonce {
     pub fn len(&self) -> usize {
         NONCE_BYTES
     }
+
+    /// For clippy.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 }
 
 /// "Additional associated data" as per the aead rust crate Payload.
@@ -106,6 +111,11 @@ impl CryptoBoxData {
     /// Length of newtype is length of inner.
     pub fn len(&self) -> usize {
         AsRef::<[u8]>::as_ref(self).len()
+    }
+
+    /// For clippy.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 }
 

@@ -405,8 +405,8 @@ impl LairClientApiHandler for Internal {
             return Ok(async move {
                 let idx = next_keystore_idx();
                 let entry = entry::EntryX25519 {
-                    priv_key: keypair.priv_key.into(),
-                    pub_key: keypair.pub_key.into(),
+                    priv_key: keypair.priv_key,
+                    pub_key: keypair.pub_key,
                 };
                 let pk = entry.pub_key.clone();
                 let entry = entry::LairEntry::from(entry);
