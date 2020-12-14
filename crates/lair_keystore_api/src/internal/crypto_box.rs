@@ -99,6 +99,7 @@ pub struct CryptoBoxEncryptedData {
 #[derive(Debug, PartialEq, Clone)]
 pub struct CryptoBoxData {
     /// Data to be encrypted.
+    #[allow(clippy::rc_buffer)]
     pub data: Arc<Vec<u8>>,
 }
 

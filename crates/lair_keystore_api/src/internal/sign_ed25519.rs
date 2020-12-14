@@ -8,6 +8,7 @@ use derive_more::*;
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
 )]
+#[allow(clippy::rc_buffer)]
 pub struct SignEd25519PrivKey(pub Arc<Vec<u8>>);
 
 impl From<Vec<u8>> for SignEd25519PrivKey {
@@ -20,6 +21,7 @@ impl From<Vec<u8>> for SignEd25519PrivKey {
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
 )]
+#[allow(clippy::rc_buffer)]
 pub struct SignEd25519PubKey(pub Arc<Vec<u8>>);
 
 impl From<Vec<u8>> for SignEd25519PubKey {
@@ -48,6 +50,7 @@ impl SignEd25519PubKey {
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
 )]
+#[allow(clippy::rc_buffer)]
 pub struct SignEd25519Signature(pub Arc<Vec<u8>>);
 
 impl From<Vec<u8>> for SignEd25519Signature {
