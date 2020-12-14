@@ -90,6 +90,7 @@ pub struct CryptoBoxEncryptedData {
     /// We never allow nonce to be set externally so we need to return it.
     pub nonce: CryptoBoxNonce,
     /// The encrypted version of our input data.
+    #[allow(clippy::rc_buffer)]
     pub encrypted_data: Arc<Vec<u8>>,
 }
 
