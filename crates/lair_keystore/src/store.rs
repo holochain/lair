@@ -82,6 +82,7 @@ struct EntryStoreImpl {
     store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
     last_entry_index: KeystoreIndex,
     entries_by_index: HashMap<KeystoreIndex, Arc<LairEntry>>,
+    #[allow(clippy::rc_buffer)]
     entries_by_pub_id: HashMap<Arc<Vec<u8>>, (KeystoreIndex, Arc<LairEntry>)>,
     entries_by_sni: HashMap<CertSni, (KeystoreIndex, Arc<LairEntry>)>,
 }
