@@ -117,6 +117,7 @@ impl From<Vec<u8>> for CertPrivKey {
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
 )]
+#[allow(clippy::rc_buffer)]
 pub struct CertSni(pub Arc<String>);
 
 impl From<String> for CertSni {
