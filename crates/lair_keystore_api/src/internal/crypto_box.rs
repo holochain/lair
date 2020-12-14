@@ -14,6 +14,8 @@ pub const NONCE_BYTES: usize = 24;
 /// Libsodium optionally supports ISO 7816-4 padding algorithm.
 /// @see https://doc.libsodium.org/padding#algorithm
 pub const BLOCK_PADDING_SIZE: usize = 32;
+/// The delimiter for padding as per ISO 7816-4.
+pub const BLOCK_PADDING_DELIMITER: usize = 0x80;
 
 /// Newtype for the nonce for safety.
 #[derive(Debug, PartialEq)]
@@ -175,15 +177,17 @@ pub async fn crypto_box(
         let sender_box =
             lib_crypto_box::SalsaBox::new(recipient.as_ref(), sender.as_ref());
 
-        let mut padded_data = data.data.to_vec();
-        block_padding::Iso7816::pad_block(
-            &mut padded_data,
-            BLOCK_PADDING_SIZE,
-        )?;
+        // It's actually easier and clearer to directly pad the vector than use the block_padding
+        // crate, as that is optimised for blocks.
+        let mut to_encrypt = data.data.to_vec();
+        let padding_delimiter = vec![BLOCK_PADDING_DELIMITER];
+        let padding = vec![0x0; BLOCK_PADDING_SIZE - (data.data.len() + 1) % BLOCK_PADDING_SIZE];
+        to_encrypt.extend(padding_delimiter);
+        to_encrypt.extend(padding);
 
         let encrypted_data = Arc::new(sender_box.encrypt(
             AsRef::<[u8; NONCE_BYTES]>::as_ref(&nonce).into(),
-            padded_data.as_slice(),
+            to_encrypt.as_slice(),
         )?);
 
         // @todo do we want associated data to enforce the originating DHT space?
@@ -219,4 +223,53 @@ pub async fn crypto_box_open(
         Ok(CryptoBoxData { data })
     })
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test(threaded_scheduler)]
+    async fn it_can_encrypt_and_decrypt() {
+
+        for input in [
+         // Empty vec.
+         vec![],
+         // Small vec.
+         vec![0],
+         vec![0, 1, 2],
+         vec![0, 1, 2, 3],
+         // Vec ending in padding delimiter.
+         vec![0x80],
+         vec![0, 0x80],
+         vec![0x80; BLOCK_PADDING_SIZE - 1],
+         vec![0x80; BLOCK_PADDING_SIZE],
+         vec![0x80; BLOCK_PADDING_SIZE + 1],
+         // Larger vec.
+         vec![0; BLOCK_PADDING_SIZE - 1],
+         vec![0; BLOCK_PADDING_SIZE],
+         vec![0; BLOCK_PADDING_SIZE + 1],
+         vec![0; BLOCK_PADDING_SIZE * 2 - 1],
+         vec![0; BLOCK_PADDING_SIZE * 2],
+         vec![0; BLOCK_PADDING_SIZE * 2 + 1],
+        ].iter() {
+            // Fresh keys.
+            let alice = crate::internal::x25519::x25519_keypair_new_from_entropy().await.unwrap();
+            let bob = crate::internal::x25519::x25519_keypair_new_from_entropy().await.unwrap();
+
+            let data = CryptoBoxData{ data: Arc::new(input.to_vec()) };
+
+            // from alice to bob.
+            let encrypted_data = super::crypto_box(alice.priv_key, bob.pub_key, Arc::new(data.clone())).await.unwrap();
+
+            // The length excluding the 16 byte overhead should always be a multiple of 32 as this
+            // is our padding.
+            assert_eq!((encrypted_data.encrypted_data.len() - 16) % 32, 0);
+
+            let decrypted_data = super::crypto_box_open(bob.priv_key, alice.pub_key, Arc::new(encrypted_data)).await.unwrap();
+
+            // If we can decrypt we managed to pad and unpad as well as encrypt and decrypt.
+            assert_eq!(&decrypted_data, &data);
+        }
+    }
 }
