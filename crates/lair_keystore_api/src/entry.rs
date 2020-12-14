@@ -244,6 +244,7 @@ impl EntrySignEd25519 {
     }
 
     /// Create a signature for given message with this entry's priv_key.
+    #[allow(clippy::rc_buffer)]
     pub fn sign(
         &self,
         message: Arc<Vec<u8>>,

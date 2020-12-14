@@ -91,6 +91,7 @@ pub struct KeystoreIndex(pub u32);
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
 )]
+#[allow(clippy::rc_buffer)]
 pub struct Cert(pub Arc<Vec<u8>>);
 
 impl From<Vec<u8>> for Cert {
@@ -103,6 +104,7 @@ impl From<Vec<u8>> for Cert {
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
 )]
+#[allow(clippy::rc_buffer)]
 pub struct CertPrivKey(pub Arc<Vec<u8>>);
 
 impl From<Vec<u8>> for CertPrivKey {
@@ -127,6 +129,7 @@ impl From<String> for CertSni {
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
 )]
+#[allow(clippy::rc_buffer)]
 pub struct CertDigest(pub Arc<Vec<u8>>);
 
 impl From<Vec<u8>> for CertDigest {

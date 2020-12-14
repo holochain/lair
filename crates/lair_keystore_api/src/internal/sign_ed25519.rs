@@ -32,6 +32,7 @@ impl From<Vec<u8>> for SignEd25519PubKey {
 
 impl SignEd25519PubKey {
     /// Verify signature on given message with given public key.
+    #[allow(clippy::rc_buffer)]
     pub async fn verify(
         &self,
         message: Arc<Vec<u8>>,
@@ -82,6 +83,7 @@ pub async fn sign_ed25519_keypair_new_from_entropy(
 }
 
 /// Generate detached signature bytes for given ed25519 priv key / message.
+#[allow(clippy::rc_buffer)]
 pub async fn sign_ed25519(
     priv_key: SignEd25519PrivKey,
     message: Arc<Vec<u8>>,
@@ -97,6 +99,7 @@ pub async fn sign_ed25519(
 }
 
 /// Verify signature on given message with given public key.
+#[allow(clippy::rc_buffer)]
 pub async fn sign_ed25519_verify(
     pub_key: SignEd25519PubKey,
     message: Arc<Vec<u8>>,
