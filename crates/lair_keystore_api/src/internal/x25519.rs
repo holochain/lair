@@ -2,8 +2,8 @@
 //! NOTE - underlying lib subject to change in the future, although the algorithm should be stable.
 
 use crate::*;
-use derive_more::*;
 use crypto_box as lib_crypto_box;
+use derive_more::*;
 
 /// Length of an x25519 private key in bytes.
 pub const PRIV_KEY_BYTES: usize = lib_crypto_box::KEY_SIZE;
@@ -25,7 +25,7 @@ impl PartialEq for X25519PrivKey {
     }
 }
 
-impl Eq for X25519PrivKey { }
+impl Eq for X25519PrivKey {}
 
 impl From<[u8; PRIV_KEY_BYTES]> for X25519PrivKey {
     fn from(bytes: [u8; PRIV_KEY_BYTES]) -> Self {
@@ -53,8 +53,7 @@ impl core::convert::TryFrom<&[u8]> for X25519PrivKey {
             let mut inner = [0; PRIV_KEY_BYTES];
             inner.copy_from_slice(slice);
             Ok(Self::from(inner))
-        }
-        else {
+        } else {
             Err(crate::error::LairError::X25519PrivKeyLength)
         }
     }
@@ -84,9 +83,7 @@ impl core::hash::Hash for X25519PrivKey {
 }
 
 /// Newtype for the public key.
-#[derive(
-    Clone, Debug, Deref, From, Into
-)]
+#[derive(Clone, Debug, Deref, From, Into)]
 pub struct X25519PubKey(lib_crypto_box::PublicKey);
 
 impl From<[u8; PUB_KEY_BYTES]> for X25519PubKey {
@@ -102,8 +99,7 @@ impl core::convert::TryFrom<&[u8]> for X25519PubKey {
             let mut inner = [0; PUB_KEY_BYTES];
             inner.copy_from_slice(bytes);
             Ok(inner.into())
-        }
-        else {
+        } else {
             Err(crate::error::LairError::X25519PubKeyLength)
         }
     }
@@ -133,7 +129,7 @@ impl PartialEq for X25519PubKey {
     }
 }
 
-impl Eq for X25519PubKey { }
+impl Eq for X25519PubKey {}
 
 impl PartialOrd for X25519PubKey {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
@@ -154,7 +150,8 @@ impl core::hash::Hash for X25519PubKey {
 }
 
 /// Generate a new random x25519 keypair.
-pub async fn x25519_keypair_new_from_entropy() -> LairResult<entry::EntryX25519> {
+pub async fn x25519_keypair_new_from_entropy() -> LairResult<entry::EntryX25519>
+{
     rayon_exec(move || {
         // This is fine _for use with the `crypto_box` crate_ because they specify the `CryptoRng`
         // trait on the `generate()` method below.

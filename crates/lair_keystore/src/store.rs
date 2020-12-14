@@ -147,8 +147,10 @@ impl EntryStoreImpl {
                     .insert(e.pub_key.0.clone(), (entry_index, entry));
             }
             LairEntry::X25519(e) => {
-                self.entries_by_pub_id
-                    .insert(Arc::new(e.pub_key.to_bytes().to_vec()), (entry_index, entry));
+                self.entries_by_pub_id.insert(
+                    Arc::new(e.pub_key.to_bytes().to_vec()),
+                    (entry_index, entry),
+                );
             }
             _ => {
                 tracing::warn!(
@@ -194,7 +196,9 @@ impl EntryStoreHandler for EntryStoreImpl {
         &mut self,
     ) -> EntryStoreHandlerResult<(KeystoreIndex, Arc<LairEntry>)> {
         Ok(
-            new_x25519_keypair(self.i_s.clone(), self.store_file.clone()).boxed().into()
+            new_x25519_keypair(self.i_s.clone(), self.store_file.clone())
+                .boxed()
+                .into(),
         )
     }
 
@@ -357,7 +361,8 @@ mod tests {
                 store.sign_ed25519_keypair_new_from_entropy().await.unwrap();
             assert_eq!(2, sign_index.0);
 
-            let (x25519_index, x25519) = store.x25519_keypair_new_from_entropy().await.unwrap();
+            let (x25519_index, x25519) =
+                store.x25519_keypair_new_from_entropy().await.unwrap();
             assert_eq!(3, x25519_index.0);
 
             use ghost_actor::GhostControlSender;

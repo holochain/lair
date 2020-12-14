@@ -2,9 +2,9 @@
 
 use crate::*;
 use derive_more::*;
+use internal::crypto_box;
 use internal::sign_ed25519;
 use internal::x25519;
-use internal::crypto_box;
 
 ghost_actor::ghost_chan! {
     /// "Event" types emitted by Lair Client Actor Api.

@@ -1,9 +1,9 @@
 use super::*;
-use crate::internal::ipc::*;
-use crate::internal::wire::*;
-use crate::internal::sign_ed25519;
-use crate::internal::x25519;
 use crate::internal::crypto_box;
+use crate::internal::ipc::*;
+use crate::internal::sign_ed25519;
+use crate::internal::wire::*;
+use crate::internal::x25519;
 use futures::{future::FutureExt, stream::StreamExt};
 
 #[allow(clippy::single_match)]
@@ -339,7 +339,10 @@ impl LairClientApiHandler for Internal {
 
     fn handle_sign_ed25519_new_from_entropy(
         &mut self,
-    ) -> LairClientApiHandlerResult<(KeystoreIndex, sign_ed25519::SignEd25519PubKey)> {
+    ) -> LairClientApiHandlerResult<(
+        KeystoreIndex,
+        sign_ed25519::SignEd25519PubKey,
+    )> {
         let fut = self.kill_switch.mix_static(self.ipc_send.request(
             LairWire::ToLairSignEd25519NewFromEntropy {
                 msg_id: next_msg_id(),
@@ -432,7 +435,7 @@ impl LairClientApiHandler for Internal {
     }
 
     fn handle_x25519_new_from_entropy(
-        &mut self
+        &mut self,
     ) -> LairClientApiHandlerResult<(KeystoreIndex, x25519::X25519PubKey)> {
         let fut = self.kill_switch.mix_static(self.ipc_send.request(
             LairWire::ToLairX25519NewFromEntropy {
@@ -465,9 +468,7 @@ impl LairClientApiHandler for Internal {
         ));
         Ok(async move {
             match fut.await? {
-                LairWire::ToCliX25519GetResponse { pub_key, .. } => {
-                    Ok(pub_key)
-                }
+                LairWire::ToCliX25519GetResponse { pub_key, .. } => Ok(pub_key),
                 o => Err(format!("unexpected: {:?}", o).into()),
             }
         }
@@ -546,8 +547,7 @@ impl LairClientApiHandler for Internal {
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliCryptoBoxOpenByIndexResponse {
-                    data,
-                    ..
+                    data, ..
                 } => Ok(data),
                 o => Err(format!("unexpected: {:?}", o).into()),
             }
@@ -573,8 +573,7 @@ impl LairClientApiHandler for Internal {
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliCryptoBoxOpenByPubKeyResponse {
-                    data,
-                    ..
+                    data, ..
                 } => Ok(data),
                 o => Err(format!("unexpected: {:?}", o).into()),
             }
@@ -582,5 +581,4 @@ impl LairClientApiHandler for Internal {
         .boxed()
         .into())
     }
-
 }

@@ -101,7 +101,8 @@ struct Internal {
     by_idx: HashMap<KeystoreIndex, entry::LairEntry>,
     cert_by_digest: HashMap<CertDigest, entry::EntryTlsCert>,
     cert_by_sni: HashMap<CertSni, entry::EntryTlsCert>,
-    sign_by_pub: HashMap<sign_ed25519::SignEd25519PubKey, entry::EntrySignEd25519>,
+    sign_by_pub:
+        HashMap<sign_ed25519::SignEd25519PubKey, entry::EntrySignEd25519>,
     x25519_by_pub: HashMap<x25519::X25519PubKey, entry::EntryX25519>,
     last_idx: KeystoreIndex,
 }
@@ -311,7 +312,10 @@ impl LairClientApiHandler for Internal {
 
     fn handle_sign_ed25519_new_from_entropy(
         &mut self,
-    ) -> LairClientApiHandlerResult<(KeystoreIndex, sign_ed25519::SignEd25519PubKey)> {
+    ) -> LairClientApiHandlerResult<(
+        KeystoreIndex,
+        sign_ed25519::SignEd25519PubKey,
+    )> {
         if !self.fixture_sign_ed25519_keypairs.is_empty() {
             let keypair = self.fixture_sign_ed25519_keypairs.remove(0);
             let i_s = self.i_s.clone();
@@ -392,7 +396,9 @@ impl LairClientApiHandler for Internal {
         )
     }
 
-    fn handle_x25519_new_from_entropy(&mut self) -> LairClientApiHandlerResult<(KeystoreIndex, x25519::X25519PubKey)> {
+    fn handle_x25519_new_from_entropy(
+        &mut self,
+    ) -> LairClientApiHandlerResult<(KeystoreIndex, x25519::X25519PubKey)> {
         if !self.fixture_x25519_keypairs.is_empty() {
             let keypair = self.fixture_x25519_keypairs.remove(0);
             let i_s = self.i_s.clone();
@@ -413,8 +419,7 @@ impl LairClientApiHandler for Internal {
         let i_s = self.i_s.clone();
         Ok(async move {
             let idx = next_keystore_idx();
-            let entry =
-                x25519::x25519_keypair_new_from_entropy().await?;
+            let entry = x25519::x25519_keypair_new_from_entropy().await?;
             let pk = entry.pub_key.clone();
             let entry = entry::LairEntry::from(entry);
             i_s.finalize_entry(idx, entry).await?;
@@ -424,7 +429,9 @@ impl LairClientApiHandler for Internal {
         .into())
     }
 
-    fn handle_x25519_get(&mut self, keystore_index: KeystoreIndex,
+    fn handle_x25519_get(
+        &mut self,
+        keystore_index: KeystoreIndex,
     ) -> LairClientApiHandlerResult<x25519::X25519PubKey> {
         let out = match match self.by_idx.get(&keystore_index) {
             Some(entry) => entry,
@@ -436,8 +443,12 @@ impl LairClientApiHandler for Internal {
         Ok(async move { Ok(out) }.boxed().into())
     }
 
-    fn handle_crypto_box_by_index(&mut self, keystore_index: KeystoreIndex, recipient: x25519::X25519PubKey, data: Arc<crypto_box::CryptoBoxData>)
-    -> LairClientApiHandlerResult<crypto_box::CryptoBoxEncryptedData> {
+    fn handle_crypto_box_by_index(
+        &mut self,
+        keystore_index: KeystoreIndex,
+        recipient: x25519::X25519PubKey,
+        data: Arc<crypto_box::CryptoBoxData>,
+    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxEncryptedData> {
         let priv_key = match match self.by_idx.get(&keystore_index) {
             Some(entry) => entry,
             None => return Err("bad index".into()),
@@ -445,18 +456,28 @@ impl LairClientApiHandler for Internal {
             entry::LairEntry::X25519(keypair) => keypair.priv_key.clone(),
             _ => return Err("bad type".into()),
         };
-        Ok(async move { crypto_box::crypto_box(priv_key, recipient, data) }.boxed().into())
+        Ok(async move { crypto_box::crypto_box(priv_key, recipient, data).await }.boxed().into())
     }
 
-    fn handle_crypto_box_by_pub_key(&mut self, pub_key: x25519::X25519PubKey, recipient: x25519::X25519PubKey, data: Arc<crypto_box::CryptoBoxData>) -> LairClientApiHandlerResult<crypto_box::CryptoBoxEncryptedData> {
+    fn handle_crypto_box_by_pub_key(
+        &mut self,
+        pub_key: x25519::X25519PubKey,
+        recipient: x25519::X25519PubKey,
+        data: Arc<crypto_box::CryptoBoxData>,
+    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxEncryptedData> {
         let priv_key = match self.x25519_by_pub.get(&pub_key) {
             Some(keypair) => keypair.priv_key.clone(),
             None => return Err(LairError::PubKeyNotFound),
         };
-        Ok(async move { crypto_box::crypto_box(priv_key, recipient, data) }.boxed().into())
+        Ok(async move { crypto_box::crypto_box(priv_key, recipient, data).await }.boxed().into())
     }
 
-    fn handle_crypto_box_open_by_index(&mut self, keystore_index: KeystoreIndex, sender: x25519::X25519PubKey, encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
+    fn handle_crypto_box_open_by_index(
+        &mut self,
+        keystore_index: KeystoreIndex,
+        sender: x25519::X25519PubKey,
+        encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
+    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
         let priv_key = match match self.by_idx.get(&keystore_index) {
             Some(entry) => entry,
             None => return Err("bad index".into()),
@@ -464,23 +485,28 @@ impl LairClientApiHandler for Internal {
             entry::LairEntry::X25519(keypair) => keypair.priv_key.clone(),
             _ => return Err("bad type".into()),
         };
-        Ok(
-            async move { crypto_box::crypto_box_open(priv_key, sender, encrypted_data) }
-            .boxed()
-            .into(),
-        )
+        Ok(async move {
+            crypto_box::crypto_box_open(priv_key, sender, encrypted_data).await
+        }
+        .boxed()
+        .into())
     }
 
-    fn handle_crypto_box_open_by_pub_key(&mut self, pub_key: x25519::X25519PubKey, sender: x25519::X25519PubKey, encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
+    fn handle_crypto_box_open_by_pub_key(
+        &mut self,
+        pub_key: x25519::X25519PubKey,
+        sender: x25519::X25519PubKey,
+        encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
+    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
         let priv_key = match self.x25519_by_pub.get(&pub_key) {
             Some(keypair) => keypair.priv_key.clone(),
             None => return Err(LairError::PubKeyNotFound),
         };
-        Ok(
-            async move { crypto_box::crypto_box_open(priv_key, sender, encrypted_data) }
-            .boxed()
-            .into(),
-        )
+        Ok(async move {
+            crypto_box::crypto_box_open(priv_key, sender, encrypted_data).await
+        }
+        .boxed()
+        .into())
     }
 }
 
@@ -546,12 +572,12 @@ mod tests {
     ];
 
     const X25519_SEC: [u8; 32] = [
-        253, 12, 117, 61, 12, 47, 207, 107, 110, 116, 6, 194, 214, 88, 61, 161, 220, 6, 53, 190,
-        225, 254, 230, 143, 130, 70, 25, 160, 15, 168, 42, 37
+        253, 12, 117, 61, 12, 47, 207, 107, 110, 116, 6, 194, 214, 88, 61, 161,
+        220, 6, 53, 190, 225, 254, 230, 143, 130, 70, 25, 160, 15, 168, 42, 37,
     ];
     const X25519_PUB: [u8; 32] = [
-        65, 17, 71, 31, 48, 10, 48, 208, 3, 220, 71, 246, 83, 246, 74, 221, 3, 123, 54, 48, 160,
-        192, 179, 207, 115, 6, 19, 53, 233, 231, 167, 75
+        65, 17, 71, 31, 48, 10, 48, 208, 3, 220, 71, 246, 83, 246, 74, 221, 3,
+        123, 54, 48, 160, 192, 179, 207, 115, 6, 19, 53, 233, 231, 167, 75,
     ];
 
     async fn setup() -> LairResult<ghost_actor::GhostSender<LairClientApi>> {
@@ -572,12 +598,10 @@ mod tests {
                 cert_der: CERT.to_vec(),
                 cert_digest: CERT_DIGEST.to_vec(),
             }],
-            vec![
-                FixtureX25519Keypair {
-                    pub_key: X25519_PUB.into(),
-                    priv_key: X25519_SEC.into(),
-                }
-            ],
+            vec![FixtureX25519Keypair {
+                pub_key: X25519_PUB.into(),
+                priv_key: X25519_SEC.into(),
+            }],
         )
         .await?;
         Ok(api)

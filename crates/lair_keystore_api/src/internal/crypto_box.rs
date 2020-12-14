@@ -1,7 +1,8 @@
-use std::sync::Arc;
-use crypto_box as lib_crypto_box;
+use crate::internal::rayon::rayon_exec;
 use crate::internal::x25519;
 use block_padding::Padding;
+use crypto_box as lib_crypto_box;
+use std::sync::Arc;
 
 /// Length of the crypto box aead nonce.
 /// Ideally this would be exposed from upstream but I didn't see a good way to get at it directly.
@@ -19,15 +20,18 @@ pub const BLOCK_PADDING_SIZE: usize = 32;
 pub struct CryptoBoxNonce([u8; NONCE_BYTES]);
 
 impl CryptoBoxNonce {
-    fn new_random() -> Self {
-        let mut rng = rand::thread_rng();
-        let mut bytes = [0; NONCE_BYTES];
-        // We rely on the lib_crypto_box nonce length being the same as what we expect.
-        // Should be a reasonably safe bet as 24 bytes is dictated by the crypto_box algorithm.
-        bytes.copy_from_slice(
-            lib_crypto_box::generate_nonce(&mut rng).as_slice()
-        );
-        Self(bytes)
+    async fn new_random() -> Self {
+        rayon_exec(move || {
+            let mut rng = rand::thread_rng();
+            let mut bytes = [0; NONCE_BYTES];
+            // We rely on the lib_crypto_box nonce length being the same as what we expect.
+            // Should be a reasonably safe bet as 24 bytes is dictated by the crypto_box algorithm.
+            bytes.copy_from_slice(
+                lib_crypto_box::generate_nonce(&mut rng).as_slice(),
+            );
+            Self(bytes)
+        })
+        .await
     }
 }
 
@@ -56,8 +60,7 @@ impl std::convert::TryFrom<&[u8]> for CryptoBoxNonce {
             let mut inner = [0; NONCE_BYTES];
             inner.copy_from_slice(slice);
             Ok(Self(inner))
-        }
-        else {
+        } else {
             Err(crate::error::LairError::CryptoBoxNonceLength)
         }
     }
@@ -108,12 +111,16 @@ impl CryptoBoxData {
 
 impl From<Vec<u8>> for CryptoBoxData {
     fn from(v: Vec<u8>) -> Self {
-        Self {
-            data: Arc::new(v)
-        }
+        Self { data: Arc::new(v) }
     }
 }
 
+/// @todo all of this can be opened up to be more flexible over time.
+/// Eventually all possible input such as nonces and associated data should be settable by the
+/// external interface.
+/// In the short term everyone is getting their heads around the 80/20 usage patterns that are as
+/// safe as we can possibly make them to avoid subtleties that lead to nonce or key re-use etc.
+///
 /// Wrapper around crypto_box from whatever lib we use.
 /// No BYO nonces. Nonces always random and returned as part of `CryptoBoxEncryptedData`.
 /// No BYO algorithms (cipher agility). Algorithm always X25519XSalsa20Poly1305.
@@ -145,35 +152,59 @@ impl From<Vec<u8>> for CryptoBoxData {
 /// really needs to be wary of.
 ///
 /// @see https://eprint.iacr.org/2019/519.pdf for 'context separable interfaces'
-pub fn crypto_box(sender: x25519::X25519PrivKey, recipient: x25519::X25519PubKey, data: Arc<CryptoBoxData>) -> crate::error::LairResult<CryptoBoxEncryptedData> {
-    use lib_crypto_box::aead::Aead;
-    let sender_box = lib_crypto_box::SalsaBox::new(recipient.as_ref(), sender.as_ref());
-    let nonce = CryptoBoxNonce::new_random();
+pub async fn crypto_box(
+    sender: x25519::X25519PrivKey,
+    recipient: x25519::X25519PubKey,
+    data: Arc<CryptoBoxData>,
+) -> crate::error::LairResult<CryptoBoxEncryptedData> {
+    let nonce = CryptoBoxNonce::new_random().await;
+    rayon_exec(move || {
+        use lib_crypto_box::aead::Aead;
+        let sender_box =
+            lib_crypto_box::SalsaBox::new(recipient.as_ref(), sender.as_ref());
 
-    let mut padded_data = data.data.to_vec();
-    block_padding::Iso7816::pad_block(&mut padded_data, BLOCK_PADDING_SIZE)?;
+        let mut padded_data = data.data.to_vec();
+        block_padding::Iso7816::pad_block(
+            &mut padded_data,
+            BLOCK_PADDING_SIZE,
+        )?;
 
-    let encrypted_data = Arc::new(sender_box.encrypt(AsRef::<[u8; NONCE_BYTES]>::as_ref(&nonce).into(), padded_data.as_slice())?);
+        let encrypted_data = Arc::new(sender_box.encrypt(
+            AsRef::<[u8; NONCE_BYTES]>::as_ref(&nonce).into(),
+            padded_data.as_slice(),
+        )?);
 
-    // @todo do we want associated data to enforce the originating DHT space?
-    // https://eprint.iacr.org/2019/519.pdf for 'context separable interfaces'
-    Ok(CryptoBoxEncryptedData {
-        encrypted_data,
-        nonce,
+        // @todo do we want associated data to enforce the originating DHT space?
+        // https://eprint.iacr.org/2019/519.pdf for 'context separable interfaces'
+        Ok(CryptoBoxEncryptedData {
+            encrypted_data,
+            nonce,
+        })
     })
+    .await
 }
 
 /// Wrapper around crypto_box_open from whatever lib we use.
 /// Exact inverse of `crypto_box_open` so nonce must be provided in `CryptoBoxEncryptedData`.
 /// The recipient's private key encrypts _from_ the sender's pubkey.
-pub fn crypto_box_open(recipient: x25519::X25519PrivKey, sender: x25519::X25519PubKey, encrypted_data: Arc<CryptoBoxEncryptedData>) -> crate::error::LairResult<CryptoBoxData> {
-    use lib_crypto_box::aead::Aead;
-    let recipient_box = lib_crypto_box::SalsaBox::new(sender.as_ref(), recipient.as_ref());
-    let decrypted_data = recipient_box.decrypt(AsRef::<[u8; NONCE_BYTES]>::as_ref(&encrypted_data.nonce).into(), encrypted_data.encrypted_data.as_slice())?;
-    let data = Arc::new(block_padding::Iso7816::unpad(&decrypted_data)?.to_vec());
+pub async fn crypto_box_open(
+    recipient: x25519::X25519PrivKey,
+    sender: x25519::X25519PubKey,
+    encrypted_data: Arc<CryptoBoxEncryptedData>,
+) -> crate::error::LairResult<CryptoBoxData> {
+    rayon_exec(move || {
+        use lib_crypto_box::aead::Aead;
+        let recipient_box =
+            lib_crypto_box::SalsaBox::new(sender.as_ref(), recipient.as_ref());
+        let decrypted_data = recipient_box.decrypt(
+            AsRef::<[u8; NONCE_BYTES]>::as_ref(&encrypted_data.nonce).into(),
+            encrypted_data.encrypted_data.as_slice(),
+        )?;
+        let data =
+            Arc::new(block_padding::Iso7816::unpad(&decrypted_data)?.to_vec());
 
-    // @todo do we want associated data to enforce the originating DHT space?
-    Ok(CryptoBoxData {
-        data,
+        // @todo do we want associated data to enforce the originating DHT space?
+        Ok(CryptoBoxData { data })
     })
+    .await
 }

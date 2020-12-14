@@ -1,12 +1,8 @@
 //! Lair Wire Protocol Utilities
 
 use crate::{
-    actor::*,
-    internal::codec,
-    *,
-    internal::sign_ed25519,
-    internal::x25519,
-    internal::crypto_box,
+    actor::*, internal::codec, internal::crypto_box, internal::sign_ed25519,
+    internal::x25519, *,
 };
 use std::convert::TryInto;
 
@@ -521,13 +517,11 @@ macro_rules! wire_type_meta_macro {
             } |reader| {
                 let msg_id = reader.read_u64()?;
                 let keystore_index = reader.read_u32()?;
-                let pub_key = reader.read_bytes(32)?;
-                let mut pub_key_array = [0; 32];
-                pub_key_array.copy_from_slice(&pub_key);
+                let pub_key = reader.read_bytes(32)?.try_into()?;
                 LairWire::ToCliX25519NewFromEntropyResponse {
                     msg_id,
                     keystore_index: keystore_index.into(),
-                    pub_key: pub_key_array.into(),
+                    pub_key,
                 }
             },
             ToLairX25519Get 0x00000244 false true {
@@ -1047,10 +1041,13 @@ pub(crate) mod tests {
     test_val!(x25519::X25519PubKey, [0x42; 32].into());
     test_val!(x25519::X25519PrivKey, [0x42; 32].into());
     test_val!(crypto_box::CryptoBoxData, vec![42_u8; 20].into());
-    test_val!(crypto_box::CryptoBoxEncryptedData, crypto_box::CryptoBoxEncryptedData {
-        nonce: [42_u8; 24].into(),
-        encrypted_data: vec![42_u8; 20].into(),
-    });
+    test_val!(
+        crypto_box::CryptoBoxEncryptedData,
+        crypto_box::CryptoBoxEncryptedData {
+            nonce: [42_u8; 24].into(),
+            encrypted_data: vec![42_u8; 20].into(),
+        }
+    );
 
     macro_rules! lair_wire_enum_test {
         ($(

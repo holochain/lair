@@ -261,7 +261,10 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
 
     fn handle_sign_ed25519_new_from_entropy(
         &mut self,
-    ) -> LairClientApiHandlerResult<(KeystoreIndex, sign_ed25519::SignEd25519PubKey)> {
+    ) -> LairClientApiHandlerResult<(
+        KeystoreIndex,
+        sign_ed25519::SignEd25519PubKey,
+    )> {
         let fut = self.store_actor.sign_ed25519_keypair_new_from_entropy();
         Ok(async move {
             let (keystore_index, entry) = fut.await?;
@@ -333,7 +336,7 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
     }
 
     fn handle_x25519_new_from_entropy(
-        &mut self
+        &mut self,
     ) -> LairClientApiHandlerResult<(KeystoreIndex, x25519::X25519PubKey)> {
         let fut = self.store_actor.x25519_keypair_new_from_entropy();
         Ok(async move {
@@ -376,7 +379,12 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
             let entry = fut.await?;
             match &*entry {
                 LairEntry::X25519(entry) => {
-                    crypto_box::crypto_box(entry.priv_key.clone(), recipient, data)
+                    crypto_box::crypto_box(
+                        entry.priv_key.clone(),
+                        recipient,
+                        data,
+                    )
+                    .await
                 }
                 _ => Err("invalid entry type".into()),
             }
@@ -391,12 +399,19 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
         recipient: x25519::X25519PubKey,
         data: Arc<crypto_box::CryptoBoxData>,
     ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxEncryptedData> {
-        let fut = self.store_actor.get_entry_by_pub_id(Arc::new(pub_key.to_bytes().to_vec()));
+        let fut = self
+            .store_actor
+            .get_entry_by_pub_id(Arc::new(pub_key.to_bytes().to_vec()));
         Ok(async move {
             let (_, entry) = fut.await?;
             match &*entry {
                 LairEntry::X25519(entry) => {
-                    crypto_box::crypto_box(entry.priv_key.clone(), recipient, data)
+                    crypto_box::crypto_box(
+                        entry.priv_key.clone(),
+                        recipient,
+                        data,
+                    )
+                    .await
                 }
                 _ => Err("invalid entry type".into()),
             }
@@ -409,14 +424,19 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
         &mut self,
         keystore_index: KeystoreIndex,
         sender: x25519::X25519PubKey,
-        encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>
+        encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
     ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
         let fut = self.store_actor.get_entry_by_index(keystore_index);
         Ok(async move {
             let entry = fut.await?;
             match &*entry {
                 LairEntry::X25519(entry) => {
-                    crypto_box::crypto_box_open(entry.priv_key.clone(), sender, encrypted_data)
+                    crypto_box::crypto_box_open(
+                        entry.priv_key.clone(),
+                        sender,
+                        encrypted_data,
+                    )
+                    .await
                 }
                 _ => Err("invalid entry type".into()),
             }
@@ -429,14 +449,21 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
         &mut self,
         pub_key: x25519::X25519PubKey,
         sender: x25519::X25519PubKey,
-        encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>
+        encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
     ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
-        let fut = self.store_actor.get_entry_by_pub_id(Arc::new(pub_key.to_bytes().to_vec()));
+        let fut = self
+            .store_actor
+            .get_entry_by_pub_id(Arc::new(pub_key.to_bytes().to_vec()));
         Ok(async move {
             let (_, entry) = fut.await?;
             match &*entry {
                 LairEntry::X25519(entry) => {
-                    crypto_box::crypto_box_open(entry.priv_key.clone(), sender, encrypted_data)
+                    crypto_box::crypto_box_open(
+                        entry.priv_key.clone(),
+                        sender,
+                        encrypted_data,
+                    )
+                    .await
                 }
                 _ => Err("invalid entry type".into()),
             }

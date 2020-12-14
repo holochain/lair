@@ -121,7 +121,10 @@ fn entry_decode_x25519(
     let mut pub_key = [0_u8; x25519::PUB_KEY_BYTES];
     pub_key.copy_from_slice(&pub_key_data);
 
-    Ok(EntryX25519 { priv_key: priv_key.into(), pub_key: pub_key.into() } )
+    Ok(EntryX25519 {
+        priv_key: priv_key.into(),
+        pub_key: pub_key.into(),
+    })
 }
 
 /// File format entry representing Tls Certificate data.
@@ -244,8 +247,9 @@ impl EntrySignEd25519 {
     pub fn sign(
         &self,
         message: Arc<Vec<u8>>,
-    ) -> impl std::future::Future<Output = LairResult<sign_ed25519::SignEd25519Signature>> + 'static
-    {
+    ) -> impl std::future::Future<
+        Output = LairResult<sign_ed25519::SignEd25519Signature>,
+    > + 'static {
         let priv_key = self.priv_key.clone();
         sign_ed25519::sign_ed25519(priv_key, message)
     }
