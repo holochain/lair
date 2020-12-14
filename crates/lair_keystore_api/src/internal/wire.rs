@@ -624,7 +624,8 @@ macro_rules! wire_type_meta_macro {
                     + 8 // msg id
                     + 32 // pub key
                     + 32 // recipient
-                    + data.len(); // data length
+                    + 8 // data length
+                    + data.len(); // data content
                 let mut writer = codec::CodecWriter::new_zeroed(size)?;
                 writer.write_u32(size as u32)?;
                 writer.write_u32(wire_type)?;

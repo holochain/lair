@@ -1,6 +1,7 @@
 use futures::{future::FutureExt, stream::StreamExt};
 use ghost_actor::dependencies::tracing;
 use lair_keystore_api::actor::LairClientApiSender;
+use lair_keystore_api::internal::crypto_box;
 
 fn init_tracing() {
     let _ = tracing::subscriber::set_global_default(
@@ -141,6 +142,53 @@ async fn lair_integration_test() -> lair_keystore_api::LairResult<()> {
 
     assert_eq!(sign2, sign3);
     assert_eq!(sign3, sign4);
+
+    let (x25519_alice_index, x25519_alice_pub_key) = api_send.x25519_new_from_entropy().await?;
+
+    assert_eq!(3, x25519_alice_index.0);
+    assert_eq!(3, api_send.lair_get_last_entry_index().await?.0);
+    assert_eq!(
+        lair_keystore_api::actor::LairEntryType::X25519,
+        api_send.lair_get_entry_type(3.into()).await?,
+    );
+
+    let x25519_alice_pub_key2 = api_send.x25519_get(x25519_alice_index).await?;
+
+    assert_eq!(x25519_alice_pub_key, x25519_alice_pub_key2);
+
+    let (x25519_bob_index, x25519_bob_pub_key) = api_send.x25519_new_from_entropy().await?;
+    assert_eq!(4, x25519_bob_index.0);
+
+    let data = std::sync::Arc::new(b"test-data".to_vec().into());
+
+    let crypto_box1 = api_send.crypto_box_by_index(x25519_alice_index, x25519_bob_pub_key.clone(), std::sync::Arc::new(crypto_box::CryptoBoxData { data: std::sync::Arc::clone(&data) })).await?;
+    let crypto_box2 = api_send.crypto_box_by_pub_key(x25519_alice_pub_key.clone(), x25519_bob_pub_key.clone(), std::sync::Arc::new(crypto_box::CryptoBoxData { data: std::sync::Arc::clone(&data) })).await?;
+    let crypto_box3 = api_send2.crypto_box_by_index(x25519_alice_index, x25519_bob_pub_key.clone(), std::sync::Arc::new(crypto_box::CryptoBoxData { data: std::sync::Arc::clone(&data) })).await?;
+    let crypto_box4 = api_send2.crypto_box_by_pub_key(x25519_alice_pub_key.clone(), x25519_bob_pub_key.clone(), std::sync::Arc::new(crypto_box::CryptoBoxData { data: std::sync::Arc::clone(&data) })).await?;
+
+    assert_ne!(crypto_box1.nonce, crypto_box2.nonce);
+    assert_ne!(crypto_box1.nonce, crypto_box3.nonce);
+    assert_ne!(crypto_box2.nonce, crypto_box4.nonce);
+    assert_ne!(crypto_box1.encrypted_data, crypto_box2.encrypted_data);
+    assert_ne!(crypto_box1.encrypted_data, crypto_box3.encrypted_data);
+    assert_ne!(crypto_box2.encrypted_data, crypto_box4.encrypted_data);
+
+    let crypto_box_open1 = api_send.crypto_box_open_by_index(x25519_bob_index, x25519_alice_pub_key.clone(), std::sync::Arc::new(crypto_box1)).await?;
+    assert_eq!(&data, &crypto_box_open1.data);
+    let crypto_box_open2 = api_send.crypto_box_open_by_pub_key(x25519_bob_pub_key.clone(), x25519_alice_pub_key.clone(), std::sync::Arc::new(crypto_box2)).await?;
+    assert_eq!(&data, &crypto_box_open2.data);
+    let crypto_box_open3 = api_send2.crypto_box_open_by_index(x25519_bob_index, x25519_alice_pub_key.clone(), std::sync::Arc::new(crypto_box3)).await?;
+    assert_eq!(&data, &crypto_box_open3.data);
+    let crypto_box_open4 = api_send2.crypto_box_open_by_pub_key(x25519_bob_pub_key.clone(), x25519_alice_pub_key.clone(), std::sync::Arc::new(crypto_box4.clone())).await?;
+    assert_eq!(&data, &crypto_box_open4.data);
+
+    let (x25519_carol_index, x25519_carol_pub_key) = api_send.x25519_new_from_entropy().await?;
+    assert_eq!(5, x25519_carol_index.0);
+
+    // let crypto_box_open6 = api_send2.crypto_box_open_by_pub_key(x25519_bob_pub_key, x25519_alice_pub_key.clone(), std::sync::Arc::new(crypto_box4.clone())).await?;
+    let crypto_box_open_carol = api_send2.crypto_box_open_by_pub_key(x25519_carol_pub_key, x25519_alice_pub_key, std::sync::Arc::new(crypto_box4)).await;
+    // assert_eq!(&data, &crypto_box_open4.data);
+    dbg!(&crypto_box_open_carol);
 
     drop(tmpdir);
 

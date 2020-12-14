@@ -261,6 +261,21 @@ mod tests {
     use super::*;
 
     #[test]
+    fn it_can_encode_and_decode_x25519_entry() {
+        let e = EntryX25519 {
+            priv_key: [0xdb; 32].into(),
+            pub_key: [0x42; 32].into(),
+        };
+        let d = LairEntry::from(e.clone()).encode().unwrap();
+        let e2 = match LairEntry::decode(&d).unwrap() {
+            LairEntry::X25519(e2) => e2,
+            e2 @ _ => panic!("unexpected type: {:?}", e2),
+        };
+        assert_eq!(e.priv_key, e2.priv_key);
+        assert_eq!(e.pub_key, e2.pub_key);
+    }
+
+    #[test]
     fn it_can_encode_and_decode_sign_ed25519_entry() {
         let e = EntrySignEd25519 {
             priv_key: vec![0xdb; 32].into(),

@@ -15,10 +15,10 @@ pub const NONCE_BYTES: usize = 24;
 /// @see https://doc.libsodium.org/padding#algorithm
 pub const BLOCK_PADDING_SIZE: usize = 32;
 /// The delimiter for padding as per ISO 7816-4.
-pub const BLOCK_PADDING_DELIMITER: usize = 0x80;
+pub const BLOCK_PADDING_DELIMITER: u8 = 0x80;
 
 /// Newtype for the nonce for safety.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct CryptoBoxNonce([u8; NONCE_BYTES]);
 
 impl CryptoBoxNonce {
@@ -86,7 +86,7 @@ pub struct CryptoBoxAad(Vec<u8>);
 
 /// The nonce and encrypted data together.
 /// @todo include additional associated data?
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct CryptoBoxEncryptedData {
     /// The nonce generated during encryption.
     /// We never allow nonce to be set externally so we need to return it.
@@ -212,12 +212,14 @@ pub async fn crypto_box_open(
         use lib_crypto_box::aead::Aead;
         let recipient_box =
             lib_crypto_box::SalsaBox::new(sender.as_ref(), recipient.as_ref());
+        dbg!(&sender, &recipient);
         let decrypted_data = recipient_box.decrypt(
             AsRef::<[u8; NONCE_BYTES]>::as_ref(&encrypted_data.nonce).into(),
             encrypted_data.encrypted_data.as_slice(),
-        )?;
+        );
+        dbg!(&decrypted_data);
         let data =
-            Arc::new(block_padding::Iso7816::unpad(&decrypted_data)?.to_vec());
+            Arc::new(block_padding::Iso7816::unpad(&decrypted_data?)?.to_vec());
 
         // @todo do we want associated data to enforce the originating DHT space?
         Ok(CryptoBoxData { data })
