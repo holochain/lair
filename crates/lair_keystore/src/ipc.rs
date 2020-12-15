@@ -406,13 +406,12 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
             let (_, entry) = fut.await?;
             match &*entry {
                 LairEntry::X25519(entry) => {
-                    let ret = crypto_box::crypto_box(
+                    crypto_box::crypto_box(
                         entry.priv_key.clone(),
                         recipient,
                         data,
                     )
-                    .await;
-                    ret
+                    .await
                 }
                 _ => Err("invalid entry type".into()),
             }
