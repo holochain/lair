@@ -1,6 +1,12 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
 //! secret lair private keystore
+//!
+//! # Usage
+//!
+//! ## Communications  Protocol
+//!
+//! See [docs/protocol.md](./docs/protocol.md)
 
 include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 

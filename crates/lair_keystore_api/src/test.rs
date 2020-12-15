@@ -7,7 +7,7 @@ use futures::future::FutureExt;
 use std::collections::HashMap;
 
 static NEXT_KEYSTORE_ID: std::sync::atomic::AtomicU32 =
-    std::sync::atomic::AtomicU32::new(0);
+    std::sync::atomic::AtomicU32::new(1);
 
 fn next_keystore_idx() -> KeystoreIndex {
     NEXT_KEYSTORE_ID
