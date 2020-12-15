@@ -713,22 +713,42 @@ macro_rules! wire_type_meta_macro {
                 }
             },
             ToCliCryptoBoxOpenByIndexResponse 0x00000251 false false {
-                data: crypto_box::CryptoBoxData,
+                data: Option<crypto_box::CryptoBoxData>,
             } |msg_id, wire_type| {
+                let inner_data = match data {
+                    Some(inner) => inner.data.to_vec(),
+                    None => vec![],
+                };
                 let size = 4 // msg len
                     + 4 // msg type
                     + 8 // msg id
+                    + 1 // is some?
                     + 8 // data length
-                    + data.len(); // data
+                    + inner_data.len(); // data
                 let mut writer = codec::CodecWriter::new_zeroed(size)?;
                 writer.write_u32(size as u32)?;
                 writer.write_u32(wire_type)?;
                 writer.write_u64(*msg_id)?;
-                writer.write_sized_bytes(AsRef::<[u8]>::as_ref(&**data.data), data.len())?;
+
+                let some_byte = if data.is_some() {
+                    1
+                }
+                else {
+                    0
+                };
+                writer.write_bytes_exact(&[some_byte], 1)?;
+                writer.write_sized_bytes(AsRef::<[u8]>::as_ref(&inner_data), inner_data.len())?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let data = reader.read_sized_bytes()?.into();
+                let some_byte = reader.read_bytes(1)?[0];
+                let data_bytes = reader.read_sized_bytes()?.into();
+                let data = if some_byte == 1 {
+                    Some(data_bytes)
+                }
+                else {
+                    None
+                };
                 LairWire::ToCliCryptoBoxOpenByIndexResponse {
                     msg_id,
                     data,
@@ -773,22 +793,42 @@ macro_rules! wire_type_meta_macro {
                 }
             },
             ToCliCryptoBoxOpenByPubKeyResponse 0x00000253 false false {
-                data: crypto_box::CryptoBoxData,
+                data: Option<crypto_box::CryptoBoxData>,
             } |msg_id, wire_type| {
+                let inner_data = match data {
+                    Some(inner) => inner.data.to_vec(),
+                    None => vec![],
+                };
                 let size = 4 // msg len
                     + 4 // msg type
                     + 8 // msg id
+                    + 1 // is some?
                     + 8 // data length
-                    + data.len(); // data
+                    + inner_data.len(); // data
                 let mut writer = codec::CodecWriter::new_zeroed(size)?;
                 writer.write_u32(size as u32)?;
                 writer.write_u32(wire_type)?;
                 writer.write_u64(*msg_id)?;
-                writer.write_sized_bytes(AsRef::<[u8]>::as_ref(&**data.data), data.len())?;
+
+                let some_byte = if data.is_some() {
+                    1
+                }
+                else {
+                    0
+                };
+                writer.write_bytes_exact(&[some_byte], 1)?;
+                writer.write_sized_bytes(AsRef::<[u8]>::as_ref(&inner_data), inner_data.len())?;
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let data = reader.read_sized_bytes()?.into();
+                let some_byte = reader.read_bytes(1)?[0];
+                let data_bytes = reader.read_sized_bytes()?.into();
+                let data = if some_byte == 1 {
+                    Some(data_bytes)
+                }
+                else {
+                    None
+                };
                 LairWire::ToCliCryptoBoxOpenByPubKeyResponse {
                     msg_id,
                     data,
@@ -1042,6 +1082,7 @@ pub(crate) mod tests {
     test_val!(x25519::X25519PubKey, [0x42; 32].into());
     test_val!(x25519::X25519PrivKey, [0x42; 32].into());
     test_val!(crypto_box::CryptoBoxData, vec![42_u8; 20].into());
+    test_val!(Option<crypto_box::CryptoBoxData>, Some(vec![42_u8; 20].into()));
     test_val!(
         crypto_box::CryptoBoxEncryptedData,
         crypto_box::CryptoBoxEncryptedData {

@@ -535,7 +535,7 @@ impl LairClientApiHandler for Internal {
         keystore_index: KeystoreIndex,
         sender: x25519::X25519PubKey,
         encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
-    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
+    ) -> LairClientApiHandlerResult<Option<crypto_box::CryptoBoxData>> {
         let fut = self.kill_switch.mix_static(self.ipc_send.request(
             LairWire::ToLairCryptoBoxOpenByIndex {
                 msg_id: next_msg_id(),
@@ -561,7 +561,7 @@ impl LairClientApiHandler for Internal {
         pub_key: x25519::X25519PubKey,
         sender: x25519::X25519PubKey,
         encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
-    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
+    ) -> LairClientApiHandlerResult<Option<crypto_box::CryptoBoxData>> {
         let fut = self.kill_switch.mix_static(self.ipc_send.request(
             LairWire::ToLairCryptoBoxOpenByPubKey {
                 msg_id: next_msg_id(),

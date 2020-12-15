@@ -207,22 +207,24 @@ pub async fn crypto_box_open(
     recipient: x25519::X25519PrivKey,
     sender: x25519::X25519PubKey,
     encrypted_data: Arc<CryptoBoxEncryptedData>,
-) -> crate::error::LairResult<CryptoBoxData> {
+) -> crate::error::LairResult<Option<CryptoBoxData>> {
     rayon_exec(move || {
         use lib_crypto_box::aead::Aead;
         let recipient_box =
             lib_crypto_box::SalsaBox::new(sender.as_ref(), recipient.as_ref());
-        dbg!(&sender, &recipient);
-        let decrypted_data = recipient_box.decrypt(
+        match recipient_box.decrypt(
             AsRef::<[u8; NONCE_BYTES]>::as_ref(&encrypted_data.nonce).into(),
             encrypted_data.encrypted_data.as_slice(),
-        );
-        dbg!(&decrypted_data);
-        let data =
-            Arc::new(block_padding::Iso7816::unpad(&decrypted_data?)?.to_vec());
-
-        // @todo do we want associated data to enforce the originating DHT space?
-        Ok(CryptoBoxData { data })
+        ) {
+            Ok(decrypted_data) => {
+                match block_padding::Iso7816::unpad(&decrypted_data) {
+                    // @todo do we want associated data to enforce the originating DHT space?
+                    Ok(unpadded) => Ok(Some(CryptoBoxData { data: Arc::new(unpadded.to_vec()) })),
+                    Err(_) => Ok(None),
+                }
+            }
+            Err(_) => Ok(None),
+        }
     })
     .await
 }
@@ -271,7 +273,7 @@ mod tests {
             let decrypted_data = super::crypto_box_open(bob.priv_key, alice.pub_key, Arc::new(encrypted_data)).await.unwrap();
 
             // If we can decrypt we managed to pad and unpad as well as encrypt and decrypt.
-            assert_eq!(&decrypted_data, &data);
+            assert_eq!(&decrypted_data, &Some(data));
         }
     }
 }

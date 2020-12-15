@@ -477,7 +477,7 @@ impl LairClientApiHandler for Internal {
         keystore_index: KeystoreIndex,
         sender: x25519::X25519PubKey,
         encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
-    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
+    ) -> LairClientApiHandlerResult<Option<crypto_box::CryptoBoxData>> {
         let priv_key = match match self.by_idx.get(&keystore_index) {
             Some(entry) => entry,
             None => return Err("bad index".into()),
@@ -497,7 +497,7 @@ impl LairClientApiHandler for Internal {
         pub_key: x25519::X25519PubKey,
         sender: x25519::X25519PubKey,
         encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
-    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
+    ) -> LairClientApiHandlerResult<Option<crypto_box::CryptoBoxData>> {
         let priv_key = match self.x25519_by_pub.get(&pub_key) {
             Some(keypair) => keypair.priv_key.clone(),
             None => return Err(LairError::PubKeyNotFound),

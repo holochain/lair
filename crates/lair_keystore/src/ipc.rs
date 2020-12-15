@@ -426,7 +426,7 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
         keystore_index: KeystoreIndex,
         sender: x25519::X25519PubKey,
         encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
-    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
+    ) -> LairClientApiHandlerResult<Option<crypto_box::CryptoBoxData>> {
         let fut = self.store_actor.get_entry_by_index(keystore_index);
         Ok(async move {
             let entry = fut.await?;
@@ -451,7 +451,7 @@ impl lair_keystore_api::actor::LairClientApiHandler for Internal {
         pub_key: x25519::X25519PubKey,
         sender: x25519::X25519PubKey,
         encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
-    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData> {
+    ) -> LairClientApiHandlerResult<Option<crypto_box::CryptoBoxData>> {
         let fut = self
             .store_actor
             .get_entry_by_pub_id(Arc::new(pub_key.to_bytes().to_vec()));

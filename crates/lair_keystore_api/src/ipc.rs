@@ -219,7 +219,6 @@ mod tests {
                 _data: Arc<crypto_box::CryptoBoxData>,
             ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxEncryptedData>
             {
-                dbg!();
                 Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
             }
             fn handle_crypto_box_open_by_index(
@@ -227,7 +226,7 @@ mod tests {
                 _keystore_index: KeystoreIndex,
                 _recipient: x25519::X25519PubKey,
                 _data: Arc<crypto_box::CryptoBoxEncryptedData>,
-            ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData>
+            ) -> LairClientApiHandlerResult<Option<crypto_box::CryptoBoxData>>
             {
                 Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
             }
@@ -236,7 +235,7 @@ mod tests {
                 _pub_key: x25519::X25519PubKey,
                 _recipient: x25519::X25519PubKey,
                 _data: Arc<crypto_box::CryptoBoxEncryptedData>,
-            ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxData>
+            ) -> LairClientApiHandlerResult<Option<crypto_box::CryptoBoxData>>
             {
                 Ok(async move { Ok(TestVal::test_val()) }.boxed().into())
             }
