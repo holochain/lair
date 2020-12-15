@@ -370,31 +370,13 @@ mod tests {
                 .await?,
         );
         assert_eq!(
-            (
-                KeystoreIndex::test_val(),
-                x25519::X25519PubKey::test_val(),
-            ),
+            (KeystoreIndex::test_val(), x25519::X25519PubKey::test_val(),),
             cli_send.x25519_new_from_entropy().await?,
         );
         assert_eq!(
             x25519::X25519PubKey::test_val(),
             cli_send.x25519_get(0.into()).await?,
         );
-        // assert_eq!(
-        //     crypto_box::CryptoBoxEncryptedData::test_val(),
-        //     cli_send
-        //         .crypto_box_by_index(0.into(), b"".to_vec().into())
-        //         .await?,
-        // );
-        // assert_eq!(
-        //     crypto_box::CryptoBoxEncryptedData::test_val(),
-        //     cli_send
-        //         .crypto_box_by_pub_key(
-        //             x25519::X25519PubKey::test_val(),
-        //             b"".to_vec().into()
-        //         )
-        //         .await?,
-        // );
 
         cli_send.ghost_actor_shutdown().await?;
         drop(tmpdir);

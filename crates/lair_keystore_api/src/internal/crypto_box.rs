@@ -181,7 +181,11 @@ pub async fn crypto_box(
         // crate, as that is optimised for blocks.
         let mut to_encrypt = data.data.to_vec();
         let padding_delimiter = vec![BLOCK_PADDING_DELIMITER];
-        let padding = vec![0x0; BLOCK_PADDING_SIZE - (data.data.len() + 1) % BLOCK_PADDING_SIZE];
+        let padding = vec![
+            0x0;
+            BLOCK_PADDING_SIZE
+                - (data.data.len() + 1) % BLOCK_PADDING_SIZE
+        ];
         to_encrypt.extend(padding_delimiter);
         to_encrypt.extend(padding);
 
@@ -219,7 +223,9 @@ pub async fn crypto_box_open(
             Ok(decrypted_data) => {
                 match block_padding::Iso7816::unpad(&decrypted_data) {
                     // @todo do we want associated data to enforce the originating DHT space?
-                    Ok(unpadded) => Ok(Some(CryptoBoxData { data: Arc::new(unpadded.to_vec()) })),
+                    Ok(unpadded) => Ok(Some(CryptoBoxData {
+                        data: Arc::new(unpadded.to_vec()),
+                    })),
                     Err(_) => Ok(None),
                 }
             }
@@ -235,42 +241,63 @@ mod tests {
 
     #[tokio::test(threaded_scheduler)]
     async fn it_can_encrypt_and_decrypt() {
-
         for input in [
-         // Empty vec.
-         vec![],
-         // Small vec.
-         vec![0],
-         vec![0, 1, 2],
-         vec![0, 1, 2, 3],
-         // Vec ending in padding delimiter.
-         vec![0x80],
-         vec![0, 0x80],
-         vec![0x80; BLOCK_PADDING_SIZE - 1],
-         vec![0x80; BLOCK_PADDING_SIZE],
-         vec![0x80; BLOCK_PADDING_SIZE + 1],
-         // Larger vec.
-         vec![0; BLOCK_PADDING_SIZE - 1],
-         vec![0; BLOCK_PADDING_SIZE],
-         vec![0; BLOCK_PADDING_SIZE + 1],
-         vec![0; BLOCK_PADDING_SIZE * 2 - 1],
-         vec![0; BLOCK_PADDING_SIZE * 2],
-         vec![0; BLOCK_PADDING_SIZE * 2 + 1],
-        ].iter() {
+            // Empty vec.
+            vec![],
+            // Small vec.
+            vec![0],
+            vec![0, 1, 2],
+            vec![0, 1, 2, 3],
+            // Vec ending in padding delimiter.
+            vec![0x80],
+            vec![0, 0x80],
+            vec![0x80; BLOCK_PADDING_SIZE - 1],
+            vec![0x80; BLOCK_PADDING_SIZE],
+            vec![0x80; BLOCK_PADDING_SIZE + 1],
+            // Larger vec.
+            vec![0; BLOCK_PADDING_SIZE - 1],
+            vec![0; BLOCK_PADDING_SIZE],
+            vec![0; BLOCK_PADDING_SIZE + 1],
+            vec![0; BLOCK_PADDING_SIZE * 2 - 1],
+            vec![0; BLOCK_PADDING_SIZE * 2],
+            vec![0; BLOCK_PADDING_SIZE * 2 + 1],
+        ]
+        .iter()
+        {
             // Fresh keys.
-            let alice = crate::internal::x25519::x25519_keypair_new_from_entropy().await.unwrap();
-            let bob = crate::internal::x25519::x25519_keypair_new_from_entropy().await.unwrap();
+            let alice =
+                crate::internal::x25519::x25519_keypair_new_from_entropy()
+                    .await
+                    .unwrap();
+            let bob =
+                crate::internal::x25519::x25519_keypair_new_from_entropy()
+                    .await
+                    .unwrap();
 
-            let data = CryptoBoxData{ data: Arc::new(input.to_vec()) };
+            let data = CryptoBoxData {
+                data: Arc::new(input.to_vec()),
+            };
 
             // from alice to bob.
-            let encrypted_data = super::crypto_box(alice.priv_key, bob.pub_key, Arc::new(data.clone())).await.unwrap();
+            let encrypted_data = super::crypto_box(
+                alice.priv_key,
+                bob.pub_key,
+                Arc::new(data.clone()),
+            )
+            .await
+            .unwrap();
 
             // The length excluding the 16 byte overhead should always be a multiple of 32 as this
             // is our padding.
             assert_eq!((encrypted_data.encrypted_data.len() - 16) % 32, 0);
 
-            let decrypted_data = super::crypto_box_open(bob.priv_key, alice.pub_key, Arc::new(encrypted_data)).await.unwrap();
+            let decrypted_data = super::crypto_box_open(
+                bob.priv_key,
+                alice.pub_key,
+                Arc::new(encrypted_data),
+            )
+            .await
+            .unwrap();
 
             // If we can decrypt we managed to pad and unpad as well as encrypt and decrypt.
             assert_eq!(&decrypted_data, &Some(data));

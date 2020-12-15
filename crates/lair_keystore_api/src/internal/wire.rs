@@ -546,12 +546,10 @@ macro_rules! wire_type_meta_macro {
                 Ok(writer.into_vec())
             } |reader| {
                 let msg_id = reader.read_u64()?;
-                let pub_key = reader.read_bytes(32)?;
-                let mut pub_key_array = [0; 32];
-                pub_key_array.copy_from_slice(pub_key);
+                let pub_key = reader.read_bytes(32)?.try_into()?;
                 LairWire::ToCliX25519GetResponse {
                     msg_id,
-                    pub_key: pub_key_array.into(),
+                    pub_key,
                 }
             },
             ToLairCryptoBoxByIndex 0x00000246 false true {
@@ -1082,7 +1080,10 @@ pub(crate) mod tests {
     test_val!(x25519::X25519PubKey, [0x42; 32].into());
     test_val!(x25519::X25519PrivKey, [0x42; 32].into());
     test_val!(crypto_box::CryptoBoxData, vec![42_u8; 20].into());
-    test_val!(Option<crypto_box::CryptoBoxData>, Some(vec![42_u8; 20].into()));
+    test_val!(
+        Option<crypto_box::CryptoBoxData>,
+        Some(vec![42_u8; 20].into())
+    );
     test_val!(
         crypto_box::CryptoBoxEncryptedData,
         crypto_box::CryptoBoxEncryptedData {

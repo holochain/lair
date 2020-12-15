@@ -437,9 +437,9 @@ where
                 .into())
             }
             LairWire::ToLairX25519NewFromEntropy { msg_id } => {
-                let fut = self.kill_switch.mix_static(
-                    self.api_sender.x25519_new_from_entropy(),
-                );
+                let fut = self
+                    .kill_switch
+                    .mix_static(self.api_sender.x25519_new_from_entropy());
                 Ok(async move {
                     fut.await.map(|(keystore_index, pub_key)| {
                         LairWire::ToCliX25519NewFromEntropyResponse {
@@ -456,15 +456,13 @@ where
                 msg_id,
                 keystore_index,
             } => {
-                let fut = self.kill_switch.mix_static(
-                    self.api_sender.x25519_get(keystore_index),
-                );
+                let fut = self
+                    .kill_switch
+                    .mix_static(self.api_sender.x25519_get(keystore_index));
                 Ok(async move {
-                    fut.await.map(|pub_key| {
-                        LairWire::ToCliX25519GetResponse {
-                            msg_id,
-                            pub_key,
-                        }
+                    fut.await.map(|pub_key| LairWire::ToCliX25519GetResponse {
+                        msg_id,
+                        pub_key,
                     })
                 }
                 .boxed()
@@ -477,7 +475,11 @@ where
                 data,
             } => {
                 let fut = self.kill_switch.mix_static(
-                    self.api_sender.crypto_box_by_index(keystore_index, recipient, data),
+                    self.api_sender.crypto_box_by_index(
+                        keystore_index,
+                        recipient,
+                        data,
+                    ),
                 );
                 Ok(async move {
                     fut.await.map(|encrypted_data| {
@@ -497,7 +499,8 @@ where
                 data,
             } => {
                 let fut = self.kill_switch.mix_static(
-                    self.api_sender.crypto_box_by_pub_key(pub_key, recipient, data),
+                    self.api_sender
+                        .crypto_box_by_pub_key(pub_key, recipient, data),
                 );
                 Ok(async move {
                     fut.await.map(|encrypted_data| {
@@ -517,7 +520,11 @@ where
                 encrypted_data,
             } => {
                 let fut = self.kill_switch.mix_static(
-                    self.api_sender.crypto_box_open_by_index(keystore_index, sender, encrypted_data),
+                    self.api_sender.crypto_box_open_by_index(
+                        keystore_index,
+                        sender,
+                        encrypted_data,
+                    ),
                 );
                 Ok(async move {
                     fut.await.map(|data| {
@@ -537,7 +544,11 @@ where
                 encrypted_data,
             } => {
                 let fut = self.kill_switch.mix_static(
-                    self.api_sender.crypto_box_open_by_pub_key(pub_key, sender, encrypted_data),
+                    self.api_sender.crypto_box_open_by_pub_key(
+                        pub_key,
+                        sender,
+                        encrypted_data,
+                    ),
                 );
                 Ok(async move {
                     fut.await.map(|data| {
