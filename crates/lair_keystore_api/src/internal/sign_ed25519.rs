@@ -8,6 +8,7 @@ use derive_more::*;
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
 )]
+#[allow(clippy::rc_buffer)]
 pub struct SignEd25519PrivKey(pub Arc<Vec<u8>>);
 
 impl From<Vec<u8>> for SignEd25519PrivKey {
@@ -16,7 +17,48 @@ impl From<Vec<u8>> for SignEd25519PrivKey {
     }
 }
 
-use actor::{SignEd25519PubKey, SignEd25519Signature};
+/// The 32 byte signature ed25519 public key.
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
+)]
+#[allow(clippy::rc_buffer)]
+pub struct SignEd25519PubKey(pub Arc<Vec<u8>>);
+
+impl From<Vec<u8>> for SignEd25519PubKey {
+    fn from(d: Vec<u8>) -> Self {
+        Self(Arc::new(d))
+    }
+}
+
+impl SignEd25519PubKey {
+    /// Verify signature on given message with given public key.
+    #[allow(clippy::rc_buffer)]
+    pub async fn verify(
+        &self,
+        message: Arc<Vec<u8>>,
+        signature: SignEd25519Signature,
+    ) -> LairResult<bool> {
+        internal::sign_ed25519::sign_ed25519_verify(
+            self.clone(),
+            message,
+            signature,
+        )
+        .await
+    }
+}
+
+/// The 64 byte detached ed25519 signature data.
+#[derive(
+    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
+)]
+#[allow(clippy::rc_buffer)]
+pub struct SignEd25519Signature(pub Arc<Vec<u8>>);
+
+impl From<Vec<u8>> for SignEd25519Signature {
+    fn from(d: Vec<u8>) -> Self {
+        Self(Arc::new(d))
+    }
+}
 
 /// Generate a new random ed25519 signature keypair.
 pub async fn sign_ed25519_keypair_new_from_entropy(
@@ -41,6 +83,7 @@ pub async fn sign_ed25519_keypair_new_from_entropy(
 }
 
 /// Generate detached signature bytes for given ed25519 priv key / message.
+#[allow(clippy::rc_buffer)]
 pub async fn sign_ed25519(
     priv_key: SignEd25519PrivKey,
     message: Arc<Vec<u8>>,
@@ -56,6 +99,7 @@ pub async fn sign_ed25519(
 }
 
 /// Verify signature on given message with given public key.
+#[allow(clippy::rc_buffer)]
 pub async fn sign_ed25519_verify(
     pub_key: SignEd25519PubKey,
     message: Arc<Vec<u8>>,

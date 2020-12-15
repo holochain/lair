@@ -47,6 +47,7 @@ Total length of the message (min/max range `16 / 4294967295`).
   - `0x00` - the message is unclassified
   - `0x01` - the message is related to TLS
   - `0x02` - the message is related to Ed25519
+  - `0x03` - the message is related to X25519
   - `0x??` - undefined / reserved
 - byte 3
   - `0x??` - undefined / reserved

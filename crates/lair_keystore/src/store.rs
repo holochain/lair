@@ -9,14 +9,17 @@ use std::collections::HashMap;
 ghost_actor::ghost_chan! {
     /// persistence manager for entry storage
     pub chan EntryStore<LairError> {
-        /// generate a new tls cert entry && return it
+        /// generate a new tls cert entry && save it && return it
         fn tls_cert_self_signed_new_from_entropy(
             options: TlsCertOptions,
         ) -> (KeystoreIndex, Arc<LairEntry>);
 
-        /// generate a new signature ed25519 keypair entry && return it
+        /// generate a new signature ed25519 keypair entry && save it && return it
         fn sign_ed25519_keypair_new_from_entropy() ->
             (KeystoreIndex, Arc<LairEntry>);
+
+        /// generate a new x25519 keypair entry && save it && return it
+        fn x25519_keypair_new_from_entropy() -> (KeystoreIndex, Arc<LairEntry>);
 
         /// fetch the highest / most recently added keystore_index
         fn get_last_entry_index() -> KeystoreIndex;
@@ -79,6 +82,7 @@ struct EntryStoreImpl {
     store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
     last_entry_index: KeystoreIndex,
     entries_by_index: HashMap<KeystoreIndex, Arc<LairEntry>>,
+    #[allow(clippy::rc_buffer)]
     entries_by_pub_id: HashMap<Arc<Vec<u8>>, (KeystoreIndex, Arc<LairEntry>)>,
     entries_by_sni: HashMap<CertSni, (KeystoreIndex, Arc<LairEntry>)>,
 }
@@ -143,6 +147,12 @@ impl EntryStoreImpl {
                 self.entries_by_pub_id
                     .insert(e.pub_key.0.clone(), (entry_index, entry));
             }
+            LairEntry::X25519(e) => {
+                self.entries_by_pub_id.insert(
+                    Arc::new(e.pub_key.to_bytes().to_vec()),
+                    (entry_index, entry),
+                );
+            }
             _ => {
                 tracing::warn!(
                     "silently ignoring unhandled entry type {:?}",
@@ -178,6 +188,16 @@ impl EntryStoreHandler for EntryStoreImpl {
     ) -> EntryStoreHandlerResult<(KeystoreIndex, Arc<LairEntry>)> {
         Ok(
             new_sign_ed25519_keypair(self.i_s.clone(), self.store_file.clone())
+                .boxed()
+                .into(),
+        )
+    }
+
+    fn handle_x25519_keypair_new_from_entropy(
+        &mut self,
+    ) -> EntryStoreHandlerResult<(KeystoreIndex, Arc<LairEntry>)> {
+        Ok(
+            new_x25519_keypair(self.i_s.clone(), self.store_file.clone())
                 .boxed()
                 .into(),
         )
@@ -270,6 +290,19 @@ async fn new_sign_ed25519_keypair(
     Ok((entry_index, entry))
 }
 
+async fn new_x25519_keypair(
+    i_s: ghost_actor::GhostSender<EntryStoreInternal>,
+    store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
+) -> LairResult<(KeystoreIndex, Arc<LairEntry>)> {
+    let entry = Arc::new(LairEntry::X25519(
+        x25519::x25519_keypair_new_from_entropy().await?,
+    ));
+    let encoded_entry = entry.encode()?;
+    let entry_index = store_file.write_next_entry(encoded_entry).await?;
+    i_s.finalize_new_entry(entry_index, entry.clone()).await?;
+    Ok((entry_index, entry))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -292,11 +325,20 @@ mod tests {
         };
     }
 
+    macro_rules! as_x25519 {
+        ($e:ident) => {
+            let $e = match &*$e {
+                LairEntry::X25519(e) => e,
+                _ => panic!("unexpected"),
+            };
+        };
+    }
+
     #[tokio::test(threaded_scheduler)]
     async fn it_can_store_and_retrieve_entries_from_disk() {
         let tmpdir = tempfile::tempdir().unwrap();
 
-        let (cert, sign) = {
+        let (cert, sign, x25519) = {
             let config = Config::builder().set_root_path(tmpdir.path()).build();
 
             let store_file_path = config.get_store_path().to_owned();
@@ -320,14 +362,19 @@ mod tests {
                 store.sign_ed25519_keypair_new_from_entropy().await.unwrap();
             assert_eq!(2, sign_index.0);
 
+            let (x25519_index, x25519) =
+                store.x25519_keypair_new_from_entropy().await.unwrap();
+            assert_eq!(3, x25519_index.0);
+
             use ghost_actor::GhostControlSender;
             store.ghost_actor_shutdown().await.unwrap();
             drop(store);
 
-            (cert, sign)
+            (cert, sign, x25519)
         };
         as_cert!(cert);
         as_sign!(sign);
+        as_x25519!(x25519);
 
         let config = Config::builder().set_root_path(tmpdir.path()).build();
 
@@ -342,11 +389,14 @@ mod tests {
 
         let r_cert = store.get_entry_by_index(1.into()).await.unwrap();
         let r_sign = store.get_entry_by_index(2.into()).await.unwrap();
+        let r_x25519 = store.get_entry_by_index(3.into()).await.unwrap();
         as_cert!(r_cert);
         as_sign!(r_sign);
+        as_x25519!(r_x25519);
 
         assert_eq!(cert.cert_digest, r_cert.cert_digest);
         assert_eq!(sign.pub_key, r_sign.pub_key);
+        assert_eq!(x25519.pub_key, r_x25519.pub_key);
 
         let (r_cert_index, r_cert) = store
             .get_entry_by_pub_id(cert.cert_digest.0.clone())
@@ -363,6 +413,14 @@ mod tests {
         as_sign!(r_sign);
         assert_eq!(2, r_sign_index.0);
         assert_eq!(sign.pub_key, r_sign.pub_key);
+
+        let (r_x25519_index, r_x25519) = store
+            .get_entry_by_pub_id(Arc::new(x25519.pub_key.to_bytes().to_vec()))
+            .await
+            .unwrap();
+        as_x25519!(r_x25519);
+        assert_eq!(3, r_x25519_index.0);
+        assert_eq!(x25519.pub_key, r_x25519.pub_key);
 
         let (r_cert_index, r_cert) =
             store.get_entry_by_sni(cert.sni.clone()).await.unwrap();

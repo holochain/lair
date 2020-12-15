@@ -1,6 +1,9 @@
 use super::*;
+use crate::internal::crypto_box;
 use crate::internal::ipc::*;
+use crate::internal::sign_ed25519;
 use crate::internal::wire::*;
+use crate::internal::x25519;
 use futures::{future::FutureExt, stream::StreamExt};
 
 #[allow(clippy::single_match)]
@@ -336,7 +339,10 @@ impl LairClientApiHandler for Internal {
 
     fn handle_sign_ed25519_new_from_entropy(
         &mut self,
-    ) -> LairClientApiHandlerResult<(KeystoreIndex, SignEd25519PubKey)> {
+    ) -> LairClientApiHandlerResult<(
+        KeystoreIndex,
+        sign_ed25519::SignEd25519PubKey,
+    )> {
         let fut = self.kill_switch.mix_static(self.ipc_send.request(
             LairWire::ToLairSignEd25519NewFromEntropy {
                 msg_id: next_msg_id(),
@@ -359,7 +365,7 @@ impl LairClientApiHandler for Internal {
     fn handle_sign_ed25519_get(
         &mut self,
         keystore_index: KeystoreIndex,
-    ) -> LairClientApiHandlerResult<SignEd25519PubKey> {
+    ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519PubKey> {
         let fut = self.kill_switch.mix_static(self.ipc_send.request(
             LairWire::ToLairSignEd25519Get {
                 msg_id: next_msg_id(),
@@ -382,7 +388,7 @@ impl LairClientApiHandler for Internal {
         &mut self,
         keystore_index: KeystoreIndex,
         message: Arc<Vec<u8>>,
-    ) -> LairClientApiHandlerResult<SignEd25519Signature> {
+    ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519Signature> {
         let fut = self.kill_switch.mix_static(self.ipc_send.request(
             LairWire::ToLairSignEd25519SignByIndex {
                 msg_id: next_msg_id(),
@@ -405,9 +411,9 @@ impl LairClientApiHandler for Internal {
 
     fn handle_sign_ed25519_sign_by_pub_key(
         &mut self,
-        pub_key: SignEd25519PubKey,
+        pub_key: sign_ed25519::SignEd25519PubKey,
         message: Arc<Vec<u8>>,
-    ) -> LairClientApiHandlerResult<SignEd25519Signature> {
+    ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519Signature> {
         let fut = self.kill_switch.mix_static(self.ipc_send.request(
             LairWire::ToLairSignEd25519SignByPubKey {
                 msg_id: next_msg_id(),
@@ -421,6 +427,154 @@ impl LairClientApiHandler for Internal {
                     signature,
                     ..
                 } => Ok(signature),
+                o => Err(format!("unexpected: {:?}", o).into()),
+            }
+        }
+        .boxed()
+        .into())
+    }
+
+    fn handle_x25519_new_from_entropy(
+        &mut self,
+    ) -> LairClientApiHandlerResult<(KeystoreIndex, x25519::X25519PubKey)> {
+        let fut = self.kill_switch.mix_static(self.ipc_send.request(
+            LairWire::ToLairX25519NewFromEntropy {
+                msg_id: next_msg_id(),
+            },
+        ));
+        Ok(async move {
+            match fut.await? {
+                LairWire::ToCliX25519NewFromEntropyResponse {
+                    keystore_index,
+                    pub_key,
+                    ..
+                } => Ok((keystore_index, pub_key)),
+                o => Err(format!("unexpected: {:?}", o).into()),
+            }
+        }
+        .boxed()
+        .into())
+    }
+
+    fn handle_x25519_get(
+        &mut self,
+        keystore_index: KeystoreIndex,
+    ) -> LairClientApiHandlerResult<x25519::X25519PubKey> {
+        let fut = self.kill_switch.mix_static(self.ipc_send.request(
+            LairWire::ToLairX25519Get {
+                msg_id: next_msg_id(),
+                keystore_index,
+            },
+        ));
+        Ok(async move {
+            match fut.await? {
+                LairWire::ToCliX25519GetResponse { pub_key, .. } => Ok(pub_key),
+                o => Err(format!("unexpected: {:?}", o).into()),
+            }
+        }
+        .boxed()
+        .into())
+    }
+
+    fn handle_crypto_box_by_index(
+        &mut self,
+        keystore_index: KeystoreIndex,
+        recipient: x25519::X25519PubKey,
+        data: Arc<crypto_box::CryptoBoxData>,
+    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxEncryptedData> {
+        let fut = self.kill_switch.mix_static(self.ipc_send.request(
+            LairWire::ToLairCryptoBoxByIndex {
+                msg_id: next_msg_id(),
+                keystore_index,
+                recipient,
+                data,
+            },
+        ));
+        Ok(async move {
+            match fut.await? {
+                LairWire::ToCliCryptoBoxByIndexResponse {
+                    encrypted_data,
+                    ..
+                } => Ok(encrypted_data),
+                o => Err(format!("unexpected: {:?}", o).into()),
+            }
+        }
+        .boxed()
+        .into())
+    }
+
+    fn handle_crypto_box_by_pub_key(
+        &mut self,
+        pub_key: x25519::X25519PubKey,
+        recipient: x25519::X25519PubKey,
+        data: Arc<crypto_box::CryptoBoxData>,
+    ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxEncryptedData> {
+        let fut = self.kill_switch.mix_static(self.ipc_send.request(
+            LairWire::ToLairCryptoBoxByPubKey {
+                msg_id: next_msg_id(),
+                pub_key,
+                recipient,
+                data,
+            },
+        ));
+        Ok(async move {
+            match fut.await? {
+                LairWire::ToCliCryptoBoxByPubKeyResponse {
+                    encrypted_data,
+                    ..
+                } => Ok(encrypted_data),
+                o => Err(format!("unexpected: {:?}", o).into()),
+            }
+        }
+        .boxed()
+        .into())
+    }
+
+    fn handle_crypto_box_open_by_index(
+        &mut self,
+        keystore_index: KeystoreIndex,
+        sender: x25519::X25519PubKey,
+        encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
+    ) -> LairClientApiHandlerResult<Option<crypto_box::CryptoBoxData>> {
+        let fut = self.kill_switch.mix_static(self.ipc_send.request(
+            LairWire::ToLairCryptoBoxOpenByIndex {
+                msg_id: next_msg_id(),
+                keystore_index,
+                sender,
+                encrypted_data,
+            },
+        ));
+        Ok(async move {
+            match fut.await? {
+                LairWire::ToCliCryptoBoxOpenByIndexResponse {
+                    data, ..
+                } => Ok(data),
+                o => Err(format!("unexpected: {:?}", o).into()),
+            }
+        }
+        .boxed()
+        .into())
+    }
+
+    fn handle_crypto_box_open_by_pub_key(
+        &mut self,
+        pub_key: x25519::X25519PubKey,
+        sender: x25519::X25519PubKey,
+        encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
+    ) -> LairClientApiHandlerResult<Option<crypto_box::CryptoBoxData>> {
+        let fut = self.kill_switch.mix_static(self.ipc_send.request(
+            LairWire::ToLairCryptoBoxOpenByPubKey {
+                msg_id: next_msg_id(),
+                pub_key,
+                sender,
+                encrypted_data,
+            },
+        ));
+        Ok(async move {
+            match fut.await? {
+                LairWire::ToCliCryptoBoxOpenByPubKeyResponse {
+                    data, ..
+                } => Ok(data),
                 o => Err(format!("unexpected: {:?}", o).into()),
             }
         }

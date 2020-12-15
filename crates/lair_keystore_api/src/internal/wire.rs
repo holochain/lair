@@ -1,6 +1,10 @@
 //! Lair Wire Protocol Utilities
 
-use crate::{actor::*, internal::codec, *};
+use crate::{
+    actor::*, internal::codec, internal::crypto_box, internal::sign_ed25519,
+    internal::x25519, *,
+};
+use std::convert::TryInto;
 
 macro_rules! default_encode_setup {
     ($msg_id:ident, $wire_type:ident) => {{
@@ -366,7 +370,7 @@ macro_rules! wire_type_meta_macro {
             },
             ToCliSignEd25519NewFromEntropyResponse 0x00000211 false false {
                 keystore_index: KeystoreIndex,
-                pub_key: SignEd25519PubKey,
+                pub_key: sign_ed25519::SignEd25519PubKey,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
                 writer.write_u32(**keystore_index)?;
@@ -397,7 +401,7 @@ macro_rules! wire_type_meta_macro {
                 }
             },
             ToCliSignEd25519GetResponse 0x00000221 false false {
-                pub_key: SignEd25519PubKey,
+                pub_key: sign_ed25519::SignEd25519PubKey,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
                 writer.write_bytes_exact(pub_key, 32)?;
@@ -439,7 +443,7 @@ macro_rules! wire_type_meta_macro {
                 }
             },
             ToCliSignEd25519SignByIndexResponse 0x00000231 false false {
-                signature: SignEd25519Signature,
+                signature: sign_ed25519::SignEd25519Signature,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
                 writer.write_bytes_exact(signature, 64)?;
@@ -453,7 +457,7 @@ macro_rules! wire_type_meta_macro {
                 }
             },
             ToLairSignEd25519SignByPubKey 0x00000240 false true {
-                pub_key: SignEd25519PubKey,
+                pub_key: sign_ed25519::SignEd25519PubKey,
                 message: Arc<Vec<u8>>,
             } |msg_id, wire_type| {
                 // outgoing sig requests just need to be the right size...
@@ -481,7 +485,7 @@ macro_rules! wire_type_meta_macro {
                 }
             },
             ToCliSignEd25519SignByPubKeyResponse 0x00000241 false false {
-                signature: SignEd25519Signature,
+                signature: sign_ed25519::SignEd25519Signature,
             } |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
                 writer.write_bytes_exact(signature, 64)?;
@@ -492,6 +496,340 @@ macro_rules! wire_type_meta_macro {
                 LairWire::ToCliSignEd25519SignByPubKeyResponse {
                     msg_id,
                     signature: signature.into(),
+                }
+            },
+            ToLairX25519NewFromEntropy 0x00000242 false true {
+            } |msg_id, wire_type| {
+                let writer = default_encode_setup!(msg_id, wire_type);
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                LairWire::ToLairX25519NewFromEntropy { msg_id }
+            },
+            ToCliX25519NewFromEntropyResponse 0x00000243 false false {
+                keystore_index: KeystoreIndex,
+                pub_key: x25519::X25519PubKey,
+            } |msg_id, wire_type| {
+                let mut writer = default_encode_setup!(msg_id, wire_type);
+                writer.write_u32(**keystore_index)?;
+                writer.write_bytes_exact(AsRef::<[u8]>::as_ref(pub_key), 32)?;
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                let keystore_index = reader.read_u32()?;
+                let pub_key = reader.read_bytes(32)?.try_into()?;
+                LairWire::ToCliX25519NewFromEntropyResponse {
+                    msg_id,
+                    keystore_index: keystore_index.into(),
+                    pub_key,
+                }
+            },
+            ToLairX25519Get 0x00000244 false true {
+                keystore_index: KeystoreIndex,
+            } |msg_id, wire_type| {
+                let mut writer = default_encode_setup!(msg_id, wire_type);
+                writer.write_u32(**keystore_index)?;
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                let keystore_index = reader.read_u32()?;
+                LairWire::ToLairX25519Get {
+                    msg_id,
+                    keystore_index: keystore_index.into(),
+                }
+            },
+            ToCliX25519GetResponse 0x00000245 false false {
+                pub_key: x25519::X25519PubKey,
+            } |msg_id, wire_type| {
+                let mut writer = default_encode_setup!(msg_id, wire_type);
+                writer.write_bytes_exact(AsRef::<[u8]>::as_ref(pub_key), 32)?;
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                let pub_key = reader.read_bytes(32)?.try_into()?;
+                LairWire::ToCliX25519GetResponse {
+                    msg_id,
+                    pub_key,
+                }
+            },
+            ToLairCryptoBoxByIndex 0x00000246 false true {
+                keystore_index: KeystoreIndex,
+                recipient: x25519::X25519PubKey,
+                data: Arc<crypto_box::CryptoBoxData>,
+            } |msg_id, wire_type| {
+                let size = 4 // msg len
+                    + 4 // msg type
+                    + 8 // msg id
+                    + 4 // keystore index
+                    + 32 // recipient pub key
+                    + 8 // data length
+                    + data.len(); // data content
+                let mut writer = codec::CodecWriter::new_zeroed(size)?;
+                writer.write_u32(size as u32)?;
+                writer.write_u32(wire_type)?;
+                writer.write_u64(*msg_id)?;
+                writer.write_u32(**keystore_index)?;
+                writer.write_bytes_exact(AsRef::<[u8]>::as_ref(recipient), 32)?;
+                writer.write_sized_bytes(AsRef::<[u8]>::as_ref(&**data), data.len())?;
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                let keystore_index = reader.read_u32()?.into();
+                let recipient = reader.read_bytes(32)?.try_into()?;
+                let data = Arc::new(reader.read_sized_bytes()?.into());
+                LairWire::ToLairCryptoBoxByIndex {
+                    msg_id,
+                    keystore_index,
+                    recipient,
+                    data,
+                }
+            },
+            ToCliCryptoBoxByIndexResponse 0x00000247 false false {
+                encrypted_data: crypto_box::CryptoBoxEncryptedData,
+            } |msg_id, wire_type| {
+                let size = 4 // msg len
+                    + 4 // msg type
+                    + 8 // msg id
+                    + 24 // nonce length
+                    + 8 // encrypted data length
+                    + encrypted_data.encrypted_data.len(); // encrypted data
+                let mut writer = codec::CodecWriter::new_zeroed(size)?;
+                writer.write_u32(size as u32)?;
+                writer.write_u32(wire_type)?;
+                writer.write_u64(*msg_id)?;
+                writer.write_bytes_exact(AsRef::<[u8]>::as_ref(&encrypted_data.nonce), 24)?;
+                writer.write_sized_bytes(AsRef::<[u8]>::as_ref(&**encrypted_data.encrypted_data), encrypted_data.encrypted_data.len())?;
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                let nonce = reader.read_bytes(24)?.try_into()?;
+                let encrypted_data = Arc::new(reader.read_sized_bytes()?.into());
+                LairWire::ToCliCryptoBoxByIndexResponse {
+                    msg_id,
+                    encrypted_data: crypto_box::CryptoBoxEncryptedData{
+                        nonce,
+                        encrypted_data,
+                    }
+                }
+            },
+            ToLairCryptoBoxByPubKey 0x00000248 false true {
+                pub_key: x25519::X25519PubKey,
+                recipient: x25519::X25519PubKey,
+                data: Arc<crypto_box::CryptoBoxData>,
+            } |msg_id, wire_type| {
+                let size = 4 // msg len
+                    + 4 // msg type
+                    + 8 // msg id
+                    + 32 // pub key
+                    + 32 // recipient
+                    + 8 // data length
+                    + data.len(); // data content
+                let mut writer = codec::CodecWriter::new_zeroed(size)?;
+                writer.write_u32(size as u32)?;
+                writer.write_u32(wire_type)?;
+                writer.write_u64(*msg_id)?;
+                writer.write_bytes_exact(AsRef::<[u8]>::as_ref(pub_key), 32)?;
+                writer.write_bytes_exact(AsRef::<[u8]>::as_ref(recipient), 32)?;
+                writer.write_sized_bytes(AsRef::<[u8]>::as_ref(&**data), data.len())?;
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                let pub_key = reader.read_bytes(32)?.try_into()?;
+                let recipient = reader.read_bytes(32)?.try_into()?;
+                let data = Arc::new(reader.read_sized_bytes()?.into());
+                LairWire::ToLairCryptoBoxByPubKey {
+                    msg_id,
+                    pub_key,
+                    recipient,
+                    data,
+                }
+            },
+            ToCliCryptoBoxByPubKeyResponse 0x00000249 false false {
+                encrypted_data: crypto_box::CryptoBoxEncryptedData,
+            } |msg_id, wire_type| {
+                let size = 4 // msg len
+                    + 4 // msg type
+                    + 8 // msg id
+                    + 24 // nonce length
+                    + 8 // encrypted data length
+                    + encrypted_data.encrypted_data.len(); // encrypted data
+                let mut writer = codec::CodecWriter::new_zeroed(size)?;
+                writer.write_u32(size as u32)?;
+                writer.write_u32(wire_type)?;
+                writer.write_u64(*msg_id)?;
+                writer.write_bytes_exact(AsRef::<[u8]>::as_ref(&encrypted_data.nonce), 24)?;
+                writer.write_sized_bytes(AsRef::<[u8]>::as_ref(&**encrypted_data.encrypted_data), encrypted_data.encrypted_data.len())?;
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                let nonce = reader.read_bytes(24)?.try_into()?;
+                let encrypted_data = Arc::new(reader.read_sized_bytes()?.into());
+                LairWire::ToCliCryptoBoxByPubKeyResponse {
+                    msg_id,
+                    encrypted_data: crypto_box::CryptoBoxEncryptedData {
+                        nonce,
+                        encrypted_data,
+                    }
+                }
+            },
+            ToLairCryptoBoxOpenByIndex 0x00000250 false true {
+                keystore_index: KeystoreIndex,
+                sender: x25519::X25519PubKey,
+                encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
+            } |msg_id, wire_type| {
+                let size = 4 // msg len
+                    + 4 // msg type
+                    + 8 // msg id
+                    + 4 // keystore index
+                    + 32 // sender pub key
+                    + 24 // nonce length
+                    + 8 // encrypted data length
+                    + encrypted_data.encrypted_data.len(); // encrypted data
+                let mut writer = codec::CodecWriter::new_zeroed(size)?;
+                writer.write_u32(size as u32)?;
+                writer.write_u32(wire_type)?;
+                writer.write_u64(*msg_id)?;
+                writer.write_u32(**keystore_index)?;
+                writer.write_bytes_exact(AsRef::<[u8]>::as_ref(sender), 32)?;
+                writer.write_bytes_exact(AsRef::<[u8]>::as_ref(&encrypted_data.nonce), 24)?;
+                writer.write_sized_bytes(AsRef::<[u8]>::as_ref(&**encrypted_data.encrypted_data), encrypted_data.encrypted_data.len())?;
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                let keystore_index = reader.read_u32()?.into();
+                let sender = reader.read_bytes(32)?.try_into()?;
+                let nonce = reader.read_bytes(24)?.try_into()?;
+                let data = Arc::new(reader.read_sized_bytes()?.into());
+                LairWire::ToLairCryptoBoxOpenByIndex {
+                    msg_id,
+                    keystore_index,
+                    sender,
+                    encrypted_data: Arc::new(crypto_box::CryptoBoxEncryptedData {
+                        nonce,
+                        encrypted_data: data,
+                    }),
+                }
+            },
+            ToCliCryptoBoxOpenByIndexResponse 0x00000251 false false {
+                data: Option<crypto_box::CryptoBoxData>,
+            } |msg_id, wire_type| {
+                let inner_data = match data {
+                    Some(inner) => inner.data.to_vec(),
+                    None => vec![],
+                };
+                let size = 4 // msg len
+                    + 4 // msg type
+                    + 8 // msg id
+                    + 1 // is some?
+                    + 8 // data length
+                    + inner_data.len(); // data
+                let mut writer = codec::CodecWriter::new_zeroed(size)?;
+                writer.write_u32(size as u32)?;
+                writer.write_u32(wire_type)?;
+                writer.write_u64(*msg_id)?;
+
+                let some_byte = if data.is_some() {
+                    1
+                }
+                else {
+                    0
+                };
+                writer.write_bytes_exact(&[some_byte], 1)?;
+                writer.write_sized_bytes(AsRef::<[u8]>::as_ref(&inner_data), inner_data.len())?;
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                let some_byte = reader.read_bytes(1)?[0];
+                let data_bytes = reader.read_sized_bytes()?.into();
+                let data = if some_byte == 1 {
+                    Some(data_bytes)
+                }
+                else {
+                    None
+                };
+                LairWire::ToCliCryptoBoxOpenByIndexResponse {
+                    msg_id,
+                    data,
+                }
+            },
+            ToLairCryptoBoxOpenByPubKey 0x00000252 false true {
+                pub_key: x25519::X25519PubKey,
+                sender: x25519::X25519PubKey,
+                encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
+            } |msg_id, wire_type| {
+                let size = 4 // msg len
+                    + 4 // msg type
+                    + 8 // msg id
+                    + 32 // pub key
+                    + 32 // sender pub key
+                    + 24 // nonce length
+                    + 8 // encrypted data length
+                    + encrypted_data.encrypted_data.len(); // encrypted data
+                let mut writer = codec::CodecWriter::new_zeroed(size)?;
+                writer.write_u32(size as u32)?;
+                writer.write_u32(wire_type)?;
+                writer.write_u64(*msg_id)?;
+                writer.write_bytes_exact(AsRef::<[u8]>::as_ref(pub_key), 32)?;
+                writer.write_bytes_exact(AsRef::<[u8]>::as_ref(sender), 32)?;
+                writer.write_bytes_exact(AsRef::<[u8]>::as_ref(&encrypted_data.nonce), 24)?;
+                writer.write_sized_bytes(AsRef::<[u8]>::as_ref(&**encrypted_data.encrypted_data), encrypted_data.encrypted_data.len())?;
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                let pub_key = reader.read_bytes(32)?.try_into()?;
+                let sender = reader.read_bytes(32)?.try_into()?;
+                let nonce = reader.read_bytes(24)?.try_into()?;
+                let encrypted_data = Arc::new(reader.read_sized_bytes()?.into());
+                LairWire::ToLairCryptoBoxOpenByPubKey {
+                    msg_id,
+                    pub_key,
+                    sender,
+                    encrypted_data: Arc::new(crypto_box::CryptoBoxEncryptedData {
+                        nonce,
+                        encrypted_data,
+                    }),
+                }
+            },
+            ToCliCryptoBoxOpenByPubKeyResponse 0x00000253 false false {
+                data: Option<crypto_box::CryptoBoxData>,
+            } |msg_id, wire_type| {
+                let inner_data = match data {
+                    Some(inner) => inner.data.to_vec(),
+                    None => vec![],
+                };
+                let size = 4 // msg len
+                    + 4 // msg type
+                    + 8 // msg id
+                    + 1 // is some?
+                    + 8 // data length
+                    + inner_data.len(); // data
+                let mut writer = codec::CodecWriter::new_zeroed(size)?;
+                writer.write_u32(size as u32)?;
+                writer.write_u32(wire_type)?;
+                writer.write_u64(*msg_id)?;
+
+                let some_byte = if data.is_some() {
+                    1
+                }
+                else {
+                    0
+                };
+                writer.write_bytes_exact(&[some_byte], 1)?;
+                writer.write_sized_bytes(AsRef::<[u8]>::as_ref(&inner_data), inner_data.len())?;
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                let some_byte = reader.read_bytes(1)?[0];
+                let data_bytes = reader.read_sized_bytes()?.into();
+                let data = if some_byte == 1 {
+                    Some(data_bytes)
+                }
+                else {
+                    None
+                };
+                LairWire::ToCliCryptoBoxOpenByPubKeyResponse {
+                    msg_id,
+                    data,
                 }
             },
         }
@@ -737,8 +1075,22 @@ pub(crate) mod tests {
     test_val!(CertPrivKey, vec![0x42; 32].into());
     test_val!(CertSni, "test-val".to_string().into());
     test_val!(CertDigest, vec![0x42; 32].into());
-    test_val!(SignEd25519PubKey, vec![0x42; 32].into());
-    test_val!(SignEd25519Signature, vec![0x42; 64].into());
+    test_val!(sign_ed25519::SignEd25519PubKey, vec![0x42; 32].into());
+    test_val!(sign_ed25519::SignEd25519Signature, vec![0x42; 64].into());
+    test_val!(x25519::X25519PubKey, [0x42; 32].into());
+    test_val!(x25519::X25519PrivKey, [0x42; 32].into());
+    test_val!(crypto_box::CryptoBoxData, vec![42_u8; 20].into());
+    test_val!(
+        Option<crypto_box::CryptoBoxData>,
+        Some(vec![42_u8; 20].into())
+    );
+    test_val!(
+        crypto_box::CryptoBoxEncryptedData,
+        crypto_box::CryptoBoxEncryptedData {
+            nonce: [42_u8; 24].into(),
+            encrypted_data: vec![42_u8; 20].into(),
+        }
+    );
 
     macro_rules! lair_wire_enum_test {
         ($(
