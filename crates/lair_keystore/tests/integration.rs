@@ -12,7 +12,7 @@ fn init_tracing() {
     );
 }
 
-#[tokio::test(threaded_scheduler)]
+#[tokio::test(flavor = "multi_thread")]
 async fn lair_integration_test() -> lair_keystore_api::LairResult<()> {
     init_tracing();
 

@@ -119,7 +119,7 @@ pub async fn sign_ed25519_verify(
 mod tests {
     use super::*;
 
-    #[tokio::test(threaded_scheduler)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn it_can_sign_and_verify() {
         let msg = Arc::new(vec![0, 1, 2, 3]);
 

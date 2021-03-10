@@ -334,7 +334,7 @@ mod tests {
         };
     }
 
-    #[tokio::test(threaded_scheduler)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn it_can_store_and_retrieve_entries_from_disk() {
         let tmpdir = tempfile::tempdir().unwrap();
 
