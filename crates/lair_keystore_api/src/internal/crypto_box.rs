@@ -239,7 +239,7 @@ pub async fn crypto_box_open(
 mod tests {
     use super::*;
 
-    #[tokio::test(threaded_scheduler)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn it_can_encrypt_and_decrypt() {
         for input in [
             // Empty vec.

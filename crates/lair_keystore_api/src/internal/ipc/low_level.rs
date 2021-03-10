@@ -16,6 +16,7 @@ pub(crate) type LowLevelWireSender =
 pub(crate) type LowLevelWireReceiver =
     futures::channel::mpsc::Receiver<LowLevelWireApi>;
 
+#[allow(clippy::unnecessary_wraps)]
 pub(crate) fn spawn_low_level_write_half(
     kill_switch: KillSwitch,
     mut write_half: IpcWrite,
@@ -60,6 +61,7 @@ pub(crate) fn spawn_low_level_write_half(
     Ok(s)
 }
 
+#[allow(clippy::unnecessary_wraps)]
 pub(crate) fn spawn_low_level_read_half(
     kill_switch: KillSwitch,
     mut read_half: IpcRead,
