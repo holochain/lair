@@ -153,9 +153,12 @@ impl LairClientApiHandler for Internal {
     fn handle_lair_get_server_info(
         &mut self,
     ) -> LairClientApiHandlerResult<LairServerInfo> {
-        let mut out = LairServerInfo::default();
-        out.name = "[LAIR-TEST-KEYSTORE]".to_string();
-        out.version = crate::LAIR_VER.to_string();
+        let out = LairServerInfo {
+            name: "[LAIR-TEST-KEYSTORE]".to_string(),
+            version: crate::LAIR_VER.to_string(),
+
+            ..Default::default()
+        };
 
         Ok(async move { Ok(out) }.boxed().into())
     }
