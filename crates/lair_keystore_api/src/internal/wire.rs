@@ -19,6 +19,21 @@ macro_rules! default_encode_setup {
 macro_rules! wire_type_meta_macro {
     ($macro_name:ident) => {
         $macro_name! {
+            ErrorResponse 0xffffffff false false {
+                message: String,
+            }
+            |msg_id, wire_type| {
+                let mut writer = default_encode_setup!(msg_id, wire_type);
+                writer.write_str(&message, 128)?;
+                Ok(writer.into_vec())
+            } |reader| {
+                let msg_id = reader.read_u64()?;
+                let message = reader.read_str()?;
+                LairWire::ErrorResponse {
+                    msg_id,
+                    message,
+                }
+            },
             ToCliRequestUnlockPassphrase 0xff000010 true true {
             } |msg_id, wire_type| {
                 let writer = default_encode_setup!(msg_id, wire_type);
