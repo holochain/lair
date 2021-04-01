@@ -875,7 +875,7 @@ macro_rules! lair_wire_type_enum {
                             LairWireType::$variant
                         }
                     )*
-                    _ => return Err("invalide wire type".into()),
+                    _ => return Err("invalid wire type".into()),
                 })
             }
         }

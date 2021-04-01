@@ -42,14 +42,14 @@ pub type IncomingIpcReceiver = futures::channel::mpsc::Receiver<(
 )>;
 
 ghost_actor::ghost_chan! {
-    /// Ipc wire api for both incoming api requsets and outgoing event requests.
+    /// Ipc wire api for both incoming api requests and outgoing event requests.
     pub chan IpcWireApi<LairError> {
         /// Make an Ipc request.
         fn request(msg: LairWire) -> LairWire;
     }
 }
 
-/// Spawn/bind a new ipc listener connection awaiting incomming clients.
+/// Spawn/bind a new ipc listener connection awaiting incoming clients.
 pub async fn spawn_bind_ipc(
     config: Arc<Config>,
 ) -> LairResult<(KillSwitch, IncomingIpcReceiver)> {

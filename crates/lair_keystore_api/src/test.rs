@@ -156,8 +156,6 @@ impl LairClientApiHandler for Internal {
         let out = LairServerInfo {
             name: "[LAIR-TEST-KEYSTORE]".to_string(),
             version: crate::LAIR_VER.to_string(),
-
-            ..Default::default()
         };
 
         Ok(async move { Ok(out) }.boxed().into())
