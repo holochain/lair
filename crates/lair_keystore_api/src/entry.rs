@@ -269,7 +269,7 @@ mod tests {
         let d = LairEntry::from(e.clone()).encode().unwrap();
         let e2 = match LairEntry::decode(&d).unwrap() {
             LairEntry::X25519(e2) => e2,
-            e2 @ _ => panic!("unexpected type: {:?}", e2),
+            e2 => panic!("unexpected type: {:?}", e2),
         };
         assert_eq!(e.priv_key, e2.priv_key);
         assert_eq!(e.pub_key, e2.pub_key);
@@ -284,7 +284,7 @@ mod tests {
         let d = LairEntry::from(e.clone()).encode().unwrap();
         let e2 = match LairEntry::decode(&d).unwrap() {
             LairEntry::SignEd25519(e2) => e2,
-            e2 @ _ => panic!("unexpected type: {:?}", e2),
+            e2 => panic!("unexpected type: {:?}", e2),
         };
         assert_eq!(e.priv_key, e2.priv_key);
         assert_eq!(e.pub_key, e2.pub_key);
@@ -301,7 +301,7 @@ mod tests {
         let d = LairEntry::from(e.clone()).encode().unwrap();
         let e2 = match LairEntry::decode(&d).unwrap() {
             LairEntry::TlsCert(e2) => e2,
-            e2 @ _ => panic!("unexpected type: {:?}", e2),
+            e2 => panic!("unexpected type: {:?}", e2),
         };
         assert_eq!(e.sni, e2.sni);
         assert_eq!(e.priv_key_der, e2.priv_key_der);

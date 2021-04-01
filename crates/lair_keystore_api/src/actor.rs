@@ -50,7 +50,7 @@ impl TlsCertAlg {
             x if x == PkcsEd25519 as u32 => PkcsEd25519,
             x if x == PkcsEcdsaP256Sha256 as u32 => PkcsEcdsaP256Sha256,
             x if x == PkcsEcdsaP384Sha384 as u32 => PkcsEcdsaP384Sha384,
-            _ => return Err("invalide tls cert alg".into()),
+            _ => return Err("invalid tls cert alg".into()),
         })
     }
 }
