@@ -85,6 +85,7 @@ impl InternalApiHandler for Internal {
 impl ghost_actor::GhostHandler<LairClientApi> for Internal {}
 
 impl lair_keystore_api::actor::LairClientApiHandler for Internal {
+    #[allow(clippy::field_reassign_with_default)]
     fn handle_lair_get_server_info(
         &mut self,
     ) -> LairClientApiHandlerResult<LairServerInfo> {

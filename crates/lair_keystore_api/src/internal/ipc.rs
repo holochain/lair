@@ -205,14 +205,14 @@ impl IpcWireApiHandler for Internal {
         let weak_kill_switch = self.kill_switch.weak();
         Ok(async move {
             fut.await?;
-            Ok(weak_kill_switch
+            weak_kill_switch
                 .mix(async move {
                     trace!("await incoming request...");
                     let res = recv.await.map_err(LairError::other);
                     trace!(?res, "respond to incoming request");
                     res
                 })
-                .await?)
+                .await
         }
         .boxed()
         .into())
