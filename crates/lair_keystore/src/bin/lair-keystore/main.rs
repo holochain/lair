@@ -13,7 +13,7 @@ struct Opt {
     version: bool,
 
     /// Set the lair data directory.
-    #[structopt(short = "d", long, env = "LAIR_DIR")]
+    #[structopt(short = "d", long, env = "LAIR_DIR", help = "lair will run as an IPC process using this directory as its root for all aspects of persistence. a platform specific dir will be used as a default equal to directories::ProjectDirs::from(\"host\", \"Holo\", \"Lair\")"))]
     lair_dir: Option<std::path::PathBuf>,
 }
 
