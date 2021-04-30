@@ -28,7 +28,7 @@ pub async fn execute_lair() -> LairResult<()> {
     }
 
     let config = config.build();
-    
+
     println!("#lair-keystore-dir:{:?}#", config.get_root_path());
 
     let internal::pid_check::PidCheckResult { store_file } =
