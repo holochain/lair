@@ -28,6 +28,8 @@ pub async fn execute_lair() -> LairResult<()> {
     }
 
     let config = config.build();
+    
+    println!("Directory in use by lair: {}", config.root_path.clone());
 
     let internal::pid_check::PidCheckResult { store_file } =
         internal::pid_check::pid_check(&config)?;
