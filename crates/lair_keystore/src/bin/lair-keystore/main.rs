@@ -5,15 +5,19 @@
 use structopt::StructOpt;
 use tracing::*;
 
+static LAIR_KEYSTORE_ABOUT: &str = r#"A secure storage system for Holochain cryptographic keys and secrets.
+
+- one `lair-keystore` per `holochain`
+- attaches the secure storage and IPC process
+    to a directory configurable via command
+    line options. a sensible platform specific
+    dir will be used as a default dir (and be
+    logged when executed)"#;
+
 #[derive(Debug, StructOpt)]
 #[structopt(
-    name = "lair-keystore"
-    help = "lair-keystore runs an IPC process for handling the most private data (like private keys) on behalf of Holochain with a very high regard for security.
-    One and only one `holochain` instance should talk to one `lair-keystore` instance.
-    lair-keystore runs tied to a configurable directory.
-    If multiple lair-keystore instances are run they must be run from separate directories.
-    A platform specific directory will be used as a default which will be equal to directories::ProjectDirs::from(\"host\", \"Holo\", \"Lair\")
-    https://docs.rs/directories/3.0.2/directories/struct.ProjectDirs.html#examples"
+    name = "lair-keystore",
+    about = LAIR_KEYSTORE_ABOUT
 )]
 struct Opt {
     /// Print out version info and exit.
@@ -25,7 +29,8 @@ struct Opt {
         short = "d",
         long,
         env = "LAIR_DIR",
-        help = "Can be used to override the default keystore directory to run multiple instances or for other purposes"
+        help = "Can be used to override the default keystore
+directory to run multiple instances or for other purposes"
     )]
     lair_dir: Option<std::path::PathBuf>,
 }
