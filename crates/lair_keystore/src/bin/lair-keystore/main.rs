@@ -25,7 +25,7 @@ struct Opt {
         short = "d",
         long,
         env = "LAIR_DIR",
-        help = "lair will run as an IPC process using this directory as its root for all aspects of persistence. a platform specific dir will be used as a default equal to directories::ProjectDirs::from(\"host\", \"Holo\", \"Lair\")"
+        help = "Can be used to override the default keystore directory to run multiple instances or for other purposes"
     )]
     lair_dir: Option<std::path::PathBuf>,
 }
