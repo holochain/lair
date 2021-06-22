@@ -40,3 +40,7 @@ path = "src/bin/lair-keystore/main.rs"
 [[bench]]
 name = "signature_generation"
 harness = false
+
+[[bench]]
+name = "parallel_key_generation"
+harness = false
