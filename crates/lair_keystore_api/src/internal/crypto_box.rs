@@ -197,8 +197,8 @@ pub async fn crypto_box(
         // @todo do we want associated data to enforce the originating DHT space?
         // https://eprint.iacr.org/2019/519.pdf for 'context separable interfaces'
         Ok(CryptoBoxEncryptedData {
-            encrypted_data,
             nonce,
+            encrypted_data,
         })
     })
     .await
