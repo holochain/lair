@@ -54,7 +54,7 @@ async fn wait_ready(stdout_path: &std::path::Path) -> LairResult<()> {
 mod bin_tests {
     use super::*;
 
-    #[tokio::test(threaded_scheduler)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn spawn_process() -> LairResult<()> {
         let tmpdir = tempfile::tempdir().unwrap();
         std::env::set_var("LAIR_DIR", tmpdir.path());

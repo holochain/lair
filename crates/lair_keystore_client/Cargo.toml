@@ -1,6 +1,6 @@
 [package]
 name = "lair_keystore_client"
-version = "0.0.1-alpha.7"
+version = "0.0.1-alpha.12"
 description = "client connector to secret lair private keystore"
 license = "Apache-2.0"
 repository = "https://github.com/holochain/lair"
@@ -11,17 +11,17 @@ categories = [ "cryptography" ]
 edition = "2018"
 
 [dependencies]
-ghost_actor = "0.2.0"
-lair_keystore_api = { version = "=0.0.1-alpha.7", path = "../lair_keystore_api" }
+ghost_actor = "0.3.0-alpha.1"
+lair_keystore_api = { version = "=0.0.1-alpha.12", path = "../lair_keystore_api" }
 tempfile = "3"
-tokio = { version = "0.2", features = [ "full" ] }
+tokio = { version = "1.2", features = [ "full" ] }
 tracing = "0.1"
 
 [dev-dependencies]
 tracing-subscriber = "0.2"
 
 [build-dependencies]
-lair_keystore_api = { version = "=0.0.1-alpha.7", path = "../lair_keystore_api" }
+lair_keystore_api = { version = "=0.0.1-alpha.12", path = "../lair_keystore_api" }
 
 [features]
 default = []

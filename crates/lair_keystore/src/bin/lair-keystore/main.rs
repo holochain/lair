@@ -5,20 +5,38 @@
 use structopt::StructOpt;
 use tracing::*;
 
+static LAIR_KEYSTORE_ABOUT: &str = r#"A secure storage system for Holochain cryptographic keys and secrets.
+
+- one `lair-keystore` per `holochain`
+- attaches the secure storage and IPC process
+    to a directory configurable via command
+    line options. a sensible platform specific
+    dir will be used as a default dir (and be
+    logged when executed)"#;
+
 #[derive(Debug, StructOpt)]
-#[structopt(name = "lair-keystore")]
+#[structopt(
+    name = "lair-keystore",
+    about = LAIR_KEYSTORE_ABOUT
+)]
 struct Opt {
     /// Print out version info and exit.
     #[structopt(short, long)]
     version: bool,
 
     /// Set the lair data directory.
-    #[structopt(short = "d", long, env = "LAIR_DIR")]
+    #[structopt(
+        short = "d",
+        long,
+        env = "LAIR_DIR",
+        help = "Can be used to override the default keystore
+directory to run multiple instances or for other purposes"
+    )]
     lair_dir: Option<std::path::PathBuf>,
 }
 
 /// main entry point
-#[tokio::main(threaded_scheduler)]
+#[tokio::main(flavor = "multi_thread")]
 pub async fn main() -> lair_keystore_api::LairResult<()> {
     let _ = subscriber::set_global_default(
         tracing_subscriber::FmtSubscriber::builder()

@@ -42,14 +42,14 @@ pub type IncomingIpcReceiver = futures::channel::mpsc::Receiver<(
 )>;
 
 ghost_actor::ghost_chan! {
-    /// Ipc wire api for both incoming api requsets and outgoing event requests.
+    /// Ipc wire api for both incoming api requests and outgoing event requests.
     pub chan IpcWireApi<LairError> {
         /// Make an Ipc request.
         fn request(msg: LairWire) -> LairWire;
     }
 }
 
-/// Spawn/bind a new ipc listener connection awaiting incomming clients.
+/// Spawn/bind a new ipc listener connection awaiting incoming clients.
 pub async fn spawn_bind_ipc(
     config: Arc<Config>,
 ) -> LairResult<(KillSwitch, IncomingIpcReceiver)> {
@@ -205,14 +205,14 @@ impl IpcWireApiHandler for Internal {
         let weak_kill_switch = self.kill_switch.weak();
         Ok(async move {
             fut.await?;
-            Ok(weak_kill_switch
+            weak_kill_switch
                 .mix(async move {
                     trace!("await incoming request...");
                     let res = recv.await.map_err(LairError::other);
                     trace!(?res, "respond to incoming request");
                     res
                 })
-                .await?)
+                .await
         }
         .boxed()
         .into())
@@ -234,7 +234,7 @@ mod tests {
         );
     }
 
-    #[tokio::test(threaded_scheduler)]
+    #[tokio::test(flavor = "multi_thread")]
     async fn test_ipc_raw_wire() -> LairResult<()> {
         init_tracing();
 

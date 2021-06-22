@@ -10,6 +10,9 @@ pub const TLS_CERT_ENTRY: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0x10];
 /// Sign Ed25519 Entry Type Identifier.
 pub const SIGN_ED25519_ENTRY: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0x20];
 
+/// X25519 Entry Type Identifier.
+pub const X25519_ENTRY: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0x30];
+
 /// Entry Type Enum
 #[derive(Debug, PartialEq, Eq)]
 pub enum EntryType {
@@ -18,6 +21,9 @@ pub enum EntryType {
 
     /// Sign Ed25519 Entry Type
     SignEd25519,
+
+    /// X25519 Entry Type
+    X25519,
 }
 
 /// Read from bytes.
@@ -49,6 +55,7 @@ impl<'lt> CodecReader<'lt> {
         match self.read_bytes(8)? {
             TLS_CERT_ENTRY => Ok(EntryType::TlsCert),
             SIGN_ED25519_ENTRY => Ok(EntryType::SignEd25519),
+            X25519_ENTRY => Ok(EntryType::X25519),
             _ => Err("invalid entry type bytes".into()),
         }
     }
@@ -124,6 +131,7 @@ impl CodecWriter {
         match entry_type {
             EntryType::TlsCert => self.0.write_all(TLS_CERT_ENTRY),
             EntryType::SignEd25519 => self.0.write_all(SIGN_ED25519_ENTRY),
+            EntryType::X25519 => self.0.write_all(X25519_ENTRY),
         }
         .map_err(LairError::other)?;
         Ok(())

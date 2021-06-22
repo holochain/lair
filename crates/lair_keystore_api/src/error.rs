@@ -1,3 +1,5 @@
+use crypto_box as lib_crypto_box;
+
 /// Keystore Error Type.
 #[derive(Debug, thiserror::Error)]
 pub enum LairError {
@@ -17,9 +19,51 @@ pub enum LairError {
     #[error("Public key not found")]
     PubKeyNotFound,
 
+    /// Error during aead encryption, likely bad data.
+    #[error("Aead error: {0}")]
+    Aead(String),
+
+    /// Error adding padding to encrypt data.
+    #[error("Block pad error: {0}")]
+    BlockPad(String),
+
+    /// Error removing padding from decrypted data.
+    #[error("Block unpad error: {0}")]
+    BlockUnpad(String),
+
+    /// Nonce byte lengths did not line up internally. Always very bad.
+    #[error("CryptoBox nonce bad length")]
+    CryptoBoxNonceLength,
+
+    /// X25519 pub key lengths did not line up internally. Always very bad.
+    #[error("X25519 pub key bad length")]
+    X25519PubKeyLength,
+
+    /// X25519 priv key lengths did not line up internally. Always very bad.
+    #[error("X25519 priv key bad length")]
+    X25519PrivKeyLength,
+
     /// Unspecified Internal error.
     #[error(transparent)]
     Other(Box<dyn std::error::Error + Send + Sync>),
+}
+
+impl From<lib_crypto_box::aead::Error> for LairError {
+    fn from(aead_error: lib_crypto_box::aead::Error) -> Self {
+        Self::Aead(aead_error.to_string())
+    }
+}
+
+impl From<block_padding::PadError> for LairError {
+    fn from(error: block_padding::PadError) -> Self {
+        Self::BlockPad(format!("{:?}", error))
+    }
+}
+
+impl From<block_padding::UnpadError> for LairError {
+    fn from(error: block_padding::UnpadError) -> Self {
+        Self::BlockUnpad(format!("{:?}", error))
+    }
 }
 
 impl LairError {

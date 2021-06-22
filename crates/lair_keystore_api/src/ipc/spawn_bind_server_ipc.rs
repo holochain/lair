@@ -436,6 +436,131 @@ where
                 .boxed()
                 .into())
             }
+            LairWire::ToLairX25519NewFromEntropy { msg_id } => {
+                let fut = self
+                    .kill_switch
+                    .mix_static(self.api_sender.x25519_new_from_entropy());
+                Ok(async move {
+                    fut.await.map(|(keystore_index, pub_key)| {
+                        LairWire::ToCliX25519NewFromEntropyResponse {
+                            msg_id,
+                            keystore_index,
+                            pub_key,
+                        }
+                    })
+                }
+                .boxed()
+                .into())
+            }
+            LairWire::ToLairX25519Get {
+                msg_id,
+                keystore_index,
+            } => {
+                let fut = self
+                    .kill_switch
+                    .mix_static(self.api_sender.x25519_get(keystore_index));
+                Ok(async move {
+                    fut.await.map(|pub_key| LairWire::ToCliX25519GetResponse {
+                        msg_id,
+                        pub_key,
+                    })
+                }
+                .boxed()
+                .into())
+            }
+            LairWire::ToLairCryptoBoxByIndex {
+                msg_id,
+                keystore_index,
+                recipient,
+                data,
+            } => {
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender.crypto_box_by_index(
+                        keystore_index,
+                        recipient,
+                        data,
+                    ),
+                );
+                Ok(async move {
+                    fut.await.map(|encrypted_data| {
+                        LairWire::ToCliCryptoBoxByIndexResponse {
+                            msg_id,
+                            encrypted_data,
+                        }
+                    })
+                }
+                .boxed()
+                .into())
+            }
+            LairWire::ToLairCryptoBoxByPubKey {
+                msg_id,
+                pub_key,
+                recipient,
+                data,
+            } => {
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender
+                        .crypto_box_by_pub_key(pub_key, recipient, data),
+                );
+                Ok(async move {
+                    fut.await.map(|encrypted_data| {
+                        LairWire::ToCliCryptoBoxByPubKeyResponse {
+                            msg_id,
+                            encrypted_data,
+                        }
+                    })
+                }
+                .boxed()
+                .into())
+            }
+            LairWire::ToLairCryptoBoxOpenByIndex {
+                msg_id,
+                keystore_index,
+                sender,
+                encrypted_data,
+            } => {
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender.crypto_box_open_by_index(
+                        keystore_index,
+                        sender,
+                        encrypted_data,
+                    ),
+                );
+                Ok(async move {
+                    fut.await.map(|data| {
+                        LairWire::ToCliCryptoBoxOpenByIndexResponse {
+                            msg_id,
+                            data,
+                        }
+                    })
+                }
+                .boxed()
+                .into())
+            }
+            LairWire::ToLairCryptoBoxOpenByPubKey {
+                msg_id,
+                pub_key,
+                sender,
+                encrypted_data,
+            } => {
+                let fut = self.kill_switch.mix_static(
+                    self.api_sender.crypto_box_open_by_pub_key(
+                        pub_key,
+                        sender,
+                        encrypted_data,
+                    ),
+                );
+                Ok(async move {
+                    fut.await.map(|data| {
+                        LairWire::ToCliCryptoBoxOpenByPubKeyResponse {
+                            msg_id,
+                            data,
+                        }
+                    })
+                }
+                .boxed()
+                .into())
+            }
             o => Err(format!("unexpected: {:?}", o).into()),
         }
     }
