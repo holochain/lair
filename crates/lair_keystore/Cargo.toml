@@ -42,5 +42,5 @@ name = "signature_generation"
 harness = false
 
 [[bench]]
-name = "parallel_key_generation"
+name = "parallel_usage"
 harness = false
