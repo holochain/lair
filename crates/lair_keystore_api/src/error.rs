@@ -43,6 +43,10 @@ pub enum LairError {
     #[error("X25519 priv key bad length")]
     X25519PrivKeyLength,
 
+    /// A path to keypair was supposed to provided (e.g. KEY_DIR) cannot be found
+    #[error("{0}")]
+    DirError(String),
+    
     /// Unspecified Internal error.
     #[error(transparent)]
     Other(Box<dyn std::error::Error + Send + Sync>),
@@ -63,6 +67,18 @@ impl From<block_padding::PadError> for LairError {
 impl From<block_padding::UnpadError> for LairError {
     fn from(error: block_padding::UnpadError) -> Self {
         Self::BlockUnpad(format!("{:?}", error))
+    }
+}
+
+impl From<std::io::Error> for LairError {
+    fn from(error: std::io::Error) -> Self {
+        Self::DirError(error.to_string())
+    }
+}
+
+impl From<serde_yaml::Error> for LairError {
+    fn from(error: serde_yaml::Error) -> Self {
+        Self::DirError(error.to_string())
     }
 }
 
