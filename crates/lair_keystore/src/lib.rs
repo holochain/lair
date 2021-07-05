@@ -41,7 +41,7 @@ pub async fn execute_lair() -> LairResult<()> {
 }
 
 /// Gen loop of lair executable.
-pub async fn execute_gen() -> LairResult<()> {
+pub async fn execute_load_ed25519_keypair_from_yaml(load_ed25519_keypair_from_yaml: std::path::PathBuf) -> LairResult<()> {
     let mut config = Config::builder();
 
     if let Some(lair_dir) = std::env::var_os("LAIR_DIR") {
@@ -58,17 +58,11 @@ pub async fn execute_gen() -> LairResult<()> {
     let store_actor =
         store::spawn_entry_store_actor(config.clone(), store_file).await?;
 
-    if let Some(key_dir) = std::env::var_os("KEY_DIR") {
-        use std::fs::File;
-        let file = File::open(key_dir)?;
-        let keypair: entry::EntrySignEd25519 = serde_yaml::from_reader(&file)?;
-        store_actor
-            .add_initial_sign_ed25519_keypair(keypair)
-            .await?;
-        Ok(())
-    } else {
-        Err(LairError::DirError(
-            "env var KEY_DIR is not set or unable to read".to_string(),
-        ))
-    }
+    use std::fs::File;
+    let file = File::open(load_ed25519_keypair_from_yaml)?;
+    let keypair: entry::EntrySignEd25519 = serde_yaml::from_reader(&file)?;
+    store_actor
+        .add_initial_sign_ed25519_keypair(keypair)
+        .await?;
+    Ok(())
 }
