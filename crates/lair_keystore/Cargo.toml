@@ -14,6 +14,7 @@ edition = "2018"
 futures = "0.3"
 ghost_actor = "0.3.0-alpha.1"
 lair_keystore_api = { version = "=0.0.1-alpha.12", path = "../lair_keystore_api" }
+serde_yaml = "0.8"
 structopt = "0.3"
 sysinfo = "0.15"
 thiserror = "1"

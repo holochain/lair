@@ -314,7 +314,7 @@ async fn add_initial_sign_ed25519_keypair(
 ) -> LairResult<(KeystoreIndex, Arc<LairEntry>)> {
     // Get keypair for KEY_DIR env var
     // encode it and write it into the storage 
-    println!("# Adding pub-key :{:?}", keypair.pub_key);
+    println!("# Adding pub-key :{:?}", keypair);
     let entry = Arc::new(LairEntry::SignEd25519(keypair));
     let encoded_entry = entry.encode()?;
     let entry_index = store_file.write_next_entry(encoded_entry).await?;

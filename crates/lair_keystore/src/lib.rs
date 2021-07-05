@@ -58,11 +58,14 @@ pub async fn execute_gen() -> LairResult<()> {
     let store_actor =
     store::spawn_entry_store_actor(config.clone(), store_file).await?;
 
-    let keypair: entry::EntrySignEd25519 = lair_keystore_api::internal::sign_ed25519::sign_ed25519_keypair_new_from_entropy().await?;
-
-    // TODO : handle the error here
-    store_actor.add_initial_sign_ed25519_keypair(keypair).await?;
-
-    Ok(())
+    if let Some(key_dir) = std::env::var_os("KEY_DIR") {
+        use std::fs::File;
+        let file = File::open(key_dir)?;
+        let keypair: entry::EntrySignEd25519 = serde_yaml::from_reader(&file)?;
+        store_actor.add_initial_sign_ed25519_keypair(keypair).await?;
+        Ok(())
+    } else {
+        Err(LairError::DirError("env var KEY_DIR is not set or unable to read".to_string()))
+    }
 }
 
