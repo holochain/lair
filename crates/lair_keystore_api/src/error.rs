@@ -43,10 +43,6 @@ pub enum LairError {
     #[error("X25519 priv key bad length")]
     X25519PrivKeyLength,
 
-    /// A path to keypair was supposed to provided (e.g. KEY_DIR) cannot be found
-    #[error("{0}")]
-    DirError(String),
-
     /// Unspecified Internal error.
     #[error(transparent)]
     Other(Box<dyn std::error::Error + Send + Sync>),
