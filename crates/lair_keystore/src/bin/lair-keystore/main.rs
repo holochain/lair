@@ -24,6 +24,16 @@ struct Opt {
     #[structopt(short, long)]
     version: bool,
 
+    /// generates a keystore with a provided key.
+    #[structopt(
+        short = "g",
+        long,
+        env = "KEY_DIR",
+        help = "Can be used to override the default keystore
+directory to run multiple instances or for other purposes"
+    )]
+    generate: Option<std::path::PathBuf>,
+    
     /// Set the lair data directory.
     #[structopt(
         short = "d",
@@ -54,6 +64,16 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
 
     if let Some(lair_dir) = opt.lair_dir {
         std::env::set_var("LAIR_DIR", lair_dir);
+    }
+
+    if let Some(key_dir) =opt.generate {
+        println!("Creating a lair-keystore with provided keys");
+        std::env::set_var("KEY_DIR", key_dir);
+
+        trace!("executing lair gen tasks");
+        lair_keystore::execute_gen().await?;
+    
+        return Ok(());
     }
 
     trace!("executing lair main tasks");
