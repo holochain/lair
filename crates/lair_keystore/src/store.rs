@@ -18,7 +18,7 @@ ghost_actor::ghost_chan! {
         fn sign_ed25519_keypair_new_from_entropy() ->
             (KeystoreIndex, Arc<LairEntry>);
 
-        /// generate a new signature ed25519 keypair entry && save it && return it
+        /// add a new signature ed25519 keypair entry that is passed && save it && return it
         fn add_initial_sign_ed25519_keypair(
             keypair: lair_keystore_api::entry::EntrySignEd25519
         ) ->
@@ -314,9 +314,7 @@ async fn add_initial_sign_ed25519_keypair(
     i_s: ghost_actor::GhostSender<EntryStoreInternal>,
     store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
 ) -> LairResult<(KeystoreIndex, Arc<LairEntry>)> {
-    // Get keypair for KEY_DIR env var
-    // encode it and write it into the storage
-    println!("# Adding pub-key :{:?}", keypair);
+    println!("# Adding pub-key :{:?}", keypair.pub_key);
     let entry = Arc::new(LairEntry::SignEd25519(keypair));
     let encoded_entry = entry.encode()?;
     let entry_index = store_file.write_next_entry(encoded_entry).await?;
