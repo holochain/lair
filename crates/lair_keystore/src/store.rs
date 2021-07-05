@@ -314,7 +314,7 @@ async fn add_initial_sign_ed25519_keypair(
     i_s: ghost_actor::GhostSender<EntryStoreInternal>,
     store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
 ) -> LairResult<(KeystoreIndex, Arc<LairEntry>)> {
-    println!("# Adding pub-key :{:?}", keypair.pub_key);
+    println!("#Adding pub-key :{:?}", keypair.pub_key);
     let entry = Arc::new(LairEntry::SignEd25519(keypair));
     let encoded_entry = entry.encode()?;
     let entry_index = store_file.write_next_entry(encoded_entry).await?;

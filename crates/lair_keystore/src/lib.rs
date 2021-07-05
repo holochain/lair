@@ -13,6 +13,7 @@ include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 use crate::store::EntryStoreSender;
 use lair_keystore_api::*;
 use std::sync::Arc;
+use std::io::{BufRead, BufReader, Error, ErrorKind};
 
 pub mod internal;
 
@@ -41,8 +42,8 @@ pub async fn execute_lair() -> LairResult<()> {
 }
 
 /// Gen loop of lair executable.
-pub async fn execute_load_ed25519_keypair_from_yaml(
-    load_ed25519_keypair_from_yaml: std::path::PathBuf,
+pub async fn execute_load_ed25519_keypair(
+    load_ed25519_keypair: std::path::PathBuf,
 ) -> LairResult<()> {
     let mut config = Config::builder();
 
@@ -61,8 +62,16 @@ pub async fn execute_load_ed25519_keypair_from_yaml(
         store::spawn_entry_store_actor(config.clone(), store_file).await?;
 
     use std::fs::File;
-    let file = File::open(load_ed25519_keypair_from_yaml)?;
-    let keypair: entry::EntrySignEd25519 = serde_yaml::from_reader(&file)?;
+    let file = File::open(load_ed25519_keypair)?;
+    let blob = BufReader::new(file).lines()
+        .map(|line| line.and_then(|v| v.parse().map_err(|e| Error::new(ErrorKind::InvalidData, e))))
+        .collect::<Result<Vec<u8>, Error>>()?;
+
+    let keypair = entry::EntrySignEd25519 {
+        priv_key: lair_keystore_api::internal::sign_ed25519::SignEd25519PrivKey::from(blob[64..].to_vec()),
+        pub_key: lair_keystore_api::internal::sign_ed25519::SignEd25519PubKey::from(blob[32..].to_vec()), 
+    };
+
     store_actor
         .add_initial_sign_ed25519_keypair(keypair)
         .await?;

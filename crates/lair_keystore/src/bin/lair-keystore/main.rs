@@ -27,10 +27,10 @@ struct Opt {
     /// generates a keystore with a provided key.
     #[structopt(
         long,
-        help = "Loads a signature keypair from a yaml 
+        help = "Loads a signature keypair from a 
 file into the keystore and exits."
     )]
-    load_ed25519_keypair_from_yaml: Option<std::path::PathBuf>,
+    load_ed25519_keypair: Option<std::path::PathBuf>,
 
     /// Set the lair data directory.
     #[structopt(
@@ -64,16 +64,16 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
         std::env::set_var("LAIR_DIR", lair_dir);
     }
 
-    if let Some(load_ed25519_keypair_from_yaml) =
-        opt.load_ed25519_keypair_from_yaml
+    if let Some(load_ed25519_keypair) =
+        opt.load_ed25519_keypair
     {
         println!(
             "Creating a lair-keystore with provided keys at {:?}",
-            load_ed25519_keypair_from_yaml
+            load_ed25519_keypair
         );
         trace!("executing lair gen tasks");
-        return lair_keystore::execute_load_ed25519_keypair_from_yaml(
-            load_ed25519_keypair_from_yaml,
+        return lair_keystore::execute_load_ed25519_keypair(
+            load_ed25519_keypair,
         )
         .await;
     }
