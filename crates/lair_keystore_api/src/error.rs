@@ -74,7 +74,7 @@ impl From<std::io::Error> for LairError {
 
 impl From<serde_yaml::Error> for LairError {
     fn from(error: serde_yaml::Error) -> Self {
-        Self::DirError(error.to_string())
+        Self::other(error)
     }
 }
 
