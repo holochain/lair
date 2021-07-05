@@ -18,6 +18,12 @@ ghost_actor::ghost_chan! {
         fn sign_ed25519_keypair_new_from_entropy() ->
             (KeystoreIndex, Arc<LairEntry>);
 
+        /// generate a new signature ed25519 keypair entry && save it && return it
+        fn add_initial_sign_ed25519_keypair(
+            keypair: lair_keystore_api::entry::EntrySignEd25519
+        ) ->
+            (KeystoreIndex, Arc<LairEntry>);
+
         /// generate a new x25519 keypair entry && save it && return it
         fn x25519_keypair_new_from_entropy() -> (KeystoreIndex, Arc<LairEntry>);
 
@@ -192,6 +198,17 @@ impl EntryStoreHandler for EntryStoreImpl {
                 .into(),
         )
     }
+    
+    fn handle_add_initial_sign_ed25519_keypair(
+        &mut self,
+        keypair: lair_keystore_api::entry::EntrySignEd25519,
+    ) -> EntryStoreHandlerResult<(KeystoreIndex, Arc<LairEntry>)> {
+        Ok(
+            add_initial_sign_ed25519_keypair(keypair, self.i_s.clone(), self.store_file.clone())
+                .boxed()
+                .into(),
+        )
+    }
 
     fn handle_x25519_keypair_new_from_entropy(
         &mut self,
@@ -284,6 +301,21 @@ async fn new_sign_ed25519_keypair(
     let entry = Arc::new(LairEntry::SignEd25519(
         sign_ed25519::sign_ed25519_keypair_new_from_entropy().await?,
     ));
+    let encoded_entry = entry.encode()?;
+    let entry_index = store_file.write_next_entry(encoded_entry).await?;
+    i_s.finalize_new_entry(entry_index, entry.clone()).await?;
+    Ok((entry_index, entry))
+}
+
+async fn add_initial_sign_ed25519_keypair(
+    keypair: lair_keystore_api::entry::EntrySignEd25519,
+    i_s: ghost_actor::GhostSender<EntryStoreInternal>,
+    store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
+) -> LairResult<(KeystoreIndex, Arc<LairEntry>)> {
+    // Get keypair for KEY_DIR env var
+    // encode it and write it into the storage 
+    println!("# Adding pub-key :{:?}", keypair.pub_key);
+    let entry = Arc::new(LairEntry::SignEd25519(keypair));
     let encoded_entry = entry.encode()?;
     let entry_index = store_file.write_next_entry(encoded_entry).await?;
     i_s.finalize_new_entry(entry_index, entry.clone()).await?;
