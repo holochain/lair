@@ -26,13 +26,11 @@ struct Opt {
 
     /// generates a keystore with a provided key.
     #[structopt(
-        short = "k",
         long,
-        env = "KEY_DIR",
-        help = "Can be used to generate a keystore with 
-externally generated lair-compatible keys that can be passed here"
+        help = "Loads a signature keypair from a yaml 
+file into the keystore and exits."
     )]
-    key_dir: Option<std::path::PathBuf>,
+    load_ed25519_keypair_from_yaml: Option<std::path::PathBuf>,
 
     /// Set the lair data directory.
     #[structopt(
