@@ -6,7 +6,17 @@ use derive_more::*;
 
 /// The 64 byte signature ed25519 public key.
 #[derive(
-    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into, serde::Deserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Deref,
+    From,
+    Into,
+    serde::Deserialize,
 )]
 #[allow(clippy::rc_buffer)]
 pub struct SignEd25519PrivKey(pub Arc<Vec<u8>>);
@@ -19,7 +29,17 @@ impl From<Vec<u8>> for SignEd25519PrivKey {
 
 /// The 32 byte signature ed25519 public key.
 #[derive(
-    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into, serde::Deserialize,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Deref,
+    From,
+    Into,
+    serde::Deserialize,
 )]
 #[allow(clippy::rc_buffer)]
 pub struct SignEd25519PubKey(pub Arc<Vec<u8>>);

@@ -10,9 +10,9 @@
 
 include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 
+use crate::store::EntryStoreSender;
 use lair_keystore_api::*;
 use std::sync::Arc;
-use crate::store::EntryStoreSender;
 
 pub mod internal;
 
@@ -56,16 +56,19 @@ pub async fn execute_gen() -> LairResult<()> {
         internal::pid_check::pid_check(&config)?;
 
     let store_actor =
-    store::spawn_entry_store_actor(config.clone(), store_file).await?;
+        store::spawn_entry_store_actor(config.clone(), store_file).await?;
 
     if let Some(key_dir) = std::env::var_os("KEY_DIR") {
         use std::fs::File;
         let file = File::open(key_dir)?;
         let keypair: entry::EntrySignEd25519 = serde_yaml::from_reader(&file)?;
-        store_actor.add_initial_sign_ed25519_keypair(keypair).await?;
+        store_actor
+            .add_initial_sign_ed25519_keypair(keypair)
+            .await?;
         Ok(())
     } else {
-        Err(LairError::DirError("env var KEY_DIR is not set or unable to read".to_string()))
+        Err(LairError::DirError(
+            "env var KEY_DIR is not set or unable to read".to_string(),
+        ))
     }
 }
-

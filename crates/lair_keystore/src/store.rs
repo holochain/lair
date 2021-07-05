@@ -198,16 +198,18 @@ impl EntryStoreHandler for EntryStoreImpl {
                 .into(),
         )
     }
-    
+
     fn handle_add_initial_sign_ed25519_keypair(
         &mut self,
         keypair: lair_keystore_api::entry::EntrySignEd25519,
     ) -> EntryStoreHandlerResult<(KeystoreIndex, Arc<LairEntry>)> {
-        Ok(
-            add_initial_sign_ed25519_keypair(keypair, self.i_s.clone(), self.store_file.clone())
-                .boxed()
-                .into(),
+        Ok(add_initial_sign_ed25519_keypair(
+            keypair,
+            self.i_s.clone(),
+            self.store_file.clone(),
         )
+        .boxed()
+        .into())
     }
 
     fn handle_x25519_keypair_new_from_entropy(
@@ -313,7 +315,7 @@ async fn add_initial_sign_ed25519_keypair(
     store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
 ) -> LairResult<(KeystoreIndex, Arc<LairEntry>)> {
     // Get keypair for KEY_DIR env var
-    // encode it and write it into the storage 
+    // encode it and write it into the storage
     println!("# Adding pub-key :{:?}", keypair);
     let entry = Arc::new(LairEntry::SignEd25519(keypair));
     let encoded_entry = entry.encode()?;

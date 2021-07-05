@@ -33,7 +33,7 @@ struct Opt {
 externally generated lair-compatible keys that can be passed here"
     )]
     key_dir: Option<std::path::PathBuf>,
-    
+
     /// Set the lair data directory.
     #[structopt(
         short = "d",
@@ -66,11 +66,14 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
         std::env::set_var("LAIR_DIR", lair_dir);
     }
 
-    if let Some(key_dir) =opt.key_dir {
-        println!("Creating a lair-keystore with provided keys at {:?}", key_dir);
+    if let Some(key_dir) = opt.key_dir {
+        println!(
+            "Creating a lair-keystore with provided keys at {:?}",
+            key_dir
+        );
         std::env::set_var("KEY_DIR", key_dir);
         trace!("executing lair gen tasks");
-        return lair_keystore::execute_gen().await
+        return lair_keystore::execute_gen().await;
     }
 
     trace!("executing lair main tasks");
