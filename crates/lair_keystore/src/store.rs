@@ -49,7 +49,7 @@ ghost_actor::ghost_chan! {
 /// Spawn a new entry store actor.
 pub async fn spawn_entry_store_actor(
     config: Arc<Config>,
-    store_file: tokio::fs::File,
+    sql_db_path: std::path::PathBuf,
 ) -> LairResult<ghost_actor::GhostSender<EntryStore>> {
     let builder = ghost_actor::actor_builder::GhostActorBuilder::new();
 
@@ -64,7 +64,7 @@ pub async fn spawn_entry_store_actor(
         .await?;
 
     tokio::task::spawn(
-        builder.spawn(EntryStoreImpl::new(i_s, config, store_file).await?),
+        builder.spawn(EntryStoreImpl::new(i_s, config, sql_db_path).await?),
     );
 
     Ok(sender)
@@ -72,14 +72,19 @@ pub async fn spawn_entry_store_actor(
 
 // -- internal -- //
 
-mod store_file;
-use store_file::EntryStoreFileSender;
+#[allow(dead_code)]
+mod store_sqlite;
+use store_sqlite::SqlPool;
+
+//mod store_file;
+//use store_file::EntryStoreFileSender;
 
 struct EntryStoreImpl {
     i_s: ghost_actor::GhostSender<EntryStoreInternal>,
     #[allow(dead_code)]
     config: Arc<Config>,
-    store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
+    //store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
+    db: SqlPool,
     last_entry_index: KeystoreIndex,
     entries_by_index: HashMap<KeystoreIndex, Arc<LairEntry>>,
     #[allow(clippy::rc_buffer)]
@@ -91,16 +96,15 @@ impl EntryStoreImpl {
     pub async fn new(
         i_s: ghost_actor::GhostSender<EntryStoreInternal>,
         config: Arc<Config>,
-        store_file: tokio::fs::File,
+        sql_db_file: std::path::PathBuf,
     ) -> LairResult<Self> {
-        let store_file =
-            store_file::spawn_entry_store_file_task(store_file).await?;
+        let db = SqlPool::new(sql_db_file).await?;
 
-        match store_file.init_load_unlock().await? {
+        match db.init_load_unlock().await? {
             None => {
                 // write a STUB unlock entry of all zeroes for now
                 let unlock_entry = vec![0_u8; entry::ENTRY_SIZE];
-                store_file.write_unlock(unlock_entry).await?;
+                db.write_unlock(unlock_entry).await?;
             }
             Some(_unlock_entry) => {
                 // someday, do some crypto stuff to read other entries
@@ -110,7 +114,7 @@ impl EntryStoreImpl {
         let mut out = Self {
             i_s,
             config,
-            store_file,
+            db,
             last_entry_index: 0.into(),
             entries_by_index: HashMap::new(),
             entries_by_pub_id: HashMap::new(),
@@ -118,7 +122,7 @@ impl EntryStoreImpl {
         };
 
         // load / decode all entries
-        for (entry_index, entry) in out.store_file.load_all_entries().await? {
+        for (entry_index, entry) in out.db.load_all_entries().await? {
             let entry = Arc::new(entry::LairEntry::decode(&entry)?);
             out.track_new_entry(entry_index, entry);
             if entry_index.0 > out.last_entry_index.0 {
@@ -177,7 +181,7 @@ impl EntryStoreHandler for EntryStoreImpl {
         options: TlsCertOptions,
     ) -> EntryStoreHandlerResult<(KeystoreIndex, Arc<LairEntry>)> {
         Ok(
-            new_tls_cert(self.i_s.clone(), self.store_file.clone(), options)
+            new_tls_cert(self.i_s.clone(), self.db.clone(), options)
                 .boxed()
                 .into(),
         )
@@ -187,7 +191,7 @@ impl EntryStoreHandler for EntryStoreImpl {
         &mut self,
     ) -> EntryStoreHandlerResult<(KeystoreIndex, Arc<LairEntry>)> {
         Ok(
-            new_sign_ed25519_keypair(self.i_s.clone(), self.store_file.clone())
+            new_sign_ed25519_keypair(self.i_s.clone(), self.db.clone())
                 .boxed()
                 .into(),
         )
@@ -197,7 +201,7 @@ impl EntryStoreHandler for EntryStoreImpl {
         &mut self,
     ) -> EntryStoreHandlerResult<(KeystoreIndex, Arc<LairEntry>)> {
         Ok(
-            new_x25519_keypair(self.i_s.clone(), self.store_file.clone())
+            new_x25519_keypair(self.i_s.clone(), self.db.clone())
                 .boxed()
                 .into(),
         )
@@ -265,40 +269,40 @@ impl EntryStoreInternalHandler for EntryStoreImpl {
 
 async fn new_tls_cert(
     i_s: ghost_actor::GhostSender<EntryStoreInternal>,
-    store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
+    db: SqlPool,
     options: TlsCertOptions,
 ) -> LairResult<(KeystoreIndex, Arc<LairEntry>)> {
     let cert = Arc::new(LairEntry::TlsCert(
         tls::tls_cert_self_signed_new_from_entropy(options).await?,
     ));
     let encoded_cert = cert.encode()?;
-    let entry_index = store_file.write_next_entry(encoded_cert).await?;
+    let entry_index = db.write_next_entry(encoded_cert).await?;
     i_s.finalize_new_entry(entry_index, cert.clone()).await?;
     Ok((entry_index, cert))
 }
 
 async fn new_sign_ed25519_keypair(
     i_s: ghost_actor::GhostSender<EntryStoreInternal>,
-    store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
+    db: SqlPool,
 ) -> LairResult<(KeystoreIndex, Arc<LairEntry>)> {
     let entry = Arc::new(LairEntry::SignEd25519(
         sign_ed25519::sign_ed25519_keypair_new_from_entropy().await?,
     ));
     let encoded_entry = entry.encode()?;
-    let entry_index = store_file.write_next_entry(encoded_entry).await?;
+    let entry_index = db.write_next_entry(encoded_entry).await?;
     i_s.finalize_new_entry(entry_index, entry.clone()).await?;
     Ok((entry_index, entry))
 }
 
 async fn new_x25519_keypair(
     i_s: ghost_actor::GhostSender<EntryStoreInternal>,
-    store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
+    db: SqlPool,
 ) -> LairResult<(KeystoreIndex, Arc<LairEntry>)> {
     let entry = Arc::new(LairEntry::X25519(
         x25519::x25519_keypair_new_from_entropy().await?,
     ));
     let encoded_entry = entry.encode()?;
-    let entry_index = store_file.write_next_entry(encoded_entry).await?;
+    let entry_index = db.write_next_entry(encoded_entry).await?;
     i_s.finalize_new_entry(entry_index, entry.clone()).await?;
     Ok((entry_index, entry))
 }
@@ -341,13 +345,10 @@ mod tests {
         let (cert, sign, x25519) = {
             let config = Config::builder().set_root_path(tmpdir.path()).build();
 
-            let store_file_path = config.get_store_path().to_owned();
-
-            let store_file =
-                tokio::fs::File::create(&store_file_path).await.unwrap();
+            let sql_db_path = config.get_store_path().to_owned();
 
             let store =
-                spawn_entry_store_actor(config, store_file).await.unwrap();
+                spawn_entry_store_actor(config, sql_db_path).await.unwrap();
 
             let (cert_index, cert) =
                 store
@@ -378,14 +379,9 @@ mod tests {
 
         let config = Config::builder().set_root_path(tmpdir.path()).build();
 
-        let store_file_path = config.get_store_path().to_owned();
+        let sql_db_path = config.get_store_path().to_owned();
 
-        let mut store_file = tokio::fs::OpenOptions::new();
-        store_file.read(true);
-        store_file.append(true);
-        let store_file = store_file.open(&store_file_path).await.unwrap();
-
-        let store = spawn_entry_store_actor(config, store_file).await.unwrap();
+        let store = spawn_entry_store_actor(config, sql_db_path).await.unwrap();
 
         let r_cert = store.get_entry_by_index(1.into()).await.unwrap();
         let r_sign = store.get_entry_by_index(2.into()).await.unwrap();

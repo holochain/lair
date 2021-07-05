@@ -31,10 +31,10 @@ pub async fn execute_lair() -> LairResult<()> {
 
     println!("#lair-keystore-dir:{:?}#", config.get_root_path());
 
-    let internal::pid_check::PidCheckResult { store_file } =
+    let internal::pid_check::PidCheckResult { sql_db_path } =
         internal::pid_check::pid_check(&config)?;
 
-    ipc::spawn_bind_server_ipc(config, store_file).await?;
+    ipc::spawn_bind_server_ipc(config, sql_db_path).await?;
 
     Ok(())
 }

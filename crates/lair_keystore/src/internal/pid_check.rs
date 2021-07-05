@@ -10,7 +10,7 @@ use sysinfo::{ProcessExt, SystemExt};
 /// Result from invoking `pid_check()` function.
 pub struct PidCheckResult {
     /// Access to the lair store file.
-    pub store_file: tokio::fs::File,
+    pub sql_db_path: std::path::PathBuf,
 }
 
 /// Execute lair pid_check verifying we are the one true Lair process
@@ -42,16 +42,10 @@ pub fn pid_check(config: &Config) -> LairResult<PidCheckResult> {
         return Err(e);
     }
 
-    let mut store_file = std::fs::OpenOptions::new();
-    let store_file = store_file
-        .append(true)
-        .read(true)
-        .create(true)
-        .open(config.get_store_path())
-        .map_err(LairError::other)?;
+    let sql_db_path = config.get_store_path().to_owned();
 
     Ok(PidCheckResult {
-        store_file: tokio::fs::File::from_std(store_file),
+        sql_db_path,
     })
 }
 
