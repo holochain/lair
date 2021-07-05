@@ -41,7 +41,9 @@ pub async fn execute_lair() -> LairResult<()> {
 }
 
 /// Gen loop of lair executable.
-pub async fn execute_load_ed25519_keypair_from_yaml(load_ed25519_keypair_from_yaml: std::path::PathBuf) -> LairResult<()> {
+pub async fn execute_load_ed25519_keypair_from_yaml(
+    load_ed25519_keypair_from_yaml: std::path::PathBuf,
+) -> LairResult<()> {
     let mut config = Config::builder();
 
     if let Some(lair_dir) = std::env::var_os("LAIR_DIR") {

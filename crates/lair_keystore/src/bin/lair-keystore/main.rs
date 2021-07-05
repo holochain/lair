@@ -64,13 +64,18 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
         std::env::set_var("LAIR_DIR", lair_dir);
     }
 
-    if let Some(load_ed25519_keypair_from_yaml) = opt.load_ed25519_keypair_from_yaml {
+    if let Some(load_ed25519_keypair_from_yaml) =
+        opt.load_ed25519_keypair_from_yaml
+    {
         println!(
             "Creating a lair-keystore with provided keys at {:?}",
             load_ed25519_keypair_from_yaml
         );
         trace!("executing lair gen tasks");
-        return lair_keystore::execute_load_ed25519_keypair_from_yaml(load_ed25519_keypair_from_yaml).await;
+        return lair_keystore::execute_load_ed25519_keypair_from_yaml(
+            load_ed25519_keypair_from_yaml,
+        )
+        .await;
     }
 
     trace!("executing lair main tasks");
