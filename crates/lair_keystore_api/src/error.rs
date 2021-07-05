@@ -68,7 +68,7 @@ impl From<block_padding::UnpadError> for LairError {
 
 impl From<std::io::Error> for LairError {
     fn from(error: std::io::Error) -> Self {
-        Self::DirError(error.to_string())
+        Self::other(error)
     }
 }
 
