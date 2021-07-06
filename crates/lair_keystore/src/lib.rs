@@ -55,7 +55,8 @@ pub async fn execute_load_ed25519_keypair_from_file(
             })
         })
         .collect::<Result<Vec<u8>, Error>>()?;
-    execute_load_ed25519_keypair_from_encrypted_obj(encrypted_blob.to_vec()).await
+    execute_load_ed25519_keypair_from_encrypted_obj(encrypted_blob.to_vec())
+        .await
 }
 
 /// Gen loop of lair executable with encrypted blob.

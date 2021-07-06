@@ -32,7 +32,6 @@ file into the keystore and exits."
     )]
     load_ed25519_keypair_from_file: Option<std::path::PathBuf>,
 
-
     /// generates a keystore with a provided key.
     #[structopt(
         long,
@@ -73,7 +72,9 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
         std::env::set_var("LAIR_DIR", lair_dir);
     }
 
-    if let Some(load_ed25519_keypair_from_file) = opt.load_ed25519_keypair_from_file {
+    if let Some(load_ed25519_keypair_from_file) =
+        opt.load_ed25519_keypair_from_file
+    {
         println!(
             "Creating a lair-keystore with provided keys at {:?}",
             load_ed25519_keypair_from_file
@@ -84,7 +85,9 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
         )
         .await;
     }
-    if let Some(load_ed25519_keypair_from_encrypted_obj) = opt.load_ed25519_keypair_from_encrypted_obj {
+    if let Some(load_ed25519_keypair_from_encrypted_obj) =
+        opt.load_ed25519_keypair_from_encrypted_obj
+    {
         println!(
             "Creating a lair-keystore with provided keys {:?}",
             load_ed25519_keypair_from_encrypted_obj
