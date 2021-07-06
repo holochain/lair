@@ -95,14 +95,12 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
         trace!("executing lair gen tasks from obj");
 
         match base64::decode(load_ed25519_keypair_from_base64) {
-            Ok (keypair) => {
-                return lair_keystore::execute_load_ed25519_keypair(
-                    keypair,
-                )
-                .await;
-            },
-            Err(e) => return Err(lair_keystore_api::LairError::other(e))
-        } 
+            Ok(keypair) => {
+                return lair_keystore::execute_load_ed25519_keypair(keypair)
+                    .await;
+            }
+            Err(e) => return Err(lair_keystore_api::LairError::other(e)),
+        }
     }
 
     trace!("executing lair main tasks");
