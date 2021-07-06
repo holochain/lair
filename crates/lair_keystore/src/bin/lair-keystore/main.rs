@@ -35,10 +35,10 @@ file into the keystore and exits."
     /// generates a keystore with a provided key.
     #[structopt(
         long,
-        help = "Loads a signature keypair from a 
-vec into the keystore and exits."
+        help = "Loads a signature keypair from a base64
+string into the keystore and exits."
     )]
-    load_ed25519_keypair_from_encrypted_obj: Option<Vec<u8>>,
+    load_ed25519_keypair_from_base64: Option<String>,
 
     /// Set the lair data directory.
     #[structopt(
@@ -85,18 +85,24 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
         )
         .await;
     }
-    if let Some(load_ed25519_keypair_from_encrypted_obj) =
-        opt.load_ed25519_keypair_from_encrypted_obj
+    if let Some(load_ed25519_keypair_from_base64) =
+        opt.load_ed25519_keypair_from_base64
     {
         println!(
             "Creating a lair-keystore with provided keys {:?}",
-            load_ed25519_keypair_from_encrypted_obj
+            load_ed25519_keypair_from_base64
         );
         trace!("executing lair gen tasks from obj");
-        return lair_keystore::execute_load_ed25519_keypair_from_encrypted_obj(
-            load_ed25519_keypair_from_encrypted_obj,
-        )
-        .await;
+
+        match base64::decode(load_ed25519_keypair_from_base64) {
+            Ok (keypair) => {
+                return lair_keystore::execute_load_ed25519_keypair(
+                    keypair,
+                )
+                .await;
+            },
+            Err(e) => return Err(lair_keystore_api::LairError::other(e))
+        } 
     }
 
     trace!("executing lair main tasks");
