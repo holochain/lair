@@ -66,6 +66,12 @@ impl From<block_padding::UnpadError> for LairError {
     }
 }
 
+impl From<std::io::Error> for LairError {
+    fn from(error: std::io::Error) -> Self {
+        Self::other(error)
+    }
+}
+
 impl LairError {
     /// Build an "Other" type LairError.
     pub fn other(
