@@ -211,7 +211,7 @@ impl EntryX25519 {
 }
 
 /// File format entry representing Sign Ed25519 Keypair data.
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone)]
 pub struct EntrySignEd25519 {
     /// Private key bytes.
     /// @todo - once we're integrated with sodoken, make this a priv buffer.

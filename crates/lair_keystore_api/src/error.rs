@@ -72,12 +72,6 @@ impl From<std::io::Error> for LairError {
     }
 }
 
-impl From<serde_yaml::Error> for LairError {
-    fn from(error: serde_yaml::Error) -> Self {
-        Self::other(error)
-    }
-}
-
 impl LairError {
     /// Build an "Other" type LairError.
     pub fn other(
