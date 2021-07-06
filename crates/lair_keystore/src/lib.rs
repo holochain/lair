@@ -69,7 +69,7 @@ pub async fn execute_load_ed25519_keypair(
 
     let keypair = entry::EntrySignEd25519 {
         priv_key: lair_keystore_api::internal::sign_ed25519::SignEd25519PrivKey::from(blob[64..].to_vec()),
-        pub_key: lair_keystore_api::internal::sign_ed25519::SignEd25519PubKey::from(blob[32..].to_vec()), 
+        pub_key: lair_keystore_api::internal::sign_ed25519::SignEd25519PubKey::from(blob[32..64].to_vec()), 
     };
 
     store_actor
