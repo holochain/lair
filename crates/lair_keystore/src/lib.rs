@@ -41,9 +41,26 @@ pub async fn execute_lair() -> LairResult<()> {
     Ok(())
 }
 
-/// Gen loop of lair executable.
-pub async fn execute_load_ed25519_keypair(
-    load_ed25519_keypair: std::path::PathBuf,
+/// Gen loop of lair executable with file path.
+pub async fn execute_load_ed25519_keypair_from_file(
+    load_ed25519_keypair_from_file: std::path::PathBuf,
+) -> LairResult<()> {
+    use std::fs::File;
+    let file = File::open(load_ed25519_keypair_from_file)?;
+    let encrypted_blob = BufReader::new(file)
+        .lines()
+        .map(|line| {
+            line.and_then(|v| {
+                v.parse().map_err(|e| Error::new(ErrorKind::InvalidData, e))
+            })
+        })
+        .collect::<Result<Vec<u8>, Error>>()?;
+    execute_load_ed25519_keypair_from_encrypted_obj(encrypted_blob.to_vec()).await
+}
+
+/// Gen loop of lair executable with encrypted blob.
+pub async fn execute_load_ed25519_keypair_from_encrypted_obj(
+    load_ed25519_keypair_from_encrypted_obj: Vec<u8>,
 ) -> LairResult<()> {
     let mut config = Config::builder();
 
@@ -61,25 +78,14 @@ pub async fn execute_load_ed25519_keypair(
     let store_actor =
         store::spawn_entry_store_actor(config.clone(), store_file).await?;
 
-    use std::fs::File;
-    let file = File::open(load_ed25519_keypair)?;
-    let blob = BufReader::new(file)
-        .lines()
-        .map(|line| {
-            line.and_then(|v| {
-                v.parse().map_err(|e| Error::new(ErrorKind::InvalidData, e))
-            })
-        })
-        .collect::<Result<Vec<u8>, Error>>()?;
-
     let keypair = entry::EntrySignEd25519 {
         priv_key:
             lair_keystore_api::internal::sign_ed25519::SignEd25519PrivKey::from(
-                blob[64..].to_vec(),
+                load_ed25519_keypair_from_encrypted_obj[64..].to_vec(),
             ),
         pub_key:
             lair_keystore_api::internal::sign_ed25519::SignEd25519PubKey::from(
-                blob[32..64].to_vec(),
+                load_ed25519_keypair_from_encrypted_obj[32..64].to_vec(),
             ),
     };
 

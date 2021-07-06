@@ -30,7 +30,16 @@ struct Opt {
         help = "Loads a signature keypair from a 
 file into the keystore and exits."
     )]
-    load_ed25519_keypair: Option<std::path::PathBuf>,
+    load_ed25519_keypair_from_file: Option<std::path::PathBuf>,
+
+
+    /// generates a keystore with a provided key.
+    #[structopt(
+        long,
+        help = "Loads a signature keypair from a 
+vec into the keystore and exits."
+    )]
+    load_ed25519_keypair_from_encrypted_obj: Option<Vec<u8>>,
 
     /// Set the lair data directory.
     #[structopt(
@@ -64,14 +73,25 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
         std::env::set_var("LAIR_DIR", lair_dir);
     }
 
-    if let Some(load_ed25519_keypair) = opt.load_ed25519_keypair {
+    if let Some(load_ed25519_keypair_from_file) = opt.load_ed25519_keypair_from_file {
         println!(
             "Creating a lair-keystore with provided keys at {:?}",
-            load_ed25519_keypair
+            load_ed25519_keypair_from_file
         );
-        trace!("executing lair gen tasks");
-        return lair_keystore::execute_load_ed25519_keypair(
-            load_ed25519_keypair,
+        trace!("executing lair gen tasks from file");
+        return lair_keystore::execute_load_ed25519_keypair_from_file(
+            load_ed25519_keypair_from_file,
+        )
+        .await;
+    }
+    if let Some(load_ed25519_keypair_from_encrypted_obj) = opt.load_ed25519_keypair_from_encrypted_obj {
+        println!(
+            "Creating a lair-keystore with provided keys {:?}",
+            load_ed25519_keypair_from_encrypted_obj
+        );
+        trace!("executing lair gen tasks from obj");
+        return lair_keystore::execute_load_ed25519_keypair_from_encrypted_obj(
+            load_ed25519_keypair_from_encrypted_obj,
         )
         .await;
     }
