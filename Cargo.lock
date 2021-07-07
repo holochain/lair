@@ -799,6 +799,7 @@ dependencies = [
 name = "lair_keystore"
 version = "0.0.1-alpha.12"
 dependencies = [
+ "base64",
  "criterion",
  "futures",
  "ghost_actor",
@@ -838,6 +839,7 @@ dependencies = [
  "tokio",
  "toml",
  "tracing-subscriber",
+ "winapi",
 ]
 
 [[package]]
