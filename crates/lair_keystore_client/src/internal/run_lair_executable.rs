@@ -19,8 +19,8 @@ pub async fn run_lair_executable(
         .map_err(LairError::other)?;
     let cmd = std::process::Command::new("lair-keystore")
         .env("LAIR_DIR", config.get_root_path())
-        .stdout(stdout)
-        .stderr(stderr)
+       .stdout(stdout)
+       .stderr(stderr)
         .stdin(std::process::Stdio::null())
         .spawn()
         .map_err(LairError::other)?;
