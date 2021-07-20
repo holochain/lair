@@ -31,6 +31,8 @@ crypto_box = "0.5"
 subtle = "2.3"
 block-padding = "0.2.1"
 
+arbitrary = { version = "1.0", features = ["derive"], optional = true }
+
 [dev-dependencies]
 tempfile = "3"
 tracing-subscriber = "0.2"
