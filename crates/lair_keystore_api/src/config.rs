@@ -1,22 +1,23 @@
+#[cfg(windows)]
+use crate::trace;
 use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use crate::trace;
 
 /// Use root path as is for socket path
 #[cfg(not(windows))]
-fn build_socket_path(root_path: &PathBuf) -> PathBuf {
-    let mut socket_path = root_path.clone();
+fn build_socket_path(root_path: &Path) -> PathBuf {
+    let mut socket_path = root_path.to_path_buf();
     socket_path.push("socket");
     socket_path
 }
 
 /// Use root path with adjustememts for pipe name
 #[cfg(windows)]
-fn build_socket_path(root_path: &PathBuf) -> PathBuf {
+fn build_socket_path(root_path: &Path) -> PathBuf {
     trace!("Config.root_path = {:?}", root_path);
-     let mut socket_path = PathBuf::new();
+    let mut socket_path = PathBuf::new();
     socket_path.push(r"\\.\pipe");
     // Add only valid path items
     for item in root_path.iter() {
@@ -31,7 +32,6 @@ fn build_socket_path(root_path: &PathBuf) -> PathBuf {
     trace!("Config.socket_path = {:?}", socket_path);
     socket_path
 }
-
 
 /// Lair configuration struct.
 pub struct Config {
