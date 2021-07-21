@@ -11,8 +11,7 @@ jobs:
     os: [
      ubuntu-latest,
      macos-latest,
-     # @todo windows support
-     #windows-latest,
+     windows-latest,
     ]
     toolchain: [
      stable,
