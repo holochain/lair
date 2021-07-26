@@ -82,14 +82,10 @@ pub async fn spawn_entry_store_actor(
 mod store_sqlite;
 use store_sqlite::SqlPool;
 
-//mod store_file;
-//use store_file::EntryStoreFileSender;
-
 struct EntryStoreImpl {
     i_s: ghost_actor::GhostSender<EntryStoreInternal>,
     #[allow(dead_code)]
     config: Arc<Config>,
-    //store_file: futures::channel::mpsc::Sender<store_file::EntryStoreFile>,
     db: SqlPool,
     last_entry_index: KeystoreIndex,
     entries_by_index: HashMap<KeystoreIndex, Arc<LairEntry>>,

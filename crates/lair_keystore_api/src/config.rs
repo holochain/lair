@@ -52,7 +52,7 @@ impl Config {
             .canonicalize()
             .expect("can cannonicalize root path");
         self.store_path = self.root_path.clone();
-        self.store_path.push("store");
+        self.store_path.push("store.sqlite");
         self.pid_path = self.root_path.clone();
         self.pid_path.push("pid");
         self.socket_path = build_socket_path(&self.root_path);

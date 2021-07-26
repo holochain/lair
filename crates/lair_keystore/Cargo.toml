@@ -17,7 +17,7 @@ ghost_actor = "0.3.0-alpha.1"
 lair_keystore_api = { version = "=0.0.1-alpha.13", path = "../lair_keystore_api" }
 parking_lot = "0.11.1"
 rusqlite = { version = "0.25", features = [ "sqlcipher" ] }
-sodoken = "=0.0.1-alpha.6"
+sodoken = "=0.0.1-alpha.7"
 structopt = "0.3"
 sysinfo = "0.15"
 thiserror = "1"

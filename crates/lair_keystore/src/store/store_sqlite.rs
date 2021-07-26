@@ -302,8 +302,10 @@ const KEY_PRAGMA: &[u8; KEY_PRAGMA_LEN] =
 /// write a sqlcipher key pragma maintaining mem protection
 fn secure_write_key_pragma<K>(key: K) -> LairResult<BufRead>
 where
-    K: AsBufReadSized<32>,
+    K: Into<BufReadSized<32>> + 'static + Send,
 {
+    let key = key.into();
+
     // write the pragma line
     let key_pragma: BufWriteSized<KEY_PRAGMA_LEN> =
         BufWriteSized::new_mem_locked().map_err(LairError::other)?;
@@ -319,7 +321,7 @@ where
         }
     }
 
-    Ok(key_pragma.read_only())
+    Ok(key_pragma.to_read())
 }
 
 fn set_pragmas(
