@@ -19,7 +19,7 @@ jobs:
 
    - name: linux-sqlcipher
      if: ${{ runner.os == 'Linux' }}
-     run: sudo apt-get install sqlcipher-dev
+     run: sudo apt-get install libsqlcipher-dev
 
 #   - name: rust cache
 #     uses: actions/cache@v2
