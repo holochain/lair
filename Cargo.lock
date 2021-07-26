@@ -50,6 +50,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "arbitrary"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "237430fd6ed3740afe94eefcc278ae21e050285be882804e0d6e8695f0c94691"
+dependencies = [
+ "derive_arbitrary",
+]
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -456,6 +465,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_arbitrary"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f1281ee141df08871db9fe261ab5312179eac32d1e314134ceaa8dd7c042f5a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "derive_more"
 version = "0.99.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -798,7 +818,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore"
-version = "0.0.1-alpha.12"
+version = "0.0.1-alpha.13"
 dependencies = [
  "base64",
  "criterion",
@@ -817,8 +837,9 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_api"
-version = "0.0.1-alpha.12"
+version = "0.0.1-alpha.13"
 dependencies = [
+ "arbitrary",
  "blake2b_simd",
  "block-padding",
  "byteorder",
@@ -845,7 +866,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_client"
-version = "0.0.1-alpha.12"
+version = "0.0.1-alpha.13"
 dependencies = [
  "ghost_actor",
  "lair_keystore_api",
