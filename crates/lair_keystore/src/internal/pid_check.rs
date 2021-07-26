@@ -44,9 +44,7 @@ pub fn pid_check(config: &Config) -> LairResult<PidCheckResult> {
 
     let sql_db_path = config.get_store_path().to_owned();
 
-    Ok(PidCheckResult {
-        sql_db_path,
-    })
+    Ok(PidCheckResult { sql_db_path })
 }
 
 /// only returns success if we were able to write pidfile with our pid

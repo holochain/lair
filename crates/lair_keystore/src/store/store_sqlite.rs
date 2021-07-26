@@ -1,10 +1,10 @@
 use lair_keystore_api::{LairError, LairResult};
 use parking_lot::Mutex;
+use rusqlite::params;
 use sodoken::*;
 use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
-use rusqlite::params;
 
 const READ_CON_COUNT: usize = 3;
 
@@ -50,7 +50,9 @@ impl SqlCon {
     pub async fn transaction<R, F>(&mut self, f: F) -> LairResult<R>
     where
         R: 'static + Send,
-        F: 'static + FnOnce(&mut rusqlite::Transaction<'_>) -> LairResult<R> + Send,
+        F: 'static
+            + FnOnce(&mut rusqlite::Transaction<'_>) -> LairResult<R>
+            + Send,
     {
         let b = if self.is_write {
             rusqlite::TransactionBehavior::Immediate
@@ -71,12 +73,14 @@ impl SqlCon {
                         } else {
                             Ok(r)
                         }
-                    },
+                    }
                     Err(err) => Err(err),
-                }
+                },
             };
             (con, r)
-        }).await.map_err(LairError::other)?;
+        })
+        .await
+        .map_err(LairError::other)?;
         self.con = Some(con);
         r
     }
@@ -105,19 +109,20 @@ impl SqlPool {
 
         set_pragmas(&write_con, fake_key_pragma.clone())?;
 
-        write_con.execute(
-            "CREATE TABLE IF NOT EXISTS lair_entries (
+        write_con
+            .execute(
+                "CREATE TABLE IF NOT EXISTS lair_entries (
                 id INTEGER PRIMARY KEY NOT NULL,
                 data BLOB NOT NULL
             );",
-            [],
-        )
-        .map_err(LairError::other)?;
+                [],
+            )
+            .map_err(LairError::other)?;
 
         let mut read_cons: [Option<rusqlite::Connection>; READ_CON_COUNT] =
             Default::default();
 
-        for i in 0..READ_CON_COUNT {
+        for rc_mut in read_cons.iter_mut() {
             let read_con = rusqlite::Connection::open_with_flags(
                 &path,
                 OpenFlags::SQLITE_OPEN_READ_ONLY
@@ -128,7 +133,7 @@ impl SqlPool {
 
             set_pragmas(&read_con, fake_key_pragma.clone())?;
 
-            read_cons[i] = Some(read_con);
+            *rc_mut = Some(read_con);
         }
 
         Ok(Self(Arc::new(Mutex::new(SqlPoolInner {
@@ -192,73 +197,99 @@ impl SqlPool {
         }
     }
 
-    pub fn init_load_unlock(&self) -> impl Future<Output = LairResult<Option<Vec<u8>>>> + 'static + Send {
+    pub fn init_load_unlock(
+        &self,
+    ) -> impl Future<Output = LairResult<Option<Vec<u8>>>> + 'static + Send
+    {
         let reader = self.read();
         async move {
             let mut reader = reader.await;
-            match reader.transaction(|txn| {
-                txn.query_row(
-                    "SELECT data FROM lair_entries WHERE id = 0;",
-                    [],
-                    |row| row.get(0),
-                )
-                .map_err(LairError::other)
-            }).await {
+            match reader
+                .transaction(|txn| {
+                    txn.query_row(
+                        "SELECT data FROM lair_entries WHERE id = 0;",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .map_err(LairError::other)
+                })
+                .await
+            {
                 Ok(data) => Ok(Some(data)),
                 Err(_) => Ok(None),
             }
         }
     }
 
-    pub fn write_unlock(&self, entry_data: Vec<u8>) -> impl Future<Output = LairResult<()>> + 'static + Send {
+    pub fn write_unlock(
+        &self,
+        entry_data: Vec<u8>,
+    ) -> impl Future<Output = LairResult<()>> + 'static + Send {
         let writer = self.write();
         async move {
             let mut writer = writer.await;
-            writer.transaction(move |txn| {
-                txn.execute(
-                    "INSERT INTO lair_entries (id, data) VALUES (?1, ?2);",
-                    params![0, entry_data],
-                )
-                .map_err(LairError::other)?;
-                Ok(())
-            }).await
+            writer
+                .transaction(move |txn| {
+                    txn.execute(
+                        "INSERT INTO lair_entries (id, data) VALUES (?1, ?2);",
+                        params![0, entry_data],
+                    )
+                    .map_err(LairError::other)?;
+                    Ok(())
+                })
+                .await
         }
     }
 
-    pub fn load_all_entries(&self) -> impl Future<Output = LairResult<Vec<(super::KeystoreIndex, Vec<u8>)>>> + 'static + Send {
+    pub fn load_all_entries(
+        &self,
+    ) -> impl Future<Output = LairResult<Vec<(super::KeystoreIndex, Vec<u8>)>>>
+           + 'static
+           + Send {
         let reader = self.read();
         async move {
             let mut reader = reader.await;
-            reader.transaction(|txn| {
-                let mut s = txn
-                    .prepare("SELECT id, data FROM lair_entries")
-                    .map_err(LairError::other)?;
-                let it = s.query_map([], |row| {
-                    let id: u32 = row.get(0)?;
-                    Ok((id.into(), row.get(1)?))
+            reader
+                .transaction(|txn| {
+                    let mut s = txn
+                        .prepare(
+                            "SELECT id, data FROM lair_entries WHERE id > 0;",
+                        )
+                        .map_err(LairError::other)?;
+                    let it = s
+                        .query_map([], |row| {
+                            let id: u32 = row.get(0)?;
+                            Ok((id.into(), row.get(1)?))
+                        })
+                        .map_err(LairError::other)?;
+                    let mut out = Vec::new();
+                    for i in it {
+                        out.push(i.map_err(LairError::other)?);
+                    }
+                    Ok(out)
                 })
-                .map_err(LairError::other)?;
-                let mut out = Vec::new();
-                for i in it {
-                    out.push(i.map_err(LairError::other)?);
-                }
-                Ok(out)
-            }).await
+                .await
         }
     }
 
-    pub fn write_next_entry(&self, entry_data: Vec<u8>) -> impl Future<Output = LairResult<super::KeystoreIndex>> + 'static + Send {
+    pub fn write_next_entry(
+        &self,
+        entry_data: Vec<u8>,
+    ) -> impl Future<Output = LairResult<super::KeystoreIndex>> + 'static + Send
+    {
         let writer = self.write();
         async move {
             let mut writer = writer.await;
-            writer.transaction(move |txn| {
-                txn.execute(
-                    "INSERT INTO lair_entries (data) VALUES (?1);",
-                    params![entry_data],
-                )
-                .map_err(LairError::other)?;
-                Ok(())
-            }).await?;
+            writer
+                .transaction(move |txn| {
+                    txn.execute(
+                        "INSERT INTO lair_entries (data) VALUES (?1);",
+                        params![entry_data],
+                    )
+                    .map_err(LairError::other)?;
+                    Ok(())
+                })
+                .await?;
             Ok((writer.last_insert_rowid() as u32).into())
         }
     }
@@ -337,7 +368,8 @@ mod tests {
                 loop {
                     let c = cont.load(std::sync::atomic::Ordering::Relaxed);
 
-                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                    tokio::time::sleep(std::time::Duration::from_millis(10))
+                        .await;
 
                     let count = pool.load_all_entries().await.unwrap().len();
                     println!("got count: {}", count);
@@ -354,7 +386,8 @@ mod tests {
             let pool = pool.clone();
             all_write.push(tokio::task::spawn(async move {
                 let start = std::time::Instant::now();
-                let id = pool.write_next_entry(b"testing".to_vec()).await.unwrap();
+                let id =
+                    pool.write_next_entry(b"testing".to_vec()).await.unwrap();
                 println!("write {} in {} s", id, start.elapsed().as_secs_f64());
             }));
         }
