@@ -15,9 +15,10 @@ jobs:
      stable,
     ]
   steps:
-   - uses: actions/checkout@v2
+   - name: Checkout
+     uses: actions/checkout@v2
 
-   - name: linux-sqlcipher
+   - name: Install Sqlcipher Linux
      if: ${{ runner.os == 'Linux' }}
      run: sudo apt-get install libsqlcipher-dev
 
@@ -34,16 +35,19 @@ jobs:
 #      restore-keys: |
 #       ${{ runner.os }}-cargo-${{ env.cache-name }}-${{ matrix.toolchain }}-
 
-   - uses: actions-rs/toolchain@v1
+   - name: Toolchain
+     uses: actions-rs/toolchain@v1
      with:
       toolchain: ${{ matrix.toolchain }}
       components: rustfmt, clippy
 
-   - uses: actions-rs/cargo@v1
+   - name: Cargo Fmt
+     uses: actions-rs/cargo@v1
      with:
       command: fmt
       args: -- --check
 
-   - uses: actions-rs/cargo@v1
+   - name: Cargo Clippy
+     uses: actions-rs/cargo@v1
      with:
       command: clippy

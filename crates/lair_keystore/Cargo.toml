@@ -16,7 +16,6 @@ futures = "0.3"
 ghost_actor = "0.3.0-alpha.1"
 lair_keystore_api = { version = "=0.0.1-alpha.13", path = "../lair_keystore_api" }
 parking_lot = "0.11.1"
-rusqlite = { version = "0.25", features = [ "sqlcipher" ] }
 sodoken = "=0.0.1-alpha.7"
 structopt = "0.3"
 sysinfo = "0.15"
@@ -24,6 +23,16 @@ thiserror = "1"
 tokio = { version = "1.8.1", features = [ "full" ] }
 tracing = "0.1"
 tracing-subscriber = "0.2"
+
+# switch to bundled-sqlcipher once this is released:
+# https://github.com/rusqlite/rusqlite/issues/966
+[target.'cfg(windows)'.dependencies]
+rusqlite = { version = "0.25", features = [ "bundled" ] }
+
+# switch to bundled-sqlcipher once this is released:
+# https://github.com/rusqlite/rusqlite/issues/966
+[target.'cfg(not(windows))'.dependencies]
+rusqlite = { version = "0.25", features = [ "sqlcipher" ] }
 
 [build-dependencies]
 lair_keystore_api = { version = "=0.0.1-alpha.13", path = "../lair_keystore_api" }
