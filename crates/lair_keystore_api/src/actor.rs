@@ -130,6 +130,7 @@ impl From<String> for CertSni {
 #[derive(
     Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deref, From, Into,
 )]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[allow(clippy::rc_buffer)]
 pub struct CertDigest(pub Arc<Vec<u8>>);
 

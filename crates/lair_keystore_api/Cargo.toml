@@ -1,6 +1,6 @@
 [package]
 name = "lair_keystore_api"
-version = "0.0.1-alpha.13"
+version = "0.0.2"
 description = "secret lair private keystore types"
 license = "Apache-2.0"
 repository = "https://github.com/holochain/lair"
@@ -30,6 +30,8 @@ rand = "0.7"
 crypto_box = "0.5"
 subtle = "2.3"
 block-padding = "0.2.1"
+
+arbitrary = { version = "1.0", features = ["derive"], optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = "0.3.9"
