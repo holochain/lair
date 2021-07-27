@@ -86,6 +86,26 @@ impl SqlCon {
     }
 }
 
+/// extension trait for execute that we don't care about results
+trait ExecExt {
+    fn execute_optional<P>(&self, sql: &str, params: P) -> LairResult<()>
+    where
+        P: rusqlite::Params;
+}
+
+impl ExecExt for rusqlite::Connection {
+    fn execute_optional<P>(&self, sql: &str, params: P) -> LairResult<()>
+    where
+        P: rusqlite::Params,
+    {
+        use rusqlite::OptionalExtension;
+        self.query_row(sql, params, |_| Ok(()))
+            .optional()
+            .map_err(LairError::other)?;
+        Ok(())
+    }
+}
+
 #[derive(Clone)]
 pub struct SqlPool(Arc<Mutex<SqlPoolInner>>);
 
@@ -109,15 +129,13 @@ impl SqlPool {
 
         set_pragmas(&write_con, fake_key_pragma.clone())?;
 
-        write_con
-            .execute(
-                "CREATE TABLE IF NOT EXISTS lair_entries (
+        write_con.execute_optional(
+            "CREATE TABLE IF NOT EXISTS lair_entries (
                 id INTEGER PRIMARY KEY NOT NULL,
                 data BLOB NOT NULL
             );",
-                [],
-            )
-            .map_err(LairError::other)?;
+            [],
+        )?;
 
         let mut read_cons: [Option<rusqlite::Connection>; READ_CON_COUNT] =
             Default::default();
@@ -230,11 +248,10 @@ impl SqlPool {
             let mut writer = writer.await;
             writer
                 .transaction(move |txn| {
-                    txn.execute(
+                    txn.execute_optional(
                         "INSERT INTO lair_entries (id, data) VALUES (?1, ?2);",
                         params![0, entry_data],
-                    )
-                    .map_err(LairError::other)?;
+                    )?;
                     Ok(())
                 })
                 .await
@@ -282,11 +299,10 @@ impl SqlPool {
             let mut writer = writer.await;
             writer
                 .transaction(move |txn| {
-                    txn.execute(
+                    txn.execute_optional(
                         "INSERT INTO lair_entries (data) VALUES (?1);",
                         params![entry_data],
-                    )
-                    .map_err(LairError::other)?;
+                    )?;
                     Ok(())
                 })
                 .await?;
@@ -331,8 +347,10 @@ fn set_pragmas(
     con.busy_timeout(std::time::Duration::from_millis(30_000))
         .map_err(LairError::other)?;
 
-    con.execute(std::str::from_utf8(&*key_pragma.read_lock()).unwrap(), [])
-        .map_err(LairError::other)?;
+    con.execute_optional(
+        std::str::from_utf8(&*key_pragma.read_lock()).unwrap(),
+        [],
+    )?;
 
     con.pragma_update(None, "trusted_schema", &"0".to_string())
         .map_err(LairError::other)?;
