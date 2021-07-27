@@ -9,10 +9,10 @@ use lair_keystore_api::{actor::*, internal::*};
 /// Spawn a new IPC server binding to serve out the Lair client api.
 pub async fn spawn_bind_server_ipc(
     config: Arc<Config>,
-    store_file: tokio::fs::File,
+    sql_db_path: std::path::PathBuf,
 ) -> LairResult<()> {
     let store_actor =
-        store::spawn_entry_store_actor(config.clone(), store_file).await?;
+        store::spawn_entry_store_actor(config.clone(), sql_db_path).await?;
 
     let builder = ghost_actor::actor_builder::GhostActorBuilder::new();
 

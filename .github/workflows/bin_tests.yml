@@ -1,49 +1,45 @@
 name: binary tests
-
 on: [ push ]
-
 jobs:
+  bin-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [
+          ubuntu-latest,
+          macos-latest,
+          windows-latest,
+        ]
+        toolchain: [
+          stable,
+        ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
 
- bin-test:
-  runs-on: ${{ matrix.os }}
-  strategy:
-   matrix:
-    os: [
-     ubuntu-latest,
-     macos-latest,
-     windows-latest,
-    ]
-    toolchain: [
-     stable,
-    ]
-  steps:
-   - uses: actions/checkout@v2
+      - name: Install Sqlcipher Linux
+        if: ${{ runner.os == 'Linux' }}
+        run: sudo apt-get install libsqlcipher-dev
 
-#   - name: rust cache
-#     uses: actions/cache@v2
-#     env:
-#      cache-name: cache-rust-bin-test
-#     with:
-#      path: |
-#        ~/.cargo/registry
-#        ~/.cargo/git
-#        target
-#      key: ${{ runner.os }}-cargo-bin-${{ env.cache-name }}-${{ matrix.toolchain }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('crates/**/Cargo.toml') }}
-#      restore-keys: |
-#       ${{ runner.os }}-cargo-${{ env.cache-name }}-${{ matrix.toolchain }}-
+      - name: Install Sqlcipher MacOs
+        if: ${{ runner.os == 'macOs' }}
+        run: brew install sqlcipher
 
-   - uses: actions-rs/toolchain@v1
-     with:
-       toolchain: ${{ matrix.toolchain }}
+      - name: Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
 
-   # the binary can't be fully tested without an install
-   - uses: actions-rs/cargo@v1
-     with:
-       command: install
-       args: -f --path crates/lair_keystore
+      - name: Install Lair
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: -f --path crates/lair_keystore
 
-   # run the binary tests
-   - uses: actions-rs/cargo@v1
-     with:
-       command: test
-       args: --manifest-path crates/lair_keystore_client/Cargo.toml --features=bin-tests
+      - name: Run Bin Tests
+        uses: actions-rs/cargo@v1
+        env:
+          RUST_BACKTRACE: 1
+        with:
+          command: test
+          args: --manifest-path crates/lair_keystore_client/Cargo.toml --features=bin-tests

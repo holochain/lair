@@ -1,5 +1,9 @@
 #![deny(missing_docs)]
 #![deny(warnings)]
+// it's not possible to specify required
+// bounds with the `async fn` syntax.
+#![allow(clippy::manual_async_fn)]
+
 //! secret lair private keystore
 //!
 //! # Usage
@@ -33,10 +37,10 @@ pub async fn execute_lair() -> LairResult<()> {
 
     println!("#lair-keystore-dir:{:?}#", config.get_root_path());
 
-    let internal::pid_check::PidCheckResult { store_file } =
+    let internal::pid_check::PidCheckResult { sql_db_path } =
         internal::pid_check::pid_check(&config)?;
 
-    ipc::spawn_bind_server_ipc(config, store_file).await?;
+    ipc::spawn_bind_server_ipc(config, sql_db_path).await?;
 
     Ok(())
 }
@@ -72,11 +76,11 @@ pub async fn execute_load_ed25519_keypair(
 
     println!("#lair-keystore-dir:{:?}#", config.get_root_path());
 
-    let internal::pid_check::PidCheckResult { store_file } =
+    let internal::pid_check::PidCheckResult { sql_db_path } =
         internal::pid_check::pid_check(&config)?;
 
     let store_actor =
-        store::spawn_entry_store_actor(config.clone(), store_file).await?;
+        store::spawn_entry_store_actor(config.clone(), sql_db_path).await?;
 
     let keypair = entry::EntrySignEd25519 {
         priv_key:

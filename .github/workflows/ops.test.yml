@@ -1,51 +1,45 @@
 name: test
-
 on: [ push ]
-
 jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [
+          ubuntu-latest,
+          macos-latest,
+          windows-latest,
+        ]
+        toolchain: [
+          stable,
+        ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
 
- test:
-  runs-on: ${{ matrix.os }}
-  strategy:
-   matrix:
-    os: [
-     ubuntu-latest,
-     macos-latest,
-     windows-latest,
-    ]
-    toolchain: [
-      stable,
-      #beta,
-      #nightly,
-    ]
-  steps:
-   - uses: actions/checkout@v2
+      - name: Install Sqlcipher Linux
+        if: ${{ runner.os == 'Linux' }}
+        run: sudo apt-get install libsqlcipher-dev
 
-#   - name: rust cache
-#     uses: actions/cache@v2
-#     env:
-#      cache-name: cache-rust-test
-#     with:
-#      path: |
-#        ~/.cargo/registry
-#        ~/.cargo/git
-#        target
-#      key: ${{ runner.os }}-cargo-${{ env.cache-name }}-${{ matrix.toolchain }}-${{ hashFiles('Cargo.toml') }}-${{ hashFiles('crates/**/Cargo.toml') }}
-#      restore-keys: |
-#       ${{ runner.os }}-cargo-${{ env.cache-name }}-${{ matrix.toolchain }}-
+      - name: Install Sqlcipher MacOs
+        if: ${{ runner.os == 'macOs' }}
+        run: brew install sqlcipher
 
-   - uses: actions-rs/toolchain@v1
-     with:
-       toolchain: ${{ matrix.toolchain }}
+      - name: Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
 
-   # smoke test a release build
-   - uses: actions-rs/cargo@v1
-     with:
-       command: build
-       args: --release
+      - name: Build Release
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release
 
-   # run all the tests
-   - uses: actions-rs/cargo@v1
-     with:
-       command: test
-       args:
+      - name: Cargo Test
+        uses: actions-rs/cargo@v1
+        env:
+          RUST_BACKTRACE: 1
+        with:
+          command: test
+          args:
