@@ -115,11 +115,11 @@ fn entry_decode_x25519(
 ) -> LairResult<EntryX25519> {
     let priv_key_data = reader.read_bytes(x25519::PRIV_KEY_BYTES as _)?;
     let mut priv_key = [0_u8; x25519::PRIV_KEY_BYTES];
-    priv_key.copy_from_slice(&priv_key_data);
+    priv_key.copy_from_slice(priv_key_data);
 
     let pub_key_data = reader.read_bytes(x25519::PUB_KEY_BYTES as _)?;
     let mut pub_key = [0_u8; x25519::PUB_KEY_BYTES];
-    pub_key.copy_from_slice(&pub_key_data);
+    pub_key.copy_from_slice(pub_key_data);
 
     Ok(EntryX25519 {
         priv_key: priv_key.into(),

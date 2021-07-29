@@ -27,7 +27,7 @@ pub fn pid_check(config: &Config) -> LairResult<PidCheckResult> {
         if i != 0 {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        match pid_check_write(&config, &mut sys) {
+        match pid_check_write(config, &mut sys) {
             Ok(_) => {
                 last_err = None;
                 break;
