@@ -4,7 +4,9 @@ use crate::internal::util::*;
 use crate::internal::wire::*;
 use crate::*;
 
-use futures::{future::FutureExt, sink::SinkExt, stream::StreamExt};
+use futures::future::FutureExt;
+use futures::sink::SinkExt;
+use futures::stream::{BoxStream, StreamExt};
 use std::collections::HashMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -20,6 +22,44 @@ use win_ipc::*;
 
 mod low_level;
 pub(crate) use low_level::*;
+
+/// respond to an incoming lair request
+pub type IpcRespond2 = tokio::sync::oneshot::Sender<LairResult<LairWire>>;
+
+/// receive incoming lair requests
+pub struct IpcReceiver2(BoxStream<'static, LairResult<(
+    LairWire,
+    IpcRespond2,
+)>>);
+
+impl IpcReceiver2 {
+    #[allow(dead_code)]
+    pub(crate) fn new(
+        read_half: IpcRead,
+        write_half: IpcWrite,
+    ) -> Self {
+        let _ll_send = LowLevelWireSender::new(write_half);
+        let _ll_recv = LowLevelWireReceiver2::new(read_half);
+
+        let stream = futures::stream::try_unfold((), |_| async move {
+            unimplemented!()
+            //Ok(None)
+        }).boxed();
+
+        Self(stream)
+    }
+}
+
+impl futures::stream::Stream for IpcReceiver2 {
+    type Item = LairResult<(LairWire, IpcRespond2)>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>
+    ) -> std::task::Poll<Option<Self::Item>> {
+        futures::stream::Stream::poll_next(std::pin::Pin::new(&mut self.0), cx)
+    }
+}
 
 /// IpcSender
 pub type IpcSender = ghost_actor::GhostSender<IpcWireApi>;
@@ -137,7 +177,7 @@ async fn spawn_connection_pair(
     let reader = spawn_low_level_read_half(kill_switch.clone(), read_half)?;
     builder.channel_factory().attach_receiver(reader).await?;
 
-    let writer = spawn_low_level_write_half(kill_switch.clone(), write_half)?;
+    let writer = LowLevelWireSender::new(write_half);
 
     tokio::task::spawn(builder.spawn(Internal {
         kill_switch: kill_switch.clone(),
@@ -152,7 +192,7 @@ async fn spawn_connection_pair(
 struct Internal {
     kill_switch: KillSwitch,
     pending: HashMap<u64, tokio::sync::oneshot::Sender<LairWire>>,
-    writer: futures::channel::mpsc::Sender<LowLevelWireApi>,
+    writer: LowLevelWireSender,
     evt_send: futures::channel::mpsc::Sender<IpcWireApi>,
 }
 
@@ -173,7 +213,7 @@ impl LowLevelWireApiHandler for Internal {
             Ok(async move {
                 if let Ok(res) = fut.await {
                     let _ = weak_kill_switch
-                        .mix(writer_clone.low_level_send(res))
+                        .mix(writer_clone.send(res))
                         .await;
                 }
                 // TODO - send errors back so we don't have dangling reqs!!
@@ -201,7 +241,7 @@ impl IpcWireApiHandler for Internal {
         let (send, recv) = tokio::sync::oneshot::channel();
         self.pending.insert(msg.get_msg_id(), send);
         trace!("con write {:?}", msg);
-        let fut = self.kill_switch.mix_static(self.writer.low_level_send(msg));
+        let fut = self.kill_switch.mix_static(self.writer.send(msg));
         let weak_kill_switch = self.kill_switch.weak();
         Ok(async move {
             fut.await?;
