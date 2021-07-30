@@ -885,6 +885,7 @@ dependencies = [
  "rayon",
  "rcgen",
  "ring",
+ "sodoken",
  "subtle",
  "tempfile",
  "thiserror",

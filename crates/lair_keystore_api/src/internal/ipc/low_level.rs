@@ -1,7 +1,7 @@
 use super::*;
+use futures::stream::BoxStream;
 use parking_lot::Mutex;
 use std::future::Future;
-use futures::stream::BoxStream;
 
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -18,10 +18,7 @@ impl LowLevelWireSender {
         // then send the whole batch at once while we have cpu time.
         let limit = Arc::new(tokio::sync::Semaphore::new(1));
         let inner = Arc::new(Mutex::new(Some(raw_send)));
-        Self {
-            limit,
-            inner,
-        }
+        Self { limit, inner }
     }
 
     #[allow(dead_code)]
@@ -30,21 +27,23 @@ impl LowLevelWireSender {
     }
 
     #[allow(dead_code)]
-    pub fn send(&self, msg: LairWire) -> impl Future<Output = LairResult<()>> + 'static + Send {
+    pub fn send(
+        &self,
+        msg: LairWire,
+    ) -> impl Future<Output = LairResult<()>> + 'static + Send {
         let limit = self.limit.clone();
         let inner = self.inner.clone();
         async move {
             let msg_enc = msg.encode()?;
 
-            let _permit = limit.acquire_owned().await.map_err(LairError::other)?;
+            let _permit =
+                limit.acquire_owned().await.map_err(LairError::other)?;
 
             // if we have a permit, the sender is available
             let mut raw_send = inner.lock().take().unwrap();
 
-            let res = raw_send
-                .write_all(&msg_enc)
-                .await
-                .map_err(LairError::other);
+            let res =
+                raw_send.write_all(&msg_enc).await.map_err(LairError::other);
             *(inner.lock()) = Some(raw_send);
             trace!("ll wrote {:?}", &msg);
             res
@@ -53,7 +52,9 @@ impl LowLevelWireSender {
 }
 
 #[allow(dead_code)]
-pub(crate) struct LowLevelWireReceiver2(BoxStream<'static, LairResult<LairWire>>);
+pub(crate) struct LowLevelWireReceiver2(
+    BoxStream<'static, LairResult<LairWire>>,
+);
 
 impl LowLevelWireReceiver2 {
     #[allow(dead_code)]
@@ -94,7 +95,10 @@ impl LowLevelWireReceiver2 {
                 }
 
                 trace!("ll read tick");
-                let read = raw_recv.read(&mut buffer).await.map_err(LairError::other)?;
+                let read = raw_recv
+                    .read(&mut buffer)
+                    .await
+                    .map_err(LairError::other)?;
                 trace!(?read, "ll read count");
                 if read == 0 {
                     trace!("ll read end");
@@ -112,7 +116,8 @@ impl LowLevelWireReceiver2 {
                     pending_msgs.push(msg);
                 }
             }
-        }).boxed();
+        })
+        .boxed();
         Self(stream)
     }
 }
@@ -122,7 +127,7 @@ impl futures::stream::Stream for LowLevelWireReceiver2 {
 
     fn poll_next(
         mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>
+        cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<Self::Item>> {
         futures::stream::Stream::poll_next(std::pin::Pin::new(&mut self.0), cx)
     }
