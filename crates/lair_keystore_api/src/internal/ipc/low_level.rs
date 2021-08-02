@@ -52,11 +52,11 @@ impl LowLevelWireSender {
 }
 
 #[allow(dead_code)]
-pub(crate) struct LowLevelWireReceiver2(
+pub(crate) struct LowLevelWireReceiver(
     BoxStream<'static, LairResult<LairWire>>,
 );
 
-impl LowLevelWireReceiver2 {
+impl LowLevelWireReceiver {
     #[allow(dead_code)]
     pub fn new(raw_recv: IpcRead) -> Self {
         struct State {
@@ -122,7 +122,7 @@ impl LowLevelWireReceiver2 {
     }
 }
 
-impl futures::stream::Stream for LowLevelWireReceiver2 {
+impl futures::stream::Stream for LowLevelWireReceiver {
     type Item = LairResult<LairWire>;
 
     fn poll_next(
@@ -131,63 +131,4 @@ impl futures::stream::Stream for LowLevelWireReceiver2 {
     ) -> std::task::Poll<Option<Self::Item>> {
         futures::stream::Stream::poll_next(std::pin::Pin::new(&mut self.0), cx)
     }
-}
-
-ghost_actor::ghost_chan! {
-    /// Low-level send api..
-    pub(crate) chan LowLevelWireApi<LairError> {
-        /// Send LairWire message somewhere.
-        fn low_level_send(msg: LairWire) -> ();
-    }
-}
-
-/// Low-level send api Receiver.
-pub(crate) type LowLevelWireReceiver =
-    futures::channel::mpsc::Receiver<LowLevelWireApi>;
-
-#[allow(clippy::unnecessary_wraps)]
-pub(crate) fn spawn_low_level_read_half(
-    kill_switch: KillSwitch,
-    mut read_half: IpcRead,
-) -> LairResult<LowLevelWireReceiver> {
-    let (s, r) = futures::channel::mpsc::channel(10);
-
-    err_spawn("ll-read", async move {
-        let mut pending_data = Vec::new();
-        let mut buffer = [0_u8; 4096];
-        loop {
-            trace!("ll read tick");
-            let read = kill_switch
-                .mix(async {
-                    read_half.read(&mut buffer).await.map_err(LairError::other)
-                })
-                .await?;
-            trace!(?read, "ll read count");
-            if read == 0 {
-                trace!("ll read end");
-                return Err("read returned 0 bytes".into());
-            }
-            pending_data.extend_from_slice(&buffer[..read]);
-            while let Ok(size) = LairWire::peek_size(&pending_data) {
-                trace!(?size, "ll read peek size");
-                if pending_data.len() < size {
-                    break;
-                }
-                let msg = LairWire::decode(&pending_data)?;
-                let _ = pending_data.drain(..size);
-                trace!("ll read {:?}", msg);
-                // run this in a task so we don't hold up the read loop
-                let weak_kill_switch = kill_switch.weak();
-                let task_sender = s.clone();
-                tokio::task::spawn(async move {
-                    let _ = weak_kill_switch
-                        .mix(task_sender.low_level_send(msg))
-                        .await;
-                    trace!("ll read send done");
-                });
-            }
-        }
-    });
-
-    Ok(r)
 }

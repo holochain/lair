@@ -26,24 +26,29 @@ pub type IncomingIpcConnectionReceiver =
 
 mod spawn_bind_server_ipc;
 
+pub use crate::internal::ipc::Passphrase;
+
+/// Callback for validating unlock passphrase.
+pub type UnlockCb = Arc<
+    dyn Fn(Passphrase) -> futures::future::BoxFuture<'static, LairResult<()>>
+        + 'static
+        + Send
+        + Sync,
+>;
+
 /// Bind a server Ipc connection.
 pub async fn spawn_bind_server_ipc<S>(
     config: Arc<Config>,
     api_sender: S,
-) -> LairResult<IncomingIpcConnectionReceiver>
+    unlock_cb: UnlockCb,
+) -> LairResult<()>
 where
     S: ghost_actor::GhostChannelSender<LairClientApi>,
 {
-    let (incoming_send, incoming_recv) = futures::channel::mpsc::channel(10);
+    spawn_bind_server_ipc::spawn_bind_server_ipc(config, api_sender, unlock_cb)
+        .await?;
 
-    spawn_bind_server_ipc::spawn_bind_server_ipc(
-        config,
-        api_sender,
-        incoming_send,
-    )
-    .await?;
-
-    Ok(incoming_recv)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -250,18 +255,19 @@ mod tests {
             builder.spawn(TestServer).await.map_err(LairError::other)
         });
 
-        let mut incoming_recv =
-            spawn_bind_server_ipc(config.clone(), api_sender).await?;
-
-        err_spawn("test-incoming-loop", async move {
-            let mut keep_em = Vec::new();
-            while let Some(evt_send) = incoming_recv.next().await {
-                let passphrase = evt_send.request_unlock_passphrase().await?;
-                assert_eq!("test-val", passphrase);
-                keep_em.push(evt_send);
+        let notify = Arc::new(tokio::sync::Notify::new());
+        let notify2 = notify.clone();
+        let unlock_cb: UnlockCb = Arc::new(move |passphrase| {
+            let notify2 = notify2.clone();
+            assert_eq!(b"test-val", &*passphrase.read_lock());
+            async move {
+                notify2.notify_waiters();
+                Ok(())
             }
-            Ok(())
+            .boxed()
         });
+
+        spawn_bind_server_ipc(config.clone(), api_sender, unlock_cb).await?;
 
         let (cli_send, mut cli_recv) = spawn_client_ipc(config).await?;
 
@@ -282,6 +288,8 @@ mod tests {
             }
             Ok(())
         });
+
+        notify.notified().await;
 
         assert_eq!(
             LairServerInfo::test_val(),

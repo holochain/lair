@@ -10,7 +10,7 @@ pub(crate) async fn spawn_client_ipc(
     config: Arc<Config>,
     evt_send: futures::channel::mpsc::Sender<LairClientEvent>,
 ) -> LairResult<ghost_actor::GhostSender<LairClientApi>> {
-    let (ipc_send, mut ipc_recv) = spawn_ipc_connection2(config).await?;
+    let (ipc_send, mut ipc_recv) = spawn_ipc_connection(config).await?;
 
     let ipc_send2 = ipc_send.clone();
     err_spawn("client-ipc-evt-loop", async move {
@@ -65,7 +65,7 @@ pub(crate) async fn spawn_client_ipc(
 }
 
 struct Internal {
-    ipc_send: IpcSender2,
+    ipc_send: IpcSender,
 }
 
 impl ghost_actor::GhostControlHandler for Internal {}

@@ -3,7 +3,8 @@
 use crate::entry::LairEntry;
 use crate::store::EntryStoreSender;
 use crate::*;
-use futures::{future::FutureExt, stream::StreamExt};
+use futures::future::FutureExt;
+use lair_keystore_api::ipc::{Passphrase, UnlockCb};
 use lair_keystore_api::{actor::*, internal::*};
 
 /// Spawn a new IPC server binding to serve out the Lair client api.
@@ -26,18 +27,22 @@ pub async fn spawn_bind_server_ipc(
         .create_channel::<InternalApi>()
         .await?;
 
-    let mut con_recv = lair_keystore_api::ipc::spawn_bind_server_ipc(
+    let i_s2 = i_s.clone();
+    let unlock_cb: UnlockCb = Arc::new(move |passphrase| {
+        let i_s2 = i_s2.clone();
+        async move {
+            i_s2.incoming_passphrase(passphrase).await?;
+            Ok(())
+        }
+        .boxed()
+    });
+
+    lair_keystore_api::ipc::spawn_bind_server_ipc(
         config.clone(),
         api_sender,
+        unlock_cb,
     )
     .await?;
-
-    tokio::task::spawn(async move {
-        while let Some(con) = con_recv.next().await {
-            i_s.incoming_con(con).await?;
-        }
-        LairResult::<()>::Ok(())
-    });
 
     tokio::task::spawn(
         builder.spawn(Internal::new(config.clone(), store_actor)?),
@@ -48,12 +53,11 @@ pub async fn spawn_bind_server_ipc(
 
 ghost_actor::ghost_chan! {
     chan InternalApi<LairError> {
-        fn incoming_con(evt_send: futures::channel::mpsc::Sender<LairClientEvent>) -> ();
+        fn incoming_passphrase(passphrase: Passphrase) -> ();
     }
 }
 
 struct Internal {
-    #[allow(dead_code)]
     store_actor: ghost_actor::GhostSender<store::EntryStore>,
 }
 
@@ -71,13 +75,11 @@ impl ghost_actor::GhostControlHandler for Internal {}
 impl ghost_actor::GhostHandler<InternalApi> for Internal {}
 
 impl InternalApiHandler for Internal {
-    fn handle_incoming_con(
+    fn handle_incoming_passphrase(
         &mut self,
-        evt_send: futures::channel::mpsc::Sender<LairClientEvent>,
+        _passphrase: Passphrase,
     ) -> InternalApiHandlerResult<()> {
-        tokio::task::spawn(async move {
-            let _passphrase = evt_send.request_unlock_passphrase().await;
-        });
+        // TODO - check passphrase - connect db if this is the first one
         Ok(async move { Ok(()) }.boxed().into())
     }
 }
