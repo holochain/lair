@@ -39,12 +39,26 @@ impl Drop for PendingCleanup {
 }
 
 /// make outgoing lair requests
+#[derive(Clone)]
 pub struct IpcSender2 {
     ll_send: LowLevelWireSender,
     inner: Arc<Mutex<Ipc2Inner>>,
 }
 
 impl IpcSender2 {
+    /// respond to an incoming lair wire request
+    pub fn respond(
+        &self,
+        msg: LairWire,
+    ) -> impl Future<Output = LairResult<()>> + 'static + Send {
+        let ll_send = self.ll_send.clone();
+
+        async move {
+            ll_send.send(msg).await?;
+            Ok(())
+        }
+    }
+
     /// make a lair wire request, and await a response
     pub fn request(
         &self,
@@ -179,7 +193,13 @@ async fn get_passphrase(
 
     ll_send.send(msg).await?;
 
-    let msg = match ll_recv.next().await {
+    let msg = match tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        ll_recv.next(),
+    )
+    .await
+    .map_err(LairError::other)?
+    {
         None => return Err("no result".into()),
         Some(msg) => msg?,
     };

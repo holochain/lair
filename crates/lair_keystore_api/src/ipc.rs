@@ -13,7 +13,7 @@ pub async fn spawn_client_ipc(
     ghost_actor::GhostSender<LairClientApi>,
     LairClientEventReceiver,
 )> {
-    let (evt_send, evt_recv) = futures::channel::mpsc::channel(10);
+    let (evt_send, evt_recv) = futures::channel::mpsc::channel(4096);
 
     let api_send = spawn_client_ipc::spawn_client_ipc(config, evt_send).await?;
 
