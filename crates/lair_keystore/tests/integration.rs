@@ -38,7 +38,8 @@ async fn lair_integration_test() -> lair_keystore_api::LairResult<()> {
             lair_keystore_api::ipc::spawn_client_ipc(config.clone()).await?;
 
         let notify = std::sync::Arc::new(tokio::sync::Notify::new());
-        let notify2 = notify.clone();
+        let notify_fut = notify.clone();
+        let notify_fut = notify_fut.notified();
 
         tokio::task::spawn(async move {
             while let Some(msg) = evt_recv.next().await {
@@ -52,13 +53,13 @@ async fn lair_integration_test() -> lair_keystore_api::LairResult<()> {
                                 .boxed()
                                 .into(),
                         ));
-                        notify2.notify_waiters();
+                        notify.notify_waiters();
                     }
                 }
             }
         });
 
-        notify.notified().await;
+        notify_fut.await;
 
         lair_keystore_api::LairResult::<_>::Ok(api_send)
     };

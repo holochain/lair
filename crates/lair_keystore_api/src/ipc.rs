@@ -256,12 +256,14 @@ mod tests {
         });
 
         let notify = Arc::new(tokio::sync::Notify::new());
-        let notify2 = notify.clone();
+        let notify_fut = notify.clone();
+        let notify_fut = notify_fut.notified();
+
         let unlock_cb: UnlockCb = Arc::new(move |passphrase| {
-            let notify2 = notify2.clone();
+            let notify = notify.clone();
             assert_eq!(b"test-val", &*passphrase.read_lock());
             async move {
-                notify2.notify_waiters();
+                notify.notify_waiters();
                 Ok(())
             }
             .boxed()
@@ -289,7 +291,7 @@ mod tests {
             Ok(())
         });
 
-        notify.notified().await;
+        notify_fut.await;
 
         assert_eq!(
             LairServerInfo::test_val(),
