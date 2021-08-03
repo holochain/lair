@@ -1,4 +1,3 @@
-use futures::{future::FutureExt, stream::StreamExt};
 use ghost_actor::dependencies::tracing;
 use lair_keystore_api::actor::LairClientApiSender;
 use lair_keystore_api::internal::crypto_box;
@@ -21,6 +20,7 @@ async fn lair_integration_test() -> lair_keystore_api::LairResult<()> {
 
     lair_keystore::execute_lair().await?;
 
+    let passphrase = sodoken::BufRead::new_no_lock(b"passphrase");
     let config = lair_keystore_api::Config::builder()
         .set_root_path(tmpdir.path())
         .build();
@@ -34,32 +34,11 @@ async fn lair_integration_test() -> lair_keystore_api::LairResult<()> {
     }
 
     let spawn = || async {
-        let (api_send, mut evt_recv) =
-            lair_keystore_api::ipc::spawn_client_ipc(config.clone()).await?;
-
-        let notify = std::sync::Arc::new(tokio::sync::Notify::new());
-        let notify_fut = notify.clone();
-        let notify_fut = notify_fut.notified();
-
-        tokio::task::spawn(async move {
-            while let Some(msg) = evt_recv.next().await {
-                match msg {
-                    lair_keystore_api::actor::LairClientEvent::RequestUnlockPassphrase {
-                        respond,
-                        ..
-                    } => {
-                        respond.respond(Ok(
-                            async move { Ok("passphrase".to_string()) }
-                                .boxed()
-                                .into(),
-                        ));
-                        notify.notify_waiters();
-                    }
-                }
-            }
-        });
-
-        notify_fut.await;
+        let api_send = lair_keystore_api::ipc::spawn_client_ipc(
+            config.clone(),
+            passphrase.clone(),
+        )
+        .await?;
 
         lair_keystore_api::LairResult::<_>::Ok(api_send)
     };

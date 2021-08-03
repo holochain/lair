@@ -8,9 +8,13 @@ use futures::{future::FutureExt, stream::StreamExt};
 
 pub(crate) async fn spawn_client_ipc(
     config: Arc<Config>,
-    evt_send: futures::channel::mpsc::Sender<LairClientEvent>,
+    passphrase: Passphrase,
 ) -> LairResult<ghost_actor::GhostSender<LairClientApi>> {
     let (ipc_send, mut ipc_recv) = spawn_ipc_connection(config).await?;
+
+    let notify = Arc::new(tokio::sync::Notify::new());
+    let notify_fut = notify.clone();
+    let notify_fut = notify_fut.notified();
 
     let ipc_send2 = ipc_send.clone();
     err_spawn("client-ipc-evt-loop", async move {
@@ -19,20 +23,17 @@ pub(crate) async fn spawn_client_ipc(
         while let Some(msg) = ipc_recv.next().await {
             match msg? {
                 LairWire::ToCliRequestUnlockPassphrase { msg_id } => {
-                    let res = evt_send
-                        .request_unlock_passphrase()
-                        .await
-                        .map(|passphrase| {
-                            LairWire::ToLairRequestUnlockPassphraseResponse {
-                                msg_id,
-                                passphrase,
-                            }
-                        })
-                        .unwrap_or_else(|err| {
-                            let message = format!("{:?}", err);
-                            LairWire::ErrorResponse { msg_id, message }
-                        });
+                    // TODO encrypt this so it's not exposed to
+                    // unsecured memory && transmitted in the clear
+                    let passphrase =
+                        String::from_utf8_lossy(&*passphrase.read_lock())
+                            .to_string();
+                    let res = LairWire::ToLairRequestUnlockPassphraseResponse {
+                        msg_id,
+                        passphrase,
+                    };
                     ipc_send2.respond(res).await?;
+                    notify.notify_waiters();
                 }
                 oth => {
                     let msg_id = oth.get_msg_id();
@@ -60,6 +61,8 @@ pub(crate) async fn spawn_client_ipc(
             .await
             .map_err(LairError::other)
     });
+
+    notify_fut.await;
 
     Ok(sender)
 }

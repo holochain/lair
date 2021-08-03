@@ -901,6 +901,7 @@ version = "0.0.2"
 dependencies = [
  "ghost_actor",
  "lair_keystore_api",
+ "sodoken",
  "tempfile",
  "tokio",
  "tracing",
