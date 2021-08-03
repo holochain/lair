@@ -36,6 +36,7 @@ fn build_socket_path(root_path: &Path) -> PathBuf {
 /// Lair configuration struct.
 pub struct Config {
     root_path: PathBuf,
+    db_key_path: PathBuf,
     store_path: PathBuf,
     pid_path: PathBuf,
     socket_path: PathBuf,
@@ -51,6 +52,8 @@ impl Config {
             .root_path
             .canonicalize()
             .expect("can cannonicalize root path");
+        self.db_key_path = self.root_path.clone();
+        self.db_key_path.push("db_key");
         self.store_path = self.root_path.clone();
         self.store_path.push("store.sqlite");
         self.pid_path = self.root_path.clone();
@@ -71,6 +74,11 @@ impl Config {
     /// Get the root data directory as specified by this config.
     pub fn get_root_path(&self) -> &Path {
         self.root_path.as_path()
+    }
+
+    /// Get the path to the database key file.
+    pub fn get_db_key_path(&self) -> &Path {
+        self.db_key_path.as_path()
     }
 
     /// Get the path to the lair store.
@@ -108,6 +116,7 @@ impl Default for ConfigBuilder {
             .expect("can determine project dir");
         Self(Config {
             root_path: pdir.data_local_dir().to_path_buf(),
+            db_key_path: PathBuf::new(),
             store_path: PathBuf::new(),
             pid_path: PathBuf::new(),
             socket_path: PathBuf::new(),

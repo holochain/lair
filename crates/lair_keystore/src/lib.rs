@@ -37,10 +37,10 @@ pub async fn execute_lair() -> LairResult<()> {
 
     println!("#lair-keystore-dir:{:?}#", config.get_root_path());
 
-    let internal::pid_check::PidCheckResult { sql_db_path } =
+    let internal::pid_check::PidCheckResult {} =
         internal::pid_check::pid_check(&config)?;
 
-    ipc::spawn_bind_server_ipc(config, sql_db_path).await?;
+    ipc::spawn_bind_server_ipc(config).await?;
 
     Ok(())
 }
@@ -76,11 +76,10 @@ pub async fn execute_load_ed25519_keypair(
 
     println!("#lair-keystore-dir:{:?}#", config.get_root_path());
 
-    let internal::pid_check::PidCheckResult { sql_db_path } =
+    let internal::pid_check::PidCheckResult {} =
         internal::pid_check::pid_check(&config)?;
 
-    let store_actor =
-        store::spawn_entry_store_actor(config.clone(), sql_db_path).await?;
+    let store_actor = store::spawn_entry_store_actor(config.clone()).await?;
 
     let keypair = entry::EntrySignEd25519 {
         priv_key:
