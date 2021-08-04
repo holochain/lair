@@ -11,11 +11,6 @@ use std::future::Future;
 
 /// Spawn a new IPC server binding to serve out the Lair client api.
 pub async fn spawn_bind_server_ipc(config: Arc<Config>) -> LairResult<()> {
-    /*
-    let store_actor =
-        store::spawn_entry_store_actor(config.clone(), sql_db_path).await?;
-    */
-
     let builder = ghost_actor::actor_builder::GhostActorBuilder::new();
 
     let api_sender = builder
@@ -53,7 +48,7 @@ pub async fn spawn_bind_server_ipc(config: Arc<Config>) -> LairResult<()> {
 ghost_actor::ghost_chan! {
     chan InternalApi<LairError> {
         fn incoming_passphrase(passphrase: Passphrase) -> ();
-        fn incoming_db_key(db_key: sodoken::BufRead) -> ();
+        fn incoming_db_key(db_key: sodoken::BufReadSized<32>) -> ();
     }
 }
 
@@ -108,96 +103,12 @@ impl InternalApiHandler for Internal {
         &mut self,
         passphrase: Passphrase,
     ) -> InternalApiHandlerResult<()> {
-        let db_key_path = self.config.get_db_key_path().to_owned();
+        let config = self.config.clone();
         let i_s = self.i_s.clone();
         Ok(async move {
-            let db_key = match tokio::fs::read(db_key_path.clone()).await {
-                Ok(content) => {
-                    use sodoken::argon2id::SALTBYTES;
+            let db_key = read_or_generate_db_key(config, passphrase).await?;
 
-                    // read the salt from the file
-                    let salt: sodoken::BufReadSized<SALTBYTES> =
-                        (&content[0..SALTBYTES]).into();
-
-                    // calculate the pre_key given salt and passphrase
-                    let pre_key = sodoken::BufWriteSized::new_mem_locked()?;
-                    sodoken::argon2id::hash(
-                        pre_key.clone(),
-                        passphrase,
-                        salt,
-                        sodoken::argon2id::OPSLIMIT_SENSITIVE,
-                        sodoken::argon2id::MEMLIMIT_SENSITIVE,
-                    )
-                    .await?;
-
-                    // extract our message parts
-                    use sodoken::secretstream_xchacha20poly1305::*;
-                    let header: sodoken::BufReadSized<
-                        SECRETSTREAM_HEADERBYTES,
-                    > = (&content[32..32 + SECRETSTREAM_HEADERBYTES]).into();
-                    let cipher = sodoken::BufRead::new_no_lock(
-                        &content[32 + SECRETSTREAM_HEADERBYTES..],
-                    );
-
-                    // decrypt the db key given our calculated pre_key
-                    let mut dec = SecretStreamDecrypt::new(pre_key, header)?;
-                    let db_key = sodoken::BufWrite::new_mem_locked(32)?;
-                    dec.pull(
-                        cipher,
-                        <Option<sodoken::BufRead>>::None,
-                        db_key.clone(),
-                    )
-                    .await?;
-
-                    db_key
-                }
-                Err(_) => {
-                    // generate a new random salt
-                    let salt = sodoken::BufWriteSized::new_no_lock();
-                    sodoken::random::randombytes_buf(salt.clone()).await?;
-
-                    // calculate the pre_key given salt and passphrase
-                    let pre_key = sodoken::BufWriteSized::new_mem_locked()?;
-                    sodoken::argon2id::hash(
-                        pre_key.clone(),
-                        passphrase,
-                        salt.clone(),
-                        sodoken::argon2id::OPSLIMIT_SENSITIVE,
-                        sodoken::argon2id::MEMLIMIT_SENSITIVE,
-                    )
-                    .await?;
-
-                    // generate a new random db_key
-                    let db_key = sodoken::BufWrite::new_mem_locked(32)?;
-                    sodoken::random::randombytes_buf(db_key.clone()).await?;
-
-                    // encrypt the db_key with the pre_key
-                    use sodoken::secretstream_xchacha20poly1305::*;
-                    let cipher = sodoken::BufWrite::new_unbound_no_lock();
-                    cipher
-                        .to_extend()
-                        .extend_lock()
-                        .extend_mut_from_slice(&*salt.read_lock())?;
-
-                    let mut enc =
-                        SecretStreamEncrypt::new(pre_key, cipher.clone())?;
-                    enc.push_final(
-                        db_key.clone(),
-                        <Option<sodoken::BufRead>>::None,
-                        cipher.clone(),
-                    )
-                    .await?;
-
-                    // write the salt and cipher to the db key file
-                    // erm... this is annoying...
-                    let data = cipher.read_lock().to_vec();
-                    tokio::fs::write(db_key_path, &data).await?;
-
-                    db_key
-                }
-            };
-
-            i_s.incoming_db_key(db_key.to_read()).await?;
+            i_s.incoming_db_key(db_key).await?;
 
             Ok(())
         }
@@ -207,13 +118,13 @@ impl InternalApiHandler for Internal {
 
     fn handle_incoming_db_key(
         &mut self,
-        _db_key: sodoken::BufRead,
+        db_key: sodoken::BufReadSized<32>,
     ) -> InternalApiHandlerResult<()> {
         if self.store_actor.is_none() {
             let config = self.config.clone();
             self.store_actor = Some(
                 async move {
-                    store::spawn_entry_store_actor(config)
+                    store::spawn_entry_store_actor(config, db_key)
                         .await
                         .map_err(|e| format!("{:?}", e))
                 }
