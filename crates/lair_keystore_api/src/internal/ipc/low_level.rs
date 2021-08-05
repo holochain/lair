@@ -3,41 +3,50 @@ use futures::stream::BoxStream;
 use parking_lot::Mutex;
 use std::future::Future;
 
-#[allow(dead_code)]
 #[derive(Clone)]
 pub(crate) struct LowLevelWireSender {
     limit: Arc<tokio::sync::Semaphore>,
+    notify_kill: Arc<tokio::sync::Notify>,
     inner: Arc<Mutex<Option<IpcWrite>>>,
 }
 
 impl LowLevelWireSender {
-    #[allow(dead_code)]
-    pub fn new(raw_send: IpcWrite) -> Self {
+    pub fn new(
+        raw_send: IpcWrite,
+        notify_kill: Arc<tokio::sync::Notify>,
+    ) -> Self {
         // rather than having a single permit, it would be more efficient
         // to batch up some number of messages while any sends are outstanding
         // then send the whole batch at once while we have cpu time.
         let limit = Arc::new(tokio::sync::Semaphore::new(1));
         let inner = Arc::new(Mutex::new(Some(raw_send)));
-        Self { limit, inner }
+        Self {
+            limit,
+            notify_kill,
+            inner,
+        }
     }
 
-    #[allow(dead_code)]
     pub fn close(&self) {
         self.limit.close();
+        self.notify_kill.notify_waiters();
     }
 
-    #[allow(dead_code)]
     pub fn send(
         &self,
         msg: LairWire,
     ) -> impl Future<Output = LairResult<()>> + 'static + Send {
         let limit = self.limit.clone();
+        let notify_kill = self.notify_kill.clone();
         let inner = self.inner.clone();
         async move {
-            let msg_enc = msg.encode()?;
+            let _permit = limit
+                .clone()
+                .acquire_owned()
+                .await
+                .map_err(LairError::other)?;
 
-            let _permit =
-                limit.acquire_owned().await.map_err(LairError::other)?;
+            let msg_enc = msg.encode()?;
 
             // if we have a permit, the sender is available
             let mut raw_send = inner.lock().take().unwrap();
@@ -46,20 +55,26 @@ impl LowLevelWireSender {
                 raw_send.write_all(&msg_enc).await.map_err(LairError::other);
             *(inner.lock()) = Some(raw_send);
             trace!("ll wrote {:?}", &msg);
+            if res.is_err() {
+                limit.close();
+                notify_kill.notify_waiters();
+            }
             res
         }
     }
 }
 
-#[allow(dead_code)]
 pub(crate) struct LowLevelWireReceiver(
     BoxStream<'static, LairResult<LairWire>>,
 );
 
 impl LowLevelWireReceiver {
-    #[allow(dead_code)]
-    pub fn new(raw_recv: IpcRead) -> Self {
+    pub fn new(
+        raw_recv: IpcRead,
+        notify_kill: Arc<tokio::sync::Notify>,
+    ) -> Self {
         struct State {
+            notify_kill: Arc<tokio::sync::Notify>,
             raw_recv: IpcRead,
             pending_msgs: Vec<LairWire>,
             pending_data: Vec<u8>,
@@ -67,6 +82,7 @@ impl LowLevelWireReceiver {
         }
 
         let state = State {
+            notify_kill,
             raw_recv,
             pending_msgs: Vec::new(),
             pending_data: Vec::new(),
@@ -75,6 +91,7 @@ impl LowLevelWireReceiver {
 
         let stream = futures::stream::try_unfold(state, |state| async move {
             let State {
+                notify_kill,
                 mut raw_recv,
                 mut pending_msgs,
                 mut pending_data,
@@ -86,6 +103,7 @@ impl LowLevelWireReceiver {
                     return Ok(Some((
                         pending_msgs.remove(0),
                         State {
+                            notify_kill,
                             raw_recv,
                             pending_msgs,
                             pending_data,
@@ -95,10 +113,17 @@ impl LowLevelWireReceiver {
                 }
 
                 trace!("ll read tick");
-                let read = raw_recv
-                    .read(&mut buffer)
-                    .await
-                    .map_err(LairError::other)?;
+                let read_fut = raw_recv.read(&mut buffer);
+                let kill_fut = notify_kill.clone();
+                let kill_fut = kill_fut.notified();
+                let read = tokio::select! {
+                    _ = kill_fut => {
+                        return Err("closed".into());
+                    }
+                    read = read_fut => {
+                        read.map_err(LairError::other)?
+                    }
+                };
                 trace!(?read, "ll read count");
                 if read == 0 {
                     trace!("ll read end");

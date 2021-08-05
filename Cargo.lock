@@ -851,6 +851,7 @@ dependencies = [
  "futures",
  "ghost_actor",
  "lair_keystore_api",
+ "num_cpus",
  "once_cell",
  "parking_lot",
  "rusqlite",
@@ -899,6 +900,7 @@ dependencies = [
 name = "lair_keystore_client"
 version = "0.0.2"
 dependencies = [
+ "futures",
  "ghost_actor",
  "lair_keystore_api",
  "sodoken",

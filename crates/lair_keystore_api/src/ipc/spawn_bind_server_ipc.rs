@@ -49,7 +49,7 @@ fn spawn_srv_con_evt_loop<S>(
 ) where
     S: ghost_actor::GhostChannelSender<LairClientApi>,
 {
-    err_spawn("srv-con-evt-loop", async move {
+    tokio::task::spawn(async move {
         let api_sender = &api_sender;
         let ipc_send = &ipc_send;
         ipc_recv.for_each_concurrent(4096, move |res| async move {
@@ -298,9 +298,10 @@ fn spawn_srv_con_evt_loop<S>(
 
             if let Err(err) = ipc_send.respond(res).await {
                 tracing::warn!(?err, "err sending request response");
+                ipc_send.close();
             }
         }).await;
 
-        Ok(())
+        tracing::warn!("spawn-bind-server-con-loop ENDED");
     });
 }

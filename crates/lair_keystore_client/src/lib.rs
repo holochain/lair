@@ -148,4 +148,79 @@ mod bin_tests {
 
         Ok(())
     }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn restart_server_encryption_checks() -> LairResult<()> {
+        init_tracing();
+
+        let tmpdir = tempfile::tempdir().unwrap();
+        std::env::set_var("LAIR_DIR", tmpdir.path());
+
+        trace!(lair_dir = ?tmpdir.path(), "RUNNING WITH LAIR_DIR");
+
+        let config = lair_keystore_api::Config::builder()
+            .set_root_path(tmpdir.path())
+            .build();
+        let config = &config;
+
+        let passphrase_good = sodoken::BufRead::new_no_lock(b"passphrase");
+        let passphrase_bad = sodoken::BufRead::new_no_lock(b"passphr4se");
+
+        let check = |passphrase| async {
+            let api =
+                assert_running_lair_and_connect(config.clone(), passphrase)
+                    .await?;
+            api.sign_ed25519_new_from_entropy().await?;
+            let this_key = api.sign_ed25519_get(1.into()).await?;
+
+            LairResult::Ok(this_key)
+        };
+
+        let run_and_check = |passphrase: sodoken::BufRead,
+                             mut check_key: Option<
+            lair_keystore_api::internal::sign_ed25519::SignEd25519PubKey,
+        >| async move {
+            println!("--start lair server--");
+            let mut child =
+                internal::run_lair_executable(config.clone()).await.unwrap();
+            println!("--lair server started--");
+
+            let mut all = Vec::new();
+            for _ in 0..3 {
+                all.push(check(passphrase.clone()));
+            }
+            for key in futures::future::try_join_all(all).await.unwrap() {
+                if check_key.is_none() {
+                    check_key = Some(key);
+                } else {
+                    assert_eq!(check_key.as_ref().unwrap(), &key);
+                }
+            }
+
+            println!("--kill lair server--");
+            child.kill().unwrap();
+            println!("--lair server killed--");
+
+            check_key
+        };
+
+        println!("--first check--");
+        run_and_check(passphrase_good.clone(), None).await;
+        println!("--second check--");
+        run_and_check(passphrase_good.clone(), None).await;
+        println!("--done--");
+
+        println!("--start lair server--");
+        let mut child =
+            internal::run_lair_executable(config.clone()).await.unwrap();
+        println!("--lair server started--");
+        assert!(check_ipc_connect(config.clone(), passphrase_bad)
+            .await
+            .is_err());
+        println!("--kill lair server--");
+        child.kill().unwrap();
+        println!("--lair server killed--");
+
+        Ok(())
+    }
 }

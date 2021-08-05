@@ -45,6 +45,12 @@ pub struct IpcSender {
 }
 
 impl IpcSender {
+    /// close this sender
+    pub fn close(&self) {
+        self.ll_send.close();
+        self.inner.lock().pending.clear();
+    }
+
     /// respond to an incoming lair wire request
     pub fn respond(
         &self,
@@ -89,7 +95,6 @@ impl IpcSender {
 pub struct IpcReceiver(BoxStream<'static, LairResult<LairWire>>);
 
 impl IpcReceiver {
-    #[allow(dead_code)]
     pub(crate) fn new(
         ll_send: LowLevelWireSender,
         ll_recv: LowLevelWireReceiver,
@@ -168,8 +173,10 @@ impl IncomingIpcReceiver {
             let State { mut srv } = state;
 
             if let Ok((read_half, write_half)) = srv.accept().await {
-                let ll_send = LowLevelWireSender::new(write_half);
-                let ll_recv = LowLevelWireReceiver::new(read_half);
+                let notify_kill = Arc::new(tokio::sync::Notify::new());
+                let ll_send =
+                    LowLevelWireSender::new(write_half, notify_kill.clone());
+                let ll_recv = LowLevelWireReceiver::new(read_half, notify_kill);
 
                 let res_fut = get_passphrase(ll_send, ll_recv).boxed();
                 return Some((res_fut, State { srv }));
@@ -261,8 +268,9 @@ pub async fn spawn_ipc_connection(
     config: Arc<Config>,
 ) -> LairResult<(IpcSender, IpcReceiver)> {
     let (read_half, write_half) = ipc_connect(config).await?;
-    let ll_send = LowLevelWireSender::new(write_half);
-    let ll_recv = LowLevelWireReceiver::new(read_half);
+    let notify_kill = Arc::new(tokio::sync::Notify::new());
+    let ll_send = LowLevelWireSender::new(write_half, notify_kill.clone());
+    let ll_recv = LowLevelWireReceiver::new(read_half, notify_kill);
     let (send, recv) = IpcReceiver::new(ll_send, ll_recv);
 
     Ok((send, recv))

@@ -5,11 +5,19 @@ use crate::internal::sign_ed25519;
 use crate::internal::wire::*;
 use crate::internal::x25519;
 use futures::{future::FutureExt, stream::StreamExt};
+use ghost_actor::dependencies::tracing;
 
 pub(crate) async fn spawn_client_ipc(
     config: Arc<Config>,
     passphrase: Passphrase,
 ) -> LairResult<ghost_actor::GhostSender<LairClientApi>> {
+    let builder = ghost_actor::actor_builder::GhostActorBuilder::new();
+
+    let sender = builder
+        .channel_factory()
+        .create_channel::<LairClientApi>()
+        .await?;
+
     let (ipc_send, mut ipc_recv) = spawn_ipc_connection(config).await?;
 
     let notify = Arc::new(tokio::sync::Notify::new());
@@ -17,43 +25,52 @@ pub(crate) async fn spawn_client_ipc(
     let notify_fut = notify_fut.notified();
 
     let ipc_send2 = ipc_send.clone();
-    err_spawn("client-ipc-evt-loop", async move {
-        // note - if we are ever handling more than unlock passphrase
-        //        consider a for_each_concurrent here.
-        while let Some(msg) = ipc_recv.next().await {
-            match msg? {
-                LairWire::ToCliRequestUnlockPassphrase { msg_id } => {
-                    // TODO encrypt this so it's not exposed to
-                    // unsecured memory && transmitted in the clear
-                    let passphrase =
-                        String::from_utf8_lossy(&*passphrase.read_lock())
-                            .to_string();
-                    let res = LairWire::ToLairRequestUnlockPassphraseResponse {
-                        msg_id,
-                        passphrase,
-                    };
-                    ipc_send2.respond(res).await?;
-                    notify.notify_waiters();
-                }
-                oth => {
-                    let msg_id = oth.get_msg_id();
-                    let message = format!("unexpected {:?}", oth);
-                    ipc_send2
-                        .respond(LairWire::ErrorResponse { msg_id, message })
-                        .await?;
+    let actor_sender = sender.clone();
+    tokio::task::spawn(async move {
+        let res = async move {
+            // note - if we are ever handling more than unlock passphrase
+            //        consider a for_each_concurrent here.
+            while let Some(msg) = ipc_recv.next().await {
+                match msg? {
+                    LairWire::ToCliRequestUnlockPassphrase { msg_id } => {
+                        // TODO encrypt this so it's not exposed to
+                        // unsecured memory && transmitted in the clear
+                        let passphrase =
+                            String::from_utf8_lossy(&*passphrase.read_lock())
+                                .to_string();
+                        let res =
+                            LairWire::ToLairRequestUnlockPassphraseResponse {
+                                msg_id,
+                                passphrase,
+                            };
+                        ipc_send2.respond(res).await?;
+                        notify.notify_waiters();
+                    }
+                    oth => {
+                        let msg_id = oth.get_msg_id();
+                        let message = format!("unexpected {:?}", oth);
+                        ipc_send2
+                            .respond(LairWire::ErrorResponse {
+                                msg_id,
+                                message,
+                            })
+                            .await?;
+                    }
                 }
             }
+
+            LairResult::Ok(())
+        };
+        if let Err(err) = res.await {
+            tracing::warn!(?err, "client-ipc-evt-loop ENDED");
+            use ghost_actor::GhostControlSender;
+            if let Err(err) =
+                actor_sender.ghost_actor_shutdown_immediate().await
+            {
+                tracing::error!(?err, "failed to shut down ghost actor");
+            }
         }
-
-        Ok(())
     });
-
-    let builder = ghost_actor::actor_builder::GhostActorBuilder::new();
-
-    let sender = builder
-        .channel_factory()
-        .create_channel::<LairClientApi>()
-        .await?;
 
     err_spawn("client-ipc-actor", async move {
         builder
@@ -71,7 +88,13 @@ struct Internal {
     ipc_send: IpcSender,
 }
 
-impl ghost_actor::GhostControlHandler for Internal {}
+use ghost_actor::dependencies::must_future::*;
+impl ghost_actor::GhostControlHandler for Internal {
+    fn handle_ghost_actor_shutdown(self) -> MustBoxFuture<'static, ()> {
+        self.ipc_send.close();
+        async move {}.boxed().into()
+    }
+}
 
 impl ghost_actor::GhostHandler<LairClientApi> for Internal {}
 

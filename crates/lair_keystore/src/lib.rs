@@ -102,93 +102,175 @@ pub async fn execute_load_ed25519_keypair(
     Ok(())
 }
 
+use sodoken::argon2id::SALTBYTES;
+use sodoken::secretstream_xchacha20poly1305::*;
+
+#[derive(Clone)]
+pub(crate) struct DbKeyEnc {
+    pub salt: sodoken::BufReadSized<SALTBYTES>,
+    pub header: sodoken::BufReadSized<SECRETSTREAM_HEADERBYTES>,
+    pub cipher: sodoken::BufRead,
+}
+
+impl DbKeyEnc {
+    pub async fn read(config: &Config) -> LairResult<Self> {
+        let db_key_path = config.get_db_key_path();
+
+        let content = tokio::fs::read(db_key_path)
+            .await
+            .map_err(LairError::other)?;
+
+        let salt: sodoken::BufReadSized<SALTBYTES> =
+            (&content[0..SALTBYTES]).into();
+
+        let header: sodoken::BufReadSized<SECRETSTREAM_HEADERBYTES> =
+            (&content[SALTBYTES..SALTBYTES + SECRETSTREAM_HEADERBYTES]).into();
+
+        let cipher = sodoken::BufRead::new_no_lock(
+            &content[SALTBYTES + SECRETSTREAM_HEADERBYTES..],
+        );
+
+        Ok(Self {
+            salt,
+            header,
+            cipher,
+        })
+    }
+
+    /// write the salt and cipher to the db key file
+    pub async fn write(&self, config: &Config) -> LairResult<()> {
+        let db_key_path = config.get_db_key_path();
+
+        let mut data = Vec::with_capacity(
+            self.salt.len() + self.header.len() + self.cipher.len(),
+        );
+
+        data.extend_from_slice(&*self.salt.read_lock());
+        data.extend_from_slice(&*self.header.read_lock());
+        data.extend_from_slice(&*self.cipher.read_lock());
+
+        tokio::fs::write(db_key_path, &data)
+            .await
+            .map_err(LairError::other)?;
+
+        Ok(())
+    }
+
+    async fn calc_pre_key(
+        passphrase: sodoken::BufRead,
+        salt: sodoken::BufReadSized<SALTBYTES>,
+    ) -> LairResult<sodoken::BufReadSized<32>> {
+        use once_cell::sync::Lazy;
+
+        // argon is designed to be both cpu and memory hard
+        // from a cpu perspective it doesn't make sense to run more
+        // argons than the number of cpus we have.
+        // from a memory perspective, if we run too many at a time,
+        // we end up with horrible slow things like memory virtualization.
+        // MODERATE limits with min(num_cpus::get(), 4) seems to work ok.
+        static ARGON_LIMIT: Lazy<Arc<tokio::sync::Semaphore>> =
+            Lazy::new(|| {
+                Arc::new(tokio::sync::Semaphore::new(std::cmp::min(
+                    num_cpus::get(),
+                    4,
+                )))
+            });
+        let _permit = ARGON_LIMIT
+            .clone()
+            .acquire_owned()
+            .await
+            .expect("this semaphore is never closed");
+
+        let pre_key = sodoken::BufWriteSized::new_mem_locked()?;
+        sodoken::argon2id::hash(
+            pre_key.clone(),
+            passphrase,
+            salt,
+            sodoken::argon2id::OPSLIMIT_MODERATE,
+            sodoken::argon2id::MEMLIMIT_MODERATE,
+        )
+        .await
+        .map_err(|e| LairError::from(format!("argon fail: {:?}", e)))?;
+        Ok(pre_key.to_read_sized())
+    }
+
+    pub async fn calc_db_key(
+        &self,
+        passphrase: sodoken::BufRead,
+    ) -> LairResult<sodoken::BufReadSized<32>> {
+        // calculate the pre_key given salt and passphrase
+        let pre_key = Self::calc_pre_key(passphrase, self.salt.clone()).await?;
+
+        // decrypt the db key given our calculated pre_key
+        let mut dec = SecretStreamDecrypt::new(pre_key, self.header.clone())
+            .map_err(|e| {
+                LairError::from(format!("decrypt new fail: {:?}", e))
+            })?;
+
+        let db_key = sodoken::BufWriteSized::new_mem_locked()?;
+        dec.pull(
+            self.cipher.clone(),
+            <Option<sodoken::BufRead>>::None,
+            // erm... fix this in sodoken
+            db_key.to_write_unsized().to_extend(),
+        )
+        .await
+        .map_err(|e| LairError::from(format!("decrypt pull fail: {:?}", e)))?;
+
+        Ok(db_key.to_read_sized())
+    }
+
+    pub async fn generate(
+        passphrase: sodoken::BufRead,
+    ) -> LairResult<(Self, sodoken::BufReadSized<32>)> {
+        // generate a new random salt
+        let salt = sodoken::BufWriteSized::new_no_lock();
+        sodoken::random::randombytes_buf(salt.clone()).await?;
+
+        // calculate the pre_key given salt and passphrase
+        let pre_key =
+            Self::calc_pre_key(passphrase, salt.to_read_sized()).await?;
+
+        // generate a new random db_key
+        let db_key = sodoken::BufWriteSized::new_mem_locked()?;
+        sodoken::random::randombytes_buf(db_key.clone()).await?;
+
+        let header = sodoken::BufWriteSized::new_no_lock();
+        let mut enc = SecretStreamEncrypt::new(
+            pre_key,
+            // erm... fix this in sodoken
+            header.to_write_unsized().to_extend(),
+        )?;
+
+        let cipher = sodoken::BufWrite::new_unbound_no_lock();
+        enc.push_final(
+            db_key.clone(),
+            <Option<sodoken::BufRead>>::None,
+            cipher.clone(),
+        )
+        .await?;
+
+        Ok((
+            Self {
+                salt: salt.to_read_sized(),
+                header: header.to_read_sized(),
+                cipher: cipher.to_read(),
+            },
+            db_key.to_read_sized(),
+        ))
+    }
+}
+
 pub(crate) async fn read_or_generate_db_key(
     config: Arc<Config>,
     passphrase: sodoken::BufRead,
 ) -> LairResult<sodoken::BufReadSized<32>> {
-    let db_key_path = config.get_db_key_path().to_owned();
-    match tokio::fs::read(db_key_path.clone()).await {
-        Ok(content) => {
-            use sodoken::argon2id::SALTBYTES;
-
-            // read the salt from the file
-            let salt: sodoken::BufReadSized<SALTBYTES> =
-                (&content[0..SALTBYTES]).into();
-
-            // calculate the pre_key given salt and passphrase
-            let pre_key = sodoken::BufWriteSized::new_mem_locked()?;
-            sodoken::argon2id::hash(
-                pre_key.clone(),
-                passphrase,
-                salt,
-                sodoken::argon2id::OPSLIMIT_SENSITIVE,
-                sodoken::argon2id::MEMLIMIT_SENSITIVE,
-            )
-            .await?;
-
-            // extract our message parts
-            use sodoken::secretstream_xchacha20poly1305::*;
-            let header: sodoken::BufReadSized<SECRETSTREAM_HEADERBYTES> =
-                (&content[32..32 + SECRETSTREAM_HEADERBYTES]).into();
-            let cipher = sodoken::BufRead::new_no_lock(
-                &content[32 + SECRETSTREAM_HEADERBYTES..],
-            );
-
-            // decrypt the db key given our calculated pre_key
-            let mut dec = SecretStreamDecrypt::new(pre_key, header)?;
-            let db_key = sodoken::BufWriteSized::new_mem_locked()?;
-            dec.pull(
-                cipher,
-                <Option<sodoken::BufRead>>::None,
-                // erm... fix this in sodoken
-                db_key.to_write_unsized().to_extend(),
-            )
-            .await?;
-
-            Ok(db_key.to_read_sized())
-        }
+    match DbKeyEnc::read(&config).await {
+        Ok(dbk_enc) => dbk_enc.calc_db_key(passphrase).await,
         Err(_) => {
-            // generate a new random salt
-            let salt = sodoken::BufWriteSized::new_no_lock();
-            sodoken::random::randombytes_buf(salt.clone()).await?;
-
-            // calculate the pre_key given salt and passphrase
-            let pre_key = sodoken::BufWriteSized::new_mem_locked()?;
-            sodoken::argon2id::hash(
-                pre_key.clone(),
-                passphrase,
-                salt.clone(),
-                sodoken::argon2id::OPSLIMIT_SENSITIVE,
-                sodoken::argon2id::MEMLIMIT_SENSITIVE,
-            )
-            .await?;
-
-            // generate a new random db_key
-            let db_key = sodoken::BufWriteSized::new_mem_locked()?;
-            sodoken::random::randombytes_buf(db_key.clone()).await?;
-
-            // encrypt the db_key with the pre_key
-            use sodoken::secretstream_xchacha20poly1305::*;
-            let cipher = sodoken::BufWrite::new_unbound_no_lock();
-            cipher
-                .to_extend()
-                .extend_lock()
-                .extend_mut_from_slice(&*salt.read_lock())?;
-
-            let mut enc = SecretStreamEncrypt::new(pre_key, cipher.clone())?;
-            enc.push_final(
-                db_key.clone(),
-                <Option<sodoken::BufRead>>::None,
-                cipher.clone(),
-            )
-            .await?;
-
-            // write the salt and cipher to the db key file
-            // erm... this is annoying...
-            let data = cipher.read_lock().to_vec();
-            tokio::fs::write(db_key_path, &data).await?;
-
-            Ok(db_key.to_read_sized())
+            let (dbk_enc, db_key) = DbKeyEnc::generate(passphrase).await?;
+            dbk_enc.write(&config).await?;
+            Ok(db_key)
         }
     }
 }
