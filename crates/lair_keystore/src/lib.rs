@@ -211,8 +211,7 @@ impl DbKeyEnc {
         dec.pull(
             self.cipher.clone(),
             <Option<sodoken::BufRead>>::None,
-            // erm... fix this in sodoken
-            db_key.to_write_unsized().to_extend(),
+            db_key.clone(),
         )
         .await
         .map_err(|e| LairError::from(format!("decrypt pull fail: {:?}", e)))?;
@@ -236,11 +235,7 @@ impl DbKeyEnc {
         sodoken::random::randombytes_buf(db_key.clone()).await?;
 
         let header = sodoken::BufWriteSized::new_no_lock();
-        let mut enc = SecretStreamEncrypt::new(
-            pre_key,
-            // erm... fix this in sodoken
-            header.to_write_unsized().to_extend(),
-        )?;
+        let mut enc = SecretStreamEncrypt::new(pre_key, header.clone())?;
 
         let cipher = sodoken::BufWrite::new_unbound_no_lock();
         enc.push_final(
