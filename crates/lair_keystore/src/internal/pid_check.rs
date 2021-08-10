@@ -8,10 +8,7 @@ use std::{
 use sysinfo::{ProcessExt, SystemExt};
 
 /// Result from invoking `pid_check()` function.
-pub struct PidCheckResult {
-    /// Access to the lair store file.
-    pub sql_db_path: std::path::PathBuf,
-}
+pub struct PidCheckResult {}
 
 /// Execute lair pid_check verifying we are the one true Lair process
 /// with access to given store / pidfile.
@@ -27,7 +24,7 @@ pub fn pid_check(config: &Config) -> LairResult<PidCheckResult> {
         if i != 0 {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        match pid_check_write(&config, &mut sys) {
+        match pid_check_write(config, &mut sys) {
             Ok(_) => {
                 last_err = None;
                 break;
@@ -42,9 +39,7 @@ pub fn pid_check(config: &Config) -> LairResult<PidCheckResult> {
         return Err(e);
     }
 
-    let sql_db_path = config.get_store_path().to_owned();
-
-    Ok(PidCheckResult { sql_db_path })
+    Ok(PidCheckResult {})
 }
 
 /// only returns success if we were able to write pidfile with our pid

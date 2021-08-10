@@ -4,20 +4,27 @@ use crate::actor::*;
 use crate::internal::util::*;
 use crate::*;
 
+pub use crate::internal::ipc::Passphrase;
+
+/// Callback for validating unlock passphrase.
+pub type UnlockCb = Arc<
+    dyn Fn(Passphrase) -> futures::future::BoxFuture<'static, LairResult<()>>
+        + 'static
+        + Send
+        + Sync,
+>;
+
 mod spawn_client_ipc;
 
 /// Spawn a client Ipc connection.
 pub async fn spawn_client_ipc(
     config: Arc<Config>,
-) -> LairResult<(
-    ghost_actor::GhostSender<LairClientApi>,
-    LairClientEventReceiver,
-)> {
-    let (evt_send, evt_recv) = futures::channel::mpsc::channel(10);
+    passphrase: Passphrase,
+) -> LairResult<ghost_actor::GhostSender<LairClientApi>> {
+    let api_send =
+        spawn_client_ipc::spawn_client_ipc(config, passphrase).await?;
 
-    let api_send = spawn_client_ipc::spawn_client_ipc(config, evt_send).await?;
-
-    Ok((api_send, evt_recv))
+    Ok(api_send)
 }
 
 /// Incoming Connection Receiver.
@@ -30,20 +37,15 @@ mod spawn_bind_server_ipc;
 pub async fn spawn_bind_server_ipc<S>(
     config: Arc<Config>,
     api_sender: S,
-) -> LairResult<IncomingIpcConnectionReceiver>
+    unlock_cb: UnlockCb,
+) -> LairResult<()>
 where
     S: ghost_actor::GhostChannelSender<LairClientApi>,
 {
-    let (incoming_send, incoming_recv) = futures::channel::mpsc::channel(10);
+    spawn_bind_server_ipc::spawn_bind_server_ipc(config, api_sender, unlock_cb)
+        .await?;
 
-    spawn_bind_server_ipc::spawn_bind_server_ipc(
-        config,
-        api_sender,
-        incoming_send,
-    )
-    .await?;
-
-    Ok(incoming_recv)
+    Ok(())
 }
 
 #[cfg(test)]
@@ -53,7 +55,7 @@ mod tests {
     use crate::internal::sign_ed25519;
     use crate::internal::wire::tests::TestVal;
     use crate::internal::x25519;
-    use futures::{future::FutureExt, stream::StreamExt};
+    use futures::future::FutureExt;
     use ghost_actor::GhostControlSender;
 
     fn init_tracing() {
@@ -250,38 +252,15 @@ mod tests {
             builder.spawn(TestServer).await.map_err(LairError::other)
         });
 
-        let mut incoming_recv =
-            spawn_bind_server_ipc(config.clone(), api_sender).await?;
-
-        err_spawn("test-incoming-loop", async move {
-            let mut keep_em = Vec::new();
-            while let Some(evt_send) = incoming_recv.next().await {
-                let passphrase = evt_send.request_unlock_passphrase().await?;
-                assert_eq!("test-val", passphrase);
-                keep_em.push(evt_send);
-            }
-            Ok(())
+        let unlock_cb: UnlockCb = Arc::new(move |passphrase| {
+            assert_eq!(b"test-val", &*passphrase.read_lock());
+            async move { Ok(()) }.boxed()
         });
 
-        let (cli_send, mut cli_recv) = spawn_client_ipc(config).await?;
+        spawn_bind_server_ipc(config.clone(), api_sender, unlock_cb).await?;
 
-        err_spawn("test-evt-loop", async move {
-            while let Some(msg) = cli_recv.next().await {
-                match msg {
-                    LairClientEvent::RequestUnlockPassphrase {
-                        respond,
-                        ..
-                    } => {
-                        respond.respond(Ok(
-                            async move { Ok(TestVal::test_val()) }
-                                .boxed()
-                                .into(),
-                        ));
-                    }
-                }
-            }
-            Ok(())
-        });
+        let passphrase = sodoken::BufRead::new_no_lock(b"test-val");
+        let cli_send = spawn_client_ipc(config, passphrase).await?;
 
         assert_eq!(
             LairServerInfo::test_val(),

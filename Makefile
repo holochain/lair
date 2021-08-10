@@ -64,7 +64,7 @@ tool_fmt: tool_rust
 	then \
 		if rustup --version >/dev/null 2>&1; then \
 			echo "# Makefile # installing rustfmt with rustup"; \
-			rustup component add rustfmt-preview; \
+			rustup component add rustfmt; \
 		else \
 			echo "# Makefile # rustup not found, cannot install rustfmt"; \
 			exit 1; \
@@ -78,7 +78,7 @@ tool_clippy: tool_rust
 	then \
 		if rustup --version >/dev/null 2>&1; then \
 			echo "# Makefile # installing clippy with rustup"; \
-			rustup component add clippy-preview; \
+			rustup component add clippy; \
 		else \
 			echo "# Makefile # rustup not found, cannot install clippy"; \
 			exit 1; \

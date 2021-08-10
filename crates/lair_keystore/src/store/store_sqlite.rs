@@ -110,13 +110,13 @@ impl ExecExt for rusqlite::Connection {
 pub struct SqlPool(Arc<Mutex<SqlPoolInner>>);
 
 impl SqlPool {
-    fn new_sync(path: std::path::PathBuf) -> LairResult<Self> {
+    fn new_sync(
+        path: std::path::PathBuf,
+        db_key: sodoken::BufReadSized<32>,
+    ) -> LairResult<Self> {
         use rusqlite::OpenFlags;
 
-        let fake_key: BufWriteSized<32> =
-            // if this were real, we would use locked memory
-            BufWriteSized::new_no_lock();
-        let fake_key_pragma = secure_write_key_pragma(fake_key)?;
+        let key_pragma = secure_write_key_pragma(db_key)?;
 
         let write_con = rusqlite::Connection::open_with_flags(
             &path,
@@ -127,7 +127,7 @@ impl SqlPool {
         )
         .map_err(LairError::other)?;
 
-        set_pragmas(&write_con, fake_key_pragma.clone())?;
+        set_pragmas(&write_con, key_pragma.clone())?;
 
         write_con.execute_optional(
             "CREATE TABLE IF NOT EXISTS lair_entries (
@@ -149,7 +149,7 @@ impl SqlPool {
             )
             .map_err(LairError::other)?;
 
-            set_pragmas(&read_con, fake_key_pragma.clone())?;
+            set_pragmas(&read_con, key_pragma.clone())?;
 
             *rc_mut = Some(read_con);
         }
@@ -164,9 +164,10 @@ impl SqlPool {
 
     pub fn new(
         path: std::path::PathBuf,
+        db_key: sodoken::BufReadSized<32>,
     ) -> impl Future<Output = LairResult<Self>> + 'static + Send {
         async move {
-            tokio::task::spawn_blocking(move || Self::new_sync(path))
+            tokio::task::spawn_blocking(move || Self::new_sync(path, db_key))
                 .await
                 .map_err(LairError::other)?
         }
@@ -316,12 +317,9 @@ const KEY_PRAGMA: &[u8; KEY_PRAGMA_LEN] =
     br#"PRAGMA key = "x'0000000000000000000000000000000000000000000000000000000000000000'";"#;
 
 /// write a sqlcipher key pragma maintaining mem protection
-fn secure_write_key_pragma<K>(key: K) -> LairResult<BufRead>
-where
-    K: Into<BufReadSized<32>> + 'static + Send,
-{
-    let key = key.into();
-
+fn secure_write_key_pragma(
+    key: sodoken::BufReadSized<32>,
+) -> LairResult<BufRead> {
     // write the pragma line
     let key_pragma: BufWriteSized<KEY_PRAGMA_LEN> =
         BufWriteSized::new_mem_locked().map_err(LairError::other)?;
@@ -371,7 +369,8 @@ mod tests {
         let mut sqlite = tmpdir.path().to_path_buf();
         sqlite.push("db.sqlite3");
 
-        let pool = SqlPool::new(sqlite).await.unwrap();
+        let db_key = sodoken::BufReadSized::new_no_lock([0; 32]);
+        let pool = SqlPool::new(sqlite, db_key).await.unwrap();
 
         assert!(pool.init_load_unlock().await.unwrap().is_none());
         pool.write_unlock(b"testing".to_vec()).await.unwrap();

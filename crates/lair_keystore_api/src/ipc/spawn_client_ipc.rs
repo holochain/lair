@@ -5,46 +5,12 @@ use crate::internal::sign_ed25519;
 use crate::internal::wire::*;
 use crate::internal::x25519;
 use futures::{future::FutureExt, stream::StreamExt};
+use ghost_actor::dependencies::tracing;
 
-#[allow(clippy::single_match)]
 pub(crate) async fn spawn_client_ipc(
     config: Arc<Config>,
-    evt_send: futures::channel::mpsc::Sender<LairClientEvent>,
+    passphrase: Passphrase,
 ) -> LairResult<ghost_actor::GhostSender<LairClientApi>> {
-    let (kill_switch, ipc_send, mut ipc_recv) =
-        spawn_ipc_connection(config).await?;
-
-    let evt_kill_switch = kill_switch.clone();
-    err_spawn("client-ipc-evt-loop", async move {
-        while let Ok(msg) = evt_kill_switch
-            .mix(async {
-                ipc_recv
-                    .next()
-                    .await
-                    .ok_or_else::<LairError, _>(|| "stream end".into())
-            })
-            .await
-        {
-            match msg {
-                IpcWireApi::Request { respond, msg, .. } => match msg {
-                    LairWire::ToCliRequestUnlockPassphrase { msg_id } => {
-                        let res = evt_kill_switch.mix(evt_send
-                                .request_unlock_passphrase()).await
-                                .map(|passphrase| {
-                                    LairWire::ToLairRequestUnlockPassphraseResponse {
-                                        msg_id,
-                                        passphrase,
-                                    }
-                                });
-                        respond.respond(Ok(async move { res }.boxed().into()));
-                    }
-                    _ => (),
-                },
-            }
-        }
-        Ok(())
-    });
-
     let builder = ghost_actor::actor_builder::GhostActorBuilder::new();
 
     let sender = builder
@@ -52,37 +18,83 @@ pub(crate) async fn spawn_client_ipc(
         .create_channel::<LairClientApi>()
         .await?;
 
-    let kill_sender = sender.clone();
-    kill_switch
-        .register_kill_callback(Box::new(move || {
-            Box::pin(async move {
-                use ghost_actor::GhostControlSender;
-                if let Err(err) = kill_sender.ghost_actor_shutdown().await {
-                    ghost_actor::dependencies::tracing::error!(?err);
+    let (ipc_send, mut ipc_recv) = spawn_ipc_connection(config).await?;
+
+    let notify = Arc::new(tokio::sync::Notify::new());
+    let notify_fut = notify.clone();
+    let notify_fut = notify_fut.notified();
+
+    let ipc_send2 = ipc_send.clone();
+    let actor_sender = sender.clone();
+    tokio::task::spawn(async move {
+        let res = async move {
+            // note - if we are ever handling more than unlock passphrase
+            //        consider a for_each_concurrent here.
+            while let Some(msg) = ipc_recv.next().await {
+                match msg? {
+                    LairWire::ToCliRequestUnlockPassphrase { msg_id } => {
+                        // TODO encrypt this so it's not exposed to
+                        // unsecured memory && transmitted in the clear
+                        let passphrase =
+                            String::from_utf8_lossy(&*passphrase.read_lock())
+                                .to_string();
+                        let res =
+                            LairWire::ToLairRequestUnlockPassphraseResponse {
+                                msg_id,
+                                passphrase,
+                            };
+                        ipc_send2.respond(res).await?;
+                        notify.notify_waiters();
+                    }
+                    oth => {
+                        let msg_id = oth.get_msg_id();
+                        let message = format!("unexpected {:?}", oth);
+                        ipc_send2
+                            .respond(LairWire::ErrorResponse {
+                                msg_id,
+                                message,
+                            })
+                            .await?;
+                    }
                 }
-            })
-        }))
-        .await;
+            }
+
+            LairResult::Ok(())
+        };
+        if let Err(err) = res.await {
+            tracing::warn!(?err, "client-ipc-evt-loop ENDED");
+            use ghost_actor::GhostControlSender;
+            if let Err(err) =
+                actor_sender.ghost_actor_shutdown_immediate().await
+            {
+                tracing::error!(?err, "failed to shut down ghost actor");
+            }
+        }
+    });
 
     err_spawn("client-ipc-actor", async move {
         builder
-            .spawn(Internal {
-                kill_switch,
-                ipc_send,
-            })
+            .spawn(Internal { ipc_send })
             .await
             .map_err(LairError::other)
     });
+
+    notify_fut.await;
 
     Ok(sender)
 }
 
 struct Internal {
-    kill_switch: KillSwitch,
     ipc_send: IpcSender,
 }
 
-impl ghost_actor::GhostControlHandler for Internal {}
+use ghost_actor::dependencies::must_future::*;
+impl ghost_actor::GhostControlHandler for Internal {
+    fn handle_ghost_actor_shutdown(self) -> MustBoxFuture<'static, ()> {
+        self.ipc_send.close();
+        async move {}.boxed().into()
+    }
+}
 
 impl ghost_actor::GhostHandler<LairClientApi> for Internal {}
 
@@ -90,11 +102,9 @@ impl LairClientApiHandler for Internal {
     fn handle_lair_get_server_info(
         &mut self,
     ) -> LairClientApiHandlerResult<LairServerInfo> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairLairGetServerInfo {
-                msg_id: next_msg_id(),
-            },
-        ));
+        let fut = self.ipc_send.request(LairWire::ToLairLairGetServerInfo {
+            msg_id: next_msg_id(),
+        });
         Ok(async move {
             trace!("awaiting server info");
             match fut.await? {
@@ -112,11 +122,11 @@ impl LairClientApiHandler for Internal {
     fn handle_lair_get_last_entry_index(
         &mut self,
     ) -> LairClientApiHandlerResult<KeystoreIndex> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairLairGetLastEntryIndex {
-                msg_id: next_msg_id(),
-            },
-        ));
+        let fut =
+            self.ipc_send
+                .request(LairWire::ToLairLairGetLastEntryIndex {
+                    msg_id: next_msg_id(),
+                });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliLairGetLastEntryIndexResponse {
@@ -134,12 +144,10 @@ impl LairClientApiHandler for Internal {
         &mut self,
         keystore_index: KeystoreIndex,
     ) -> LairClientApiHandlerResult<LairEntryType> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairLairGetEntryType {
-                msg_id: next_msg_id(),
-                keystore_index,
-            },
-        ));
+        let fut = self.ipc_send.request(LairWire::ToLairLairGetEntryType {
+            msg_id: next_msg_id(),
+            keystore_index,
+        });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliLairGetEntryTypeResponse {
@@ -157,12 +165,12 @@ impl LairClientApiHandler for Internal {
         &mut self,
         options: TlsCertOptions,
     ) -> LairClientApiHandlerResult<(KeystoreIndex, CertSni, CertDigest)> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
+        let fut = self.ipc_send.request(
             LairWire::ToLairTlsCertNewSelfSignedFromEntropy {
                 msg_id: next_msg_id(),
                 cert_alg: options.alg,
             },
-        ));
+        );
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliTlsCertNewSelfSignedFromEntropyResponse {
@@ -182,12 +190,10 @@ impl LairClientApiHandler for Internal {
         &mut self,
         keystore_index: KeystoreIndex,
     ) -> LairClientApiHandlerResult<(CertSni, CertDigest)> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairTlsCertGet {
-                msg_id: next_msg_id(),
-                keystore_index,
-            },
-        ));
+        let fut = self.ipc_send.request(LairWire::ToLairTlsCertGet {
+            msg_id: next_msg_id(),
+            keystore_index,
+        });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliTlsCertGetResponse {
@@ -206,12 +212,12 @@ impl LairClientApiHandler for Internal {
         &mut self,
         keystore_index: KeystoreIndex,
     ) -> LairClientApiHandlerResult<Cert> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairTlsCertGetCertByIndex {
-                msg_id: next_msg_id(),
-                keystore_index,
-            },
-        ));
+        let fut =
+            self.ipc_send
+                .request(LairWire::ToLairTlsCertGetCertByIndex {
+                    msg_id: next_msg_id(),
+                    keystore_index,
+                });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliTlsCertGetCertByIndexResponse {
@@ -228,12 +234,12 @@ impl LairClientApiHandler for Internal {
         &mut self,
         cert_digest: CertDigest,
     ) -> LairClientApiHandlerResult<Cert> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairTlsCertGetCertByDigest {
-                msg_id: next_msg_id(),
-                cert_digest,
-            },
-        ));
+        let fut =
+            self.ipc_send
+                .request(LairWire::ToLairTlsCertGetCertByDigest {
+                    msg_id: next_msg_id(),
+                    cert_digest,
+                });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliTlsCertGetCertByDigestResponse {
@@ -250,12 +256,10 @@ impl LairClientApiHandler for Internal {
         &mut self,
         cert_sni: CertSni,
     ) -> LairClientApiHandlerResult<Cert> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairTlsCertGetCertBySni {
-                msg_id: next_msg_id(),
-                cert_sni,
-            },
-        ));
+        let fut = self.ipc_send.request(LairWire::ToLairTlsCertGetCertBySni {
+            msg_id: next_msg_id(),
+            cert_sni,
+        });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliTlsCertGetCertBySniResponse { cert, .. } => {
@@ -272,12 +276,12 @@ impl LairClientApiHandler for Internal {
         &mut self,
         keystore_index: KeystoreIndex,
     ) -> LairClientApiHandlerResult<CertPrivKey> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairTlsCertGetPrivKeyByIndex {
-                msg_id: next_msg_id(),
-                keystore_index,
-            },
-        ));
+        let fut =
+            self.ipc_send
+                .request(LairWire::ToLairTlsCertGetPrivKeyByIndex {
+                    msg_id: next_msg_id(),
+                    keystore_index,
+                });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliTlsCertGetPrivKeyByIndexResponse {
@@ -295,12 +299,12 @@ impl LairClientApiHandler for Internal {
         &mut self,
         cert_digest: CertDigest,
     ) -> LairClientApiHandlerResult<CertPrivKey> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairTlsCertGetPrivKeyByDigest {
-                msg_id: next_msg_id(),
-                cert_digest,
-            },
-        ));
+        let fut =
+            self.ipc_send
+                .request(LairWire::ToLairTlsCertGetPrivKeyByDigest {
+                    msg_id: next_msg_id(),
+                    cert_digest,
+                });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliTlsCertGetPrivKeyByDigestResponse {
@@ -318,12 +322,12 @@ impl LairClientApiHandler for Internal {
         &mut self,
         cert_sni: CertSni,
     ) -> LairClientApiHandlerResult<CertPrivKey> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairTlsCertGetPrivKeyBySni {
-                msg_id: next_msg_id(),
-                cert_sni,
-            },
-        ));
+        let fut =
+            self.ipc_send
+                .request(LairWire::ToLairTlsCertGetPrivKeyBySni {
+                    msg_id: next_msg_id(),
+                    cert_sni,
+                });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliTlsCertGetPrivKeyBySniResponse {
@@ -343,11 +347,11 @@ impl LairClientApiHandler for Internal {
         KeystoreIndex,
         sign_ed25519::SignEd25519PubKey,
     )> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairSignEd25519NewFromEntropy {
-                msg_id: next_msg_id(),
-            },
-        ));
+        let fut =
+            self.ipc_send
+                .request(LairWire::ToLairSignEd25519NewFromEntropy {
+                    msg_id: next_msg_id(),
+                });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliSignEd25519NewFromEntropyResponse {
@@ -366,12 +370,10 @@ impl LairClientApiHandler for Internal {
         &mut self,
         keystore_index: KeystoreIndex,
     ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519PubKey> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairSignEd25519Get {
-                msg_id: next_msg_id(),
-                keystore_index,
-            },
-        ));
+        let fut = self.ipc_send.request(LairWire::ToLairSignEd25519Get {
+            msg_id: next_msg_id(),
+            keystore_index,
+        });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliSignEd25519GetResponse { pub_key, .. } => {
@@ -389,13 +391,13 @@ impl LairClientApiHandler for Internal {
         keystore_index: KeystoreIndex,
         message: Arc<Vec<u8>>,
     ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519Signature> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairSignEd25519SignByIndex {
-                msg_id: next_msg_id(),
-                keystore_index,
-                message,
-            },
-        ));
+        let fut =
+            self.ipc_send
+                .request(LairWire::ToLairSignEd25519SignByIndex {
+                    msg_id: next_msg_id(),
+                    keystore_index,
+                    message,
+                });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliSignEd25519SignByIndexResponse {
@@ -414,13 +416,13 @@ impl LairClientApiHandler for Internal {
         pub_key: sign_ed25519::SignEd25519PubKey,
         message: Arc<Vec<u8>>,
     ) -> LairClientApiHandlerResult<sign_ed25519::SignEd25519Signature> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairSignEd25519SignByPubKey {
-                msg_id: next_msg_id(),
-                pub_key,
-                message,
-            },
-        ));
+        let fut =
+            self.ipc_send
+                .request(LairWire::ToLairSignEd25519SignByPubKey {
+                    msg_id: next_msg_id(),
+                    pub_key,
+                    message,
+                });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliSignEd25519SignByPubKeyResponse {
@@ -437,11 +439,9 @@ impl LairClientApiHandler for Internal {
     fn handle_x25519_new_from_entropy(
         &mut self,
     ) -> LairClientApiHandlerResult<(KeystoreIndex, x25519::X25519PubKey)> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairX25519NewFromEntropy {
-                msg_id: next_msg_id(),
-            },
-        ));
+        let fut = self.ipc_send.request(LairWire::ToLairX25519NewFromEntropy {
+            msg_id: next_msg_id(),
+        });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliX25519NewFromEntropyResponse {
@@ -460,12 +460,10 @@ impl LairClientApiHandler for Internal {
         &mut self,
         keystore_index: KeystoreIndex,
     ) -> LairClientApiHandlerResult<x25519::X25519PubKey> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairX25519Get {
-                msg_id: next_msg_id(),
-                keystore_index,
-            },
-        ));
+        let fut = self.ipc_send.request(LairWire::ToLairX25519Get {
+            msg_id: next_msg_id(),
+            keystore_index,
+        });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliX25519GetResponse { pub_key, .. } => Ok(pub_key),
@@ -482,14 +480,12 @@ impl LairClientApiHandler for Internal {
         recipient: x25519::X25519PubKey,
         data: Arc<crypto_box::CryptoBoxData>,
     ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxEncryptedData> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairCryptoBoxByIndex {
-                msg_id: next_msg_id(),
-                keystore_index,
-                recipient,
-                data,
-            },
-        ));
+        let fut = self.ipc_send.request(LairWire::ToLairCryptoBoxByIndex {
+            msg_id: next_msg_id(),
+            keystore_index,
+            recipient,
+            data,
+        });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliCryptoBoxByIndexResponse {
@@ -509,14 +505,12 @@ impl LairClientApiHandler for Internal {
         recipient: x25519::X25519PubKey,
         data: Arc<crypto_box::CryptoBoxData>,
     ) -> LairClientApiHandlerResult<crypto_box::CryptoBoxEncryptedData> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairCryptoBoxByPubKey {
-                msg_id: next_msg_id(),
-                pub_key,
-                recipient,
-                data,
-            },
-        ));
+        let fut = self.ipc_send.request(LairWire::ToLairCryptoBoxByPubKey {
+            msg_id: next_msg_id(),
+            pub_key,
+            recipient,
+            data,
+        });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliCryptoBoxByPubKeyResponse {
@@ -536,14 +530,12 @@ impl LairClientApiHandler for Internal {
         sender: x25519::X25519PubKey,
         encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
     ) -> LairClientApiHandlerResult<Option<crypto_box::CryptoBoxData>> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairCryptoBoxOpenByIndex {
-                msg_id: next_msg_id(),
-                keystore_index,
-                sender,
-                encrypted_data,
-            },
-        ));
+        let fut = self.ipc_send.request(LairWire::ToLairCryptoBoxOpenByIndex {
+            msg_id: next_msg_id(),
+            keystore_index,
+            sender,
+            encrypted_data,
+        });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliCryptoBoxOpenByIndexResponse {
@@ -562,14 +554,14 @@ impl LairClientApiHandler for Internal {
         sender: x25519::X25519PubKey,
         encrypted_data: Arc<crypto_box::CryptoBoxEncryptedData>,
     ) -> LairClientApiHandlerResult<Option<crypto_box::CryptoBoxData>> {
-        let fut = self.kill_switch.mix_static(self.ipc_send.request(
-            LairWire::ToLairCryptoBoxOpenByPubKey {
-                msg_id: next_msg_id(),
-                pub_key,
-                sender,
-                encrypted_data,
-            },
-        ));
+        let fut =
+            self.ipc_send
+                .request(LairWire::ToLairCryptoBoxOpenByPubKey {
+                    msg_id: next_msg_id(),
+                    pub_key,
+                    sender,
+                    encrypted_data,
+                });
         Ok(async move {
             match fut.await? {
                 LairWire::ToCliCryptoBoxOpenByPubKeyResponse {

@@ -72,6 +72,12 @@ impl From<std::io::Error> for LairError {
     }
 }
 
+impl From<sodoken::SodokenError> for LairError {
+    fn from(error: sodoken::SodokenError) -> Self {
+        Self::other(error)
+    }
+}
+
 impl LairError {
     /// Build an "Other" type LairError.
     pub fn other(

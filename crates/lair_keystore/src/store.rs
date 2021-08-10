@@ -55,7 +55,7 @@ ghost_actor::ghost_chan! {
 /// Spawn a new entry store actor.
 pub async fn spawn_entry_store_actor(
     config: Arc<Config>,
-    sql_db_path: std::path::PathBuf,
+    db_key: sodoken::BufReadSized<32>,
 ) -> LairResult<ghost_actor::GhostSender<EntryStore>> {
     let builder = ghost_actor::actor_builder::GhostActorBuilder::new();
 
@@ -70,7 +70,7 @@ pub async fn spawn_entry_store_actor(
         .await?;
 
     tokio::task::spawn(
-        builder.spawn(EntryStoreImpl::new(i_s, config, sql_db_path).await?),
+        builder.spawn(EntryStoreImpl::new(i_s, config, db_key).await?),
     );
 
     Ok(sender)
@@ -98,9 +98,10 @@ impl EntryStoreImpl {
     pub async fn new(
         i_s: ghost_actor::GhostSender<EntryStoreInternal>,
         config: Arc<Config>,
-        sql_db_file: std::path::PathBuf,
+        db_key: sodoken::BufReadSized<32>,
     ) -> LairResult<Self> {
-        let db = SqlPool::new(sql_db_file).await?;
+        let sql_db_file = config.get_store_path().to_owned();
+        let db = SqlPool::new(sql_db_file, db_key).await?;
 
         match db.init_load_unlock().await? {
             None => {
@@ -367,10 +368,8 @@ mod tests {
         let (cert, sign, x25519) = {
             let config = Config::builder().set_root_path(tmpdir.path()).build();
 
-            let sql_db_path = config.get_store_path().to_owned();
-
-            let store =
-                spawn_entry_store_actor(config, sql_db_path).await.unwrap();
+            let db_key = sodoken::BufReadSized::new_no_lock([0; 32]);
+            let store = spawn_entry_store_actor(config, db_key).await.unwrap();
 
             let (cert_index, cert) =
                 store
@@ -401,9 +400,8 @@ mod tests {
 
         let config = Config::builder().set_root_path(tmpdir.path()).build();
 
-        let sql_db_path = config.get_store_path().to_owned();
-
-        let store = spawn_entry_store_actor(config, sql_db_path).await.unwrap();
+        let db_key = sodoken::BufReadSized::new_no_lock([0; 32]);
+        let store = spawn_entry_store_actor(config, db_key).await.unwrap();
 
         let r_cert = store.get_entry_by_index(1.into()).await.unwrap();
         let r_sign = store.get_entry_by_index(2.into()).await.unwrap();

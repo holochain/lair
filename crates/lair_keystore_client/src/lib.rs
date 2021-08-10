@@ -34,12 +34,12 @@ macro_rules! e {
 /// experience.
 pub async fn assert_running_lair_and_connect(
     config: Arc<Config>,
-) -> LairResult<(
-    ghost_actor::GhostSender<LairClientApi>,
-    LairClientEventReceiver,
-)> {
+    passphrase: sodoken::BufRead,
+) -> LairResult<ghost_actor::GhostSender<LairClientApi>> {
     // step 1 - just try to connect
-    if let Ok(r) = e!(check_ipc_connect(config.clone()).await) {
+    if let Ok(r) =
+        e!(check_ipc_connect(config.clone(), passphrase.clone()).await)
+    {
         trace!("first try check Ok");
         return Ok(r);
     }
@@ -49,7 +49,9 @@ pub async fn assert_running_lair_and_connect(
         e!(internal::run_lair_executable(config.clone()).await)
     {
         // step 2.1 - if the executable ran, try to connect to it.
-        if let Ok(r) = e!(check_ipc_connect(config.clone()).await) {
+        if let Ok(r) =
+            e!(check_ipc_connect(config.clone(), passphrase.clone()).await)
+        {
             trace!("second try (run executable) check Ok");
             return Ok(r);
         }
@@ -65,7 +67,7 @@ pub async fn assert_running_lair_and_connect(
     let mut proc = internal::run_lair_executable(config.clone()).await?;
 
     // step 3.2 - if the executable ran, try to connect to it.
-    if let Ok(r) = e!(check_ipc_connect(config).await) {
+    if let Ok(r) = e!(check_ipc_connect(config, passphrase.clone()).await) {
         trace!("third try (build executable) check Ok");
         return Ok(r);
     }
@@ -78,11 +80,9 @@ pub async fn assert_running_lair_and_connect(
 
 async fn check_ipc_connect(
     config: Arc<Config>,
-) -> LairResult<(
-    ghost_actor::GhostSender<LairClientApi>,
-    LairClientEventReceiver,
-)> {
-    let (api, evt) = ipc::spawn_client_ipc(config.clone()).await?;
+    passphrase: sodoken::BufRead,
+) -> LairResult<ghost_actor::GhostSender<LairClientApi>> {
+    let api = ipc::spawn_client_ipc(config, passphrase).await?;
 
     trace!("send check server info");
     let srv_info = api.lair_get_server_info().await?;
@@ -96,7 +96,7 @@ async fn check_ipc_connect(
         .into());
     }
 
-    Ok((api, evt))
+    Ok(api)
 }
 
 #[cfg(test)]
@@ -131,8 +131,10 @@ mod bin_tests {
         let mut child = internal::run_lair_executable(config.clone()).await?;
         trace!("executable running.");
 
+        let passphrase = sodoken::BufRead::new_no_lock(b"passphrase");
+
         trace!("connecting...");
-        let (api, _evt) = assert_running_lair_and_connect(config).await?;
+        let api = assert_running_lair_and_connect(config, passphrase).await?;
         trace!("connected.");
 
         trace!("checking version...");
@@ -143,6 +145,81 @@ mod bin_tests {
         trace!("killing executable...");
         child.kill().unwrap();
         trace!("executable killed.");
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn restart_server_encryption_checks() -> LairResult<()> {
+        init_tracing();
+
+        let tmpdir = tempfile::tempdir().unwrap();
+        std::env::set_var("LAIR_DIR", tmpdir.path());
+
+        trace!(lair_dir = ?tmpdir.path(), "RUNNING WITH LAIR_DIR");
+
+        let config = lair_keystore_api::Config::builder()
+            .set_root_path(tmpdir.path())
+            .build();
+        let config = &config;
+
+        let passphrase_good = sodoken::BufRead::new_no_lock(b"passphrase");
+        let passphrase_bad = sodoken::BufRead::new_no_lock(b"passphr4se");
+
+        let check = |passphrase| async {
+            let api =
+                assert_running_lair_and_connect(config.clone(), passphrase)
+                    .await?;
+            api.sign_ed25519_new_from_entropy().await?;
+            let this_key = api.sign_ed25519_get(1.into()).await?;
+
+            LairResult::Ok(this_key)
+        };
+
+        let run_and_check = |passphrase: sodoken::BufRead,
+                             mut check_key: Option<
+            lair_keystore_api::internal::sign_ed25519::SignEd25519PubKey,
+        >| async move {
+            println!("--start lair server--");
+            let mut child =
+                internal::run_lair_executable(config.clone()).await.unwrap();
+            println!("--lair server started--");
+
+            let mut all = Vec::new();
+            for _ in 0..3 {
+                all.push(check(passphrase.clone()));
+            }
+            for key in futures::future::try_join_all(all).await.unwrap() {
+                if check_key.is_none() {
+                    check_key = Some(key);
+                } else {
+                    assert_eq!(check_key.as_ref().unwrap(), &key);
+                }
+            }
+
+            println!("--kill lair server--");
+            child.kill().unwrap();
+            println!("--lair server killed--");
+
+            check_key
+        };
+
+        println!("--first check--");
+        run_and_check(passphrase_good.clone(), None).await;
+        println!("--second check--");
+        run_and_check(passphrase_good.clone(), None).await;
+        println!("--done--");
+
+        println!("--start lair server--");
+        let mut child =
+            internal::run_lair_executable(config.clone()).await.unwrap();
+        println!("--lair server started--");
+        assert!(check_ipc_connect(config.clone(), passphrase_bad)
+            .await
+            .is_err());
+        println!("--kill lair server--");
+        child.kill().unwrap();
+        println!("--lair server killed--");
 
         Ok(())
     }

@@ -113,7 +113,7 @@ impl AsRef<lib_crypto_box::PublicKey> for X25519PubKey {
 
 impl AsRef<[u8; PUB_KEY_BYTES]> for X25519PubKey {
     fn as_ref(&self) -> &[u8; PUB_KEY_BYTES] {
-        &self.0.as_bytes()
+        self.0.as_bytes()
     }
 }
 

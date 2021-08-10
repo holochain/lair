@@ -27,7 +27,7 @@ struct Opt {
     /// generates a keystore with a provided key.
     #[structopt(
         long,
-        help = "Loads a signature keypair from a 
+        help = "Loads a signature keypair from a
 file into the keystore and exits."
     )]
     load_ed25519_keypair_from_file: Option<std::path::PathBuf>,
@@ -39,6 +39,12 @@ file into the keystore and exits."
 string into the keystore and exits."
     )]
     load_ed25519_keypair_from_base64: Option<String>,
+
+    /// passphrase to use for injecting keys into the keystore
+    /// note, this is not very secure... we should find a
+    /// better pattern
+    #[structopt(long)]
+    load_db_passphrase: Option<String>,
 
     /// Set the lair data directory.
     #[structopt(
@@ -72,9 +78,16 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
         std::env::set_var("LAIR_DIR", lair_dir);
     }
 
+    let passphrase = opt
+        .load_db_passphrase
+        .map(|p| sodoken::BufRead::new_no_lock(p.as_bytes()));
+
     if let Some(load_ed25519_keypair_from_file) =
         opt.load_ed25519_keypair_from_file
     {
+        if passphrase.is_none() {
+            panic!("'--load-db-passphrase' required for '--load-ed25519-keypair-from-file'");
+        }
         println!(
             "Creating a lair-keystore with provided keys at {:?}",
             load_ed25519_keypair_from_file
@@ -82,12 +95,16 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
         trace!("executing lair gen tasks from file");
         return lair_keystore::execute_load_ed25519_keypair_from_file(
             load_ed25519_keypair_from_file,
+            passphrase.unwrap(),
         )
         .await;
     }
     if let Some(load_ed25519_keypair_from_base64) =
         opt.load_ed25519_keypair_from_base64
     {
+        if passphrase.is_none() {
+            panic!("'--load-db-passphrase' required for '--load-ed25519-keypair-from-base64'");
+        }
         println!(
             "Creating a lair-keystore with provided keys {:?}",
             load_ed25519_keypair_from_base64
@@ -96,8 +113,11 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
 
         match base64::decode(load_ed25519_keypair_from_base64) {
             Ok(keypair) => {
-                return lair_keystore::execute_load_ed25519_keypair(keypair)
-                    .await;
+                return lair_keystore::execute_load_ed25519_keypair(
+                    keypair,
+                    passphrase.unwrap(),
+                )
+                .await;
             }
             Err(e) => return Err(lair_keystore_api::LairError::other(e)),
         }
