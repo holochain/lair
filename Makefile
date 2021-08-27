@@ -18,11 +18,14 @@ bump:
 	@for toml in $$(find crates -name Cargo.toml); do \
 		echo "# updating version in $${toml} to $(ver)"; \
 		sed -i'' 's/^version = \"[^"]*"$$/version = "$(ver)"/g' $${toml}; \
+		sed -i'' 's/^hc_seed_bundle = { version = \"[^"]*"/hc_seed_bundle = { version = "=$(ver)"/g' $${toml}; \
 		sed -i'' 's/^lair_keystore_api = { version = \"[^"]*"/lair_keystore_api = { version = "=$(ver)"/g' $${toml}; \
 	done
 
 publish: tools
 	git diff --exit-code
+	cargo publish --manifest-path crates/hc_seed_bundle/Cargo.toml
+	echo "-- wait for crates.io... --"; sleep 30
 	cargo publish --manifest-path crates/lair_keystore_api/Cargo.toml
 	echo "-- wait for crates.io... --"; sleep 30
 	cargo publish --manifest-path crates/lair_keystore/Cargo.toml
@@ -37,6 +40,7 @@ test: tools
 		$(ENV) cargo install --debug -f --path crates/lair_keystore; \
 	fi
 	$(ENV) RUST_BACKTRACE=1 cargo test
+	$(ENV) cargo readme -r crates/hc_seed_bundle -o README.md
 	$(ENV) cargo readme -r crates/lair_keystore_api -o README.md
 	$(ENV) cargo readme -r crates/lair_keystore -o README.md
 	$(ENV) cargo readme -r crates/lair_keystore -o ../../README.md
