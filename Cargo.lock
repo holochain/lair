@@ -735,6 +735,11 @@ dependencies = [
 [[package]]
 name = "hc_seed_bundle"
 version = "0.0.4"
+dependencies = [
+ "rmp-serde",
+ "serde",
+ "sodoken",
+]
 
 [[package]]
 name = "heck"
@@ -1868,9 +1873,9 @@ checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
 
 [[package]]
 name = "sodoken"
-version = "0.0.1-alpha.10"
+version = "0.0.1-alpha.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f39afbc2d374fad30911f189625218312f8c93d6cd07f4f96181823a4316561"
+checksum = "d01f51ea9491a7ca06cde8c05a91881f6d58d3b284519078af77891441475067"
 dependencies = [
  "libc",
  "libsodium-sys",
