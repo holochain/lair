@@ -11,8 +11,10 @@ categories = [ "cryptography" ]
 edition = "2018"
 
 [dependencies]
+futures = "0.3.17"
 rmp-serde = "0.15.5"
 serde = { version = "1", features = [ "derive", "rc" ] }
+serde_bytes = "0.11.5"
 sodoken = "=0.0.1-alpha.11"
 
 [dev-dependencies]

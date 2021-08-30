@@ -1,6 +1,7 @@
 use sodoken::{SodokenError, SodokenResult};
 
 use std::future::Future;
+use std::sync::Arc;
 
 const KDF_CONTEXT: &[u8; 8] = b"SeedBndl";
 
@@ -9,12 +10,12 @@ pub struct UnlockedSeedBundle {
     seed: sodoken::BufReadSized<32>,
     sign_pub_key: sodoken::BufReadSized<{ sodoken::sign::SIGN_PUBLICKEYBYTES }>,
     sign_sec_key: sodoken::BufReadSized<{ sodoken::sign::SIGN_SECRETKEYBYTES }>,
-    app_data: Box<[u8]>,
+    app_data: Arc<[u8]>,
 }
 
 impl UnlockedSeedBundle {
     /// Private core constructor
-    async fn priv_from_seed(
+    pub(crate) async fn priv_from_seed(
         seed: sodoken::BufReadSized<32>,
     ) -> SodokenResult<Self> {
         let pk = sodoken::BufWriteSized::new_no_lock();
@@ -25,7 +26,7 @@ impl UnlockedSeedBundle {
             seed,
             sign_pub_key: pk.to_read_sized(),
             sign_sec_key: sk.to_read_sized(),
-            app_data: Box::new([]),
+            app_data: Arc::new([]),
         })
     }
 
@@ -34,6 +35,14 @@ impl UnlockedSeedBundle {
         let seed = sodoken::BufWriteSized::new_mem_locked()?;
         sodoken::random::randombytes_buf(seed.clone()).await?;
         Self::priv_from_seed(seed.to_read_sized()).await
+    }
+
+    /// Decode locked SeedBundle bytes into a list of
+    /// LockedSeedCiphers to be used for decrypting the bundle.
+    pub async fn from_locked(
+        bytes: &[u8],
+    ) -> SodokenResult<Vec<crate::LockedSeedCipher>> {
+        crate::LockedSeedCipher::from_locked(bytes)
     }
 
     /// Derive a new sub SeedBundle by given index.
@@ -90,8 +99,11 @@ impl UnlockedSeedBundle {
     }
 
     /// Set the raw appData bytes.
-    pub fn set_app_data_bytes(&mut self, app_data: Box<[u8]>) {
-        self.app_data = app_data;
+    pub fn set_app_data_bytes<B>(&mut self, app_data: B)
+    where
+        B: Into<Arc<[u8]>>,
+    {
+        self.app_data = app_data.into();
     }
 
     /// Get the decoded appData bytes by type.
@@ -111,7 +123,12 @@ impl UnlockedSeedBundle {
             .with_struct_map()
             .with_string_variants();
         t.serialize(&mut se).map_err(SodokenError::other)?;
-        self.app_data = se.into_inner().into_boxed_slice();
+        self.app_data = se.into_inner().into_boxed_slice().into();
         Ok(())
+    }
+
+    /// Get a SeedCipherBuilder that will allow us to lock this bundle.
+    pub fn lock(&self) -> crate::SeedCipherBuilder {
+        crate::SeedCipherBuilder::new(self.seed.clone(), self.app_data.clone())
     }
 }
