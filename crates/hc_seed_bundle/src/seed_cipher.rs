@@ -103,47 +103,183 @@ impl<'de, const N: usize> serde::Deserialize<'de> for U8Array<N> {
     }
 }
 
-/// Encrypted ("locked") SeedCipher encoding.
-/// This has to be struct type so we can at least name unhandled variants.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[non_exhaustive]
-struct SeedCipher {
-    /// the cipher type name, required
-    r#type: Box<str>,
-
-    /// argon salt
-    salt: Option<U8Array<16>>,
-
-    /// argon mem limit
-    mem_limit: Option<u32>,
-
-    /// argon ops limit
-    ops_limit: Option<u32>,
-
-    /// security questions
-    question_list: Option<(String, String, String)>,
-
-    /// secretstream header for encrypted seed
-    seed_cipher_header: Option<U8Array<24>>,
-
-    /// secretstream "final" tagged msg for encrypted seed
-    seed_cipher: Option<U8Array<49>>,
+#[derive(Debug)]
+struct SeedBundle {
+    cipher_list: Box<[SeedCipher]>,
+    app_data: Box<[u8]>,
 }
 
-/// Encrypted ("locked") SeedBundle encoding.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SeedBundle {
-    /// bundle version (fixed literal '0')
-    hc_seed_bundle_ver: u8,
+impl serde::Serialize for SeedBundle {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        ("hcsb0", &self.cipher_list, &self.app_data).serialize(serializer)
+    }
+}
 
-    /// 1+ methods for decrypting the same secret seed
-    seed_cipher_list: Box<[SeedCipher]>,
+impl<'de> serde::Deserialize<'de> for SeedBundle {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let dec: (&'de str, Box<[SeedCipher]>, Box<[u8]>) =
+            serde::Deserialize::deserialize(deserializer)?;
+        if dec.0 != "hcsb0" {
+            return Err(serde::de::Error::custom(format!(
+                "unsupported bundle version: {}",
+                dec.0
+            )));
+        }
+        Ok(SeedBundle {
+            cipher_list: dec.1,
+            app_data: dec.2,
+        })
+    }
+}
 
-    /// additional msg-pack encoded context included with bundle
-    #[serde(with = "serde_bytes")]
-    app_data: Box<[u8]>,
+#[derive(Debug)]
+enum SeedCipher {
+    PwHash {
+        salt: U8Array<16>,
+        mem_limit: u32,
+        ops_limit: u32,
+        header: U8Array<24>,
+        cipher: U8Array<49>,
+    },
+    SecurityQuestions {
+        salt: U8Array<16>,
+        mem_limit: u32,
+        ops_limit: u32,
+        question_list: (String, String, String),
+        header: U8Array<24>,
+        cipher: U8Array<49>,
+    },
+}
+
+impl serde::Serialize for SeedCipher {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Self::PwHash {
+                salt,
+                mem_limit,
+                ops_limit,
+                header,
+                cipher,
+            } => ("pw", salt, mem_limit, ops_limit, header, cipher)
+                .serialize(serializer),
+            Self::SecurityQuestions {
+                salt,
+                mem_limit,
+                ops_limit,
+                question_list,
+                header,
+                cipher,
+            } => (
+                "qa",
+                salt,
+                mem_limit,
+                ops_limit,
+                &question_list.0,
+                &question_list.1,
+                &question_list.2,
+                header,
+                cipher,
+            )
+                .serialize(serializer),
+        }
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for SeedCipher {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = SeedCipher;
+
+            fn expecting(
+                &self,
+                f: &mut std::fmt::Formatter<'_>,
+            ) -> std::fmt::Result {
+                write!(f, "SeedCipher array")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                macro_rules! next_elem {
+                    ($t:ty, $s:ident, $e:literal) => {{
+                        let out: $t = match $s.next_element() {
+                            Ok(Some(t)) => t,
+                            _ => return Err(serde::de::Error::custom($e)),
+                        };
+                        out
+                    }};
+                }
+                let type_name =
+                    next_elem!(&'de str, seq, "expected cipher type_name");
+                match type_name {
+                    "pw" => {
+                        let salt =
+                            next_elem!(U8Array<16>, seq, "expected salt");
+                        let mem_limit =
+                            next_elem!(u32, seq, "expected mem_limit");
+                        let ops_limit =
+                            next_elem!(u32, seq, "expected ops_limit");
+                        let header =
+                            next_elem!(U8Array<24>, seq, "expected header");
+                        let cipher =
+                            next_elem!(U8Array<49>, seq, "expected cipher");
+                        Ok(SeedCipher::PwHash {
+                            salt,
+                            mem_limit,
+                            ops_limit,
+                            header,
+                            cipher,
+                        })
+                    }
+                    "qa" => {
+                        let salt =
+                            next_elem!(U8Array<16>, seq, "expected salt");
+                        let mem_limit =
+                            next_elem!(u32, seq, "expected mem_limit");
+                        let ops_limit =
+                            next_elem!(u32, seq, "expected ops_limit");
+                        let q1 = next_elem!(String, seq, "expected question 1");
+                        let q2 = next_elem!(String, seq, "expected question 2");
+                        let q3 = next_elem!(String, seq, "expected question 3");
+                        let header =
+                            next_elem!(U8Array<24>, seq, "expected header");
+                        let cipher =
+                            next_elem!(U8Array<49>, seq, "expected cipher");
+                        Ok(SeedCipher::SecurityQuestions {
+                            salt,
+                            mem_limit,
+                            ops_limit,
+                            question_list: (q1, q2, q3),
+                            header,
+                            cipher,
+                        })
+                    }
+                    oth => {
+                        return Err(serde::de::Error::custom(format!(
+                            "unsupported cipher type: {}",
+                            oth
+                        )))
+                    }
+                }
+            }
+        }
+
+        deserializer.deserialize_seq(V)
+    }
 }
 
 type PrivCalcCipher = Box<
@@ -327,14 +463,12 @@ impl SeedCipherBuilder {
                 let (salt, header, cipher) =
                     pw_enc(seed, passphrase, limits).await?;
 
-                Ok(SeedCipher {
-                    r#type: "pwHash".into(),
-                    salt: Some(salt.into()),
-                    mem_limit: Some(limits.as_mem_limit() as u32),
-                    ops_limit: Some(limits.as_ops_limit() as u32),
-                    question_list: None,
-                    seed_cipher_header: Some(header.into()),
-                    seed_cipher: Some(cipher.into()),
+                Ok(SeedCipher::PwHash {
+                    salt: salt.into(),
+                    mem_limit: limits.as_mem_limit() as u32,
+                    ops_limit: limits.as_ops_limit() as u32,
+                    header: header.into(),
+                    cipher: cipher.into(),
                 })
             }
             .boxed()
@@ -360,14 +494,13 @@ impl SeedCipherBuilder {
                 let (salt, header, cipher) =
                     pw_enc(seed, passphrase, limits).await?;
 
-                Ok(SeedCipher {
-                    r#type: "securityQuestions".into(),
-                    salt: Some(salt.into()),
-                    mem_limit: Some(limits.as_mem_limit() as u32),
-                    ops_limit: Some(limits.as_ops_limit() as u32),
-                    question_list: Some(question_list),
-                    seed_cipher_header: Some(header.into()),
-                    seed_cipher: Some(cipher.into()),
+                Ok(SeedCipher::SecurityQuestions {
+                    salt: salt.into(),
+                    mem_limit: limits.as_mem_limit() as u32,
+                    ops_limit: limits.as_ops_limit() as u32,
+                    question_list,
+                    header: header.into(),
+                    cipher: cipher.into(),
                 })
             }
             .boxed()
@@ -384,18 +517,17 @@ impl SeedCipherBuilder {
             cipher_list,
         } = self;
 
-        let seed_cipher_list = cipher_list
+        let cipher_list = cipher_list
             .into_iter()
             .map(|c| c(seed.clone()))
             .collect::<Vec<_>>();
 
-        let seed_cipher_list = futures::future::try_join_all(seed_cipher_list)
+        let cipher_list = futures::future::try_join_all(cipher_list)
             .await?
             .into_boxed_slice();
 
         let bundle = SeedBundle {
-            hc_seed_bundle_ver: 0,
-            seed_cipher_list,
+            cipher_list,
             app_data: app_data.to_vec().into_boxed_slice(),
         };
 
@@ -572,97 +704,52 @@ impl LockedSeedCipher {
             rmp_serde::from_read_ref(bytes).map_err(SodokenError::other)?;
 
         let SeedBundle {
-            hc_seed_bundle_ver,
-            seed_cipher_list,
+            cipher_list,
             app_data,
-            ..
         } = bundle;
-
-        if hc_seed_bundle_ver != 0 {
-            return Err(format!(
-                "expected hcSeedBundleVer = 0, got: {}",
-                hc_seed_bundle_ver
-            )
-            .into());
-        }
 
         let app_data: Arc<[u8]> = app_data.into();
 
         let mut out = Vec::new();
 
-        for seed_cipher in seed_cipher_list.into_vec().into_iter() {
-            let SeedCipher {
-                r#type,
-                salt,
-                mem_limit,
-                ops_limit,
-                question_list,
-                seed_cipher_header,
-                seed_cipher,
-            } = seed_cipher;
-
-            match &*r#type {
-                "pwHash" => {
-                    let salt = salt
-                        .ok_or_else(|| SodokenError::from("salt required"))?;
-                    let mem_limit = mem_limit.ok_or_else(|| {
-                        SodokenError::from("mem_limit required")
-                    })?;
-                    let ops_limit = ops_limit.ok_or_else(|| {
-                        SodokenError::from("ops_limit required")
-                    })?;
-                    let seed_cipher_header =
-                        seed_cipher_header.ok_or_else(|| {
-                            SodokenError::from("seed_cipher_header required")
-                        })?;
-                    let seed_cipher = seed_cipher.ok_or_else(|| {
-                        SodokenError::from("seed_cipher required")
-                    })?;
+        for cipher in cipher_list.into_vec().into_iter() {
+            match cipher {
+                SeedCipher::PwHash {
+                    salt,
+                    mem_limit,
+                    ops_limit,
+                    header,
+                    cipher,
+                } => {
                     out.push(LockedSeedCipher::PwHash(
                         LockedSeedCipherPwHash {
                             salt: salt.into(),
                             mem_limit: mem_limit as usize,
                             ops_limit: ops_limit as u64,
-                            seed_cipher_header: seed_cipher_header.into(),
-                            seed_cipher: seed_cipher.into(),
+                            seed_cipher_header: header.into(),
+                            seed_cipher: cipher.into(),
                             app_data: app_data.clone(),
                         },
                     ));
                 }
-                "securityQuestions" => {
-                    let salt = salt
-                        .ok_or_else(|| SodokenError::from("salt required"))?;
-                    let mem_limit = mem_limit.ok_or_else(|| {
-                        SodokenError::from("mem_limit required")
-                    })?;
-                    let ops_limit = ops_limit.ok_or_else(|| {
-                        SodokenError::from("ops_limit required")
-                    })?;
-                    let question_list = question_list.ok_or_else(|| {
-                        SodokenError::from("question_list required")
-                    })?;
-                    let seed_cipher_header =
-                        seed_cipher_header.ok_or_else(|| {
-                            SodokenError::from("seed_cipher_header required")
-                        })?;
-                    let seed_cipher = seed_cipher.ok_or_else(|| {
-                        SodokenError::from("seed_cipher required")
-                    })?;
+                SeedCipher::SecurityQuestions {
+                    salt,
+                    mem_limit,
+                    ops_limit,
+                    question_list,
+                    header,
+                    cipher,
+                } => {
                     out.push(LockedSeedCipher::SecurityQuestions(
                         LockedSeedCipherSecurityQuestions {
                             salt: salt.into(),
                             mem_limit: mem_limit as usize,
                             ops_limit: ops_limit as u64,
                             question_list,
-                            seed_cipher_header: seed_cipher_header.into(),
-                            seed_cipher: seed_cipher.into(),
+                            seed_cipher_header: header.into(),
+                            seed_cipher: cipher.into(),
                             app_data: app_data.clone(),
                         },
-                    ));
-                }
-                unsupported => {
-                    out.push(LockedSeedCipher::UnsupportedCipher(
-                        unsupported.into(),
                     ));
                 }
             }
