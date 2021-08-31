@@ -80,7 +80,16 @@ impl<'de, const N: usize> serde::Deserialize<'de> for U8Array<N> {
     where
         D: serde::Deserializer<'de>,
     {
-        let v: Box<[u8]> = serde::Deserialize::deserialize(deserializer)?;
+        let v: rmpv::Value = serde::Deserialize::deserialize(deserializer)?;
+        let v = match v {
+            rmpv::Value::Binary(b) => b,
+            rmpv::Value::Ext(_, b) => b,
+            _ => {
+                return Err(serde::de::Error::custom(
+                    "invalid type, expected bytes",
+                ))
+            }
+        };
         if v.len() != N {
             return Err(serde::de::Error::custom(format!(
                 "expected {} bytes, got {} bytes",
@@ -288,6 +297,12 @@ pub struct LockedSeedCipherPwHash {
     app_data: Arc<[u8]>,
 }
 
+impl std::fmt::Debug for LockedSeedCipherPwHash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LockedSeedCipherPwHash").finish()
+    }
+}
+
 impl LockedSeedCipherPwHash {
     /// Decrypt this Cipher into an UnlockedSeedBundle struct.
     pub async fn unlock<P>(
@@ -335,6 +350,7 @@ impl LockedSeedCipherPwHash {
 
 /// Enum of Locked SeedCipher types handled by this library.
 #[non_exhaustive]
+#[derive(Debug)]
 pub enum LockedSeedCipher {
     /// This locked cipher is a simple pwHash type.
     PwHash(LockedSeedCipherPwHash),

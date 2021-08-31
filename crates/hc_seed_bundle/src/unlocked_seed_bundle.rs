@@ -6,6 +6,7 @@ use std::sync::Arc;
 const KDF_CONTEXT: &[u8; 8] = b"SeedBndl";
 
 /// This is the main struct for interacting with SeedBundles.
+#[derive(Clone)]
 pub struct UnlockedSeedBundle {
     seed: sodoken::BufReadSized<32>,
     sign_pub_key: sodoken::BufReadSized<{ sodoken::sign::SIGN_PUBLICKEYBYTES }>,

@@ -734,13 +734,17 @@ dependencies = [
 
 [[package]]
 name = "hc_seed_bundle"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
+ "base64",
  "futures",
  "rmp-serde",
+ "rmpv",
  "serde",
  "serde_bytes",
+ "serde_json",
  "sodoken",
+ "tokio",
 ]
 
 [[package]]
@@ -855,7 +859,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "base64",
  "criterion",
@@ -878,7 +882,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_api"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "arbitrary",
  "blake2b_simd",
@@ -909,7 +913,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_client"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "futures",
  "ghost_actor",
@@ -1693,6 +1697,18 @@ dependencies = [
  "byteorder",
  "rmp",
  "serde",
+]
+
+[[package]]
+name = "rmpv"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de8813b3a2f95c5138fe5925bfb8784175d88d6bff059ba8ce090aa891319754"
+dependencies = [
+ "num-traits",
+ "rmp",
+ "serde",
+ "serde_bytes",
 ]
 
 [[package]]
