@@ -1,49 +1,8 @@
 {
   "success": [
     {
-      "desc": "two-pass-generated-by-javascript",
-      "cipher": "g69oY1NlZWRCdW5kbGVWZXIArnNlZWRDaXBoZXJMaXN0koSkdHlwZaZwd0hhc2ikc2FsdNgSEChs5Y95IXw9fyHfZktaYLBzZWVkQ2lwaGVySGVhZGVyxxgSiAnXPkYtZfHER3hiX5fzY-91qwu_r29wqnNlZWRDaXBoZXLHMRIY273brgaYRLPpAF9DQVlUysJreTf1YAwveVaAohgHufWPExjp_-ex6dMR61cTMQ-XhKR0eXBlpnB3SGFzaKRzYWx02BJjh8JvgUS8ofo_CpMyCGsksHNlZWRDaXBoZXJIZWFkZXLHGBI3T77MrPhhkg8lOgkIKYRhUtsRHwBfX1Wqc2VlZENpcGhlcscxEvMmLnfupg9WNuquSc1A-TNnRW_KWnO1nUaROzcyKFNXVoCFmGAXFhY4mckNmdBRDOKnYXBwRGF0YcQBgA",
-      "unlock": [
-        {
-          "type": "pwHash",
-          "passphrase": "zombies1"
-        },
-        {
-          "type": "pwHash",
-          "passphrase": "zombies2"
-        }
-      ],
-      "signPubKey": "my99kQEX6sCX8r3lMDjg54c1gm2YFHvqj_axmgMPDHs",
-      "derivations": {
-        "m/0/1/2/3/4/5/6/7/8/9": "wuvLHEzv_3lGiKvuMKdQnBSdyaR4fHHn0h9sh44OYeA",
-        "m/68": "U7h9JkGxmQOVi2txw_KJgTK8_08SqK0yhnRqryANsNc",
-        "m/68/0": "zSosbAhF_0DeQurKa25s3WxXOVggQTh7bAih_SdCLjU",
-        "m/68/0/65": "T8SdReG4FTUdOY0Zi4W23sHE2hkzSFI5kO8XQHXN1rg",
-        "m/68/0/65/0": "5tmYE6DaegiQ8lLTlPD0AOWfVkchkkvK5AnoMlj66fk"
-      }
-    },
-    {
-      "desc": "pass-and-qa-generated-by-javascript",
-      "cipher": "g69oY1NlZWRCdW5kbGVWZXIArnNlZWRDaXBoZXJMaXN0koSkdHlwZaZwd0hhc2ikc2FsdNgS2LqLnAFGqujDc-GDkjo2A7BzZWVkQ2lwaGVySGVhZGVyxxgScTBuUFJ6T5-HFHmlB6BKxG7LIzlOSqTpqnNlZWRDaXBoZXLHMRKwUici7B56Yh3eDhInMj40Vgq4otL7hmdQdTKlYvM-qsuoHfPYeaC3C8rpbfNo0fcthaR0eXBlsXNlY3VyaXR5UXVlc3Rpb25zpHNhbHTYEp4wAhvfHXAr7XsO7Se06FCscXVlc3Rpb25MaXN0k6NxLWGjcS1io3EtY7BzZWVkQ2lwaGVySGVhZGVyxxgS-Lpf19DIuK8mTXBTg1gg0-iDCxV3-2OMqnNlZWRDaXBoZXLHMRJMUsdTa4LmSxTXwpkEtLWtJHNbREFSLzIngt2RKRuXAWPY57AYR7_P3P1G7qF3xRbzp2FwcERhdGHEAYA",
-      "unlock": [
-        {
-          "type": "pwHash",
-          "passphrase": "my passphrase with multiple words"
-        },
-        {
-          "type": "securityQuestions",
-          "questionList": ["q-a", "q-b", "q-c"],
-          "answerList": ["a-a", "a-b", "a-c"]
-        }
-      ],
-      "signPubKey": "nprsLbv8KzxFTuEKRsElBnVXCdpe1Xz_7EwqtjCvZCc",
-      "derivations": {
-        "m/68/0/65/0": "WAxxG-D00QqQxCnvTXgDO7o0iu8hG83o1wEIA7KW3EY"
-      }
-    },
-    {
       "desc": "two-pass-generated-by-rust",
-      "cipher": "g69oY1NlZWRCdW5kbGVWZXIArnNlZWRDaXBoZXJMaXN0koSkdHlwZaZwd0hhc2ikc2FsdMQQDKZcpEh0pu36xHnl9fOAZ7BzZWVkQ2lwaGVySGVhZGVyxBjVes_m-Q_kc9ovsVnZk-w0ltI0hkvBDReqc2VlZENpcGhlcsQxtXlTd-D__qsZemib-kCZxpJ-sMSbTWV8wEkEd7eWmnGZLSLTbDu0pM--XVb_wmGNxISkdHlwZaZwd0hhc2ikc2FsdMQQPK8AHdCu_YZSi2PHcjphzbBzZWVkQ2lwaGVySGVhZGVyxBgqHlvPnd2P3D-Pyz2xp6N2KV2rCznRLa2qc2VlZENpcGhlcsQxdS5mk5_YybVuBxompsCA77k4wHgYNyqvztux_fkJRQovxCQprm-utamf9gR8oZJk1qdhcHBEYXRhxAA",
+      "cipher": "g69oY1NlZWRCdW5kbGVWZXIArnNlZWRDaXBoZXJMaXN0koekdHlwZaZwd0hhc2ikc2FsdMQQ0im2I3pH4EoKwYc0zAOJ1ahtZW1MaW1pdM4EAAAAqG9wc0xpbWl0AqxxdWVzdGlvbkxpc3TAsHNlZWRDaXBoZXJIZWFkZXLEGITkYFZnHjnT5RaMPyKPiXYao3HwwotuuapzZWVkQ2lwaGVyxDG3Q60pSePZ9EpPURAja7q71a9Z0LdL6rC5noN_Nbm5oqO_ZkmUrmEAYtHDDutPmO8Oh6R0eXBlpnB3SGFzaKRzYWx0xBBKuTYXHT671f8bRzgSLeCNqG1lbUxpbWl0zgQAAACob3BzTGltaXQCrHF1ZXN0aW9uTGlzdMCwc2VlZENpcGhlckhlYWRlcsQYwbn60LJqFmRP241ZV-tUc_7K6xKeRYZkqnNlZWRDaXBoZXLEMfZigoALYKTCWeyb2w8v0Hr3WzZQPjbIpQQTI3D2qyDDrl3tnR-Zlj3a3gsCeO6F2LSnYXBwRGF0YcQA",
       "unlock": [
         {
           "type": "pwHash",
@@ -54,9 +13,28 @@
           "passphrase": "second-pass"
         }
       ],
-      "signPubKey": "BdGVgRFW_CUEUmyYkcjQccw2NX8cVxH4dYcQrgSjv7A",
+      "signPubKey": "0R4NoM1Lt6F0_-bn6qlp-ZUMDpnqCoicyAwZDApdWHA",
       "derivations": {
-        "m/68/0/65/0": "RdtbE77Gl7y6ejVxLvXZEfbp74pDtzLG5r6FVdamQXY"
+        "m/68/0/65/0": "gFEaNCYJXXm4mp1o-x3Ui1CakLicWBuAzre9WqAB-4M"
+      }
+    },
+    {
+      "desc": "pass-and-qa-generated-by-rust",
+      "cipher": "g69oY1NlZWRCdW5kbGVWZXIArnNlZWRDaXBoZXJMaXN0koekdHlwZaZwd0hhc2ikc2FsdMQQu0hweAqkWOn75ZVYM24_06htZW1MaW1pdM4EAAAAqG9wc0xpbWl0AqxxdWVzdGlvbkxpc3TAsHNlZWRDaXBoZXJIZWFkZXLEGGzd2U0d_WxR5fMU6VFcL_m2eLCDNFRQOKpzZWVkQ2lwaGVyxDGTTc6G1fbgudB1X-X5eng2YMuEYp33wE7CwwKjL6T0Hsi0jFNFFo0xsG01n2hUfPx7h6R0eXBlsXNlY3VyaXR5UXVlc3Rpb25zpHNhbHTEEJDeowip1CUk5Y1wu_RNK4qobWVtTGltaXTOBAAAAKhvcHNMaW1pdAKscXVlc3Rpb25MaXN0k69GYXZvcml0ZSBDb2xvcj-qRmlyc3QgUGV0P6VIYWlyP7BzZWVkQ2lwaGVySGVhZGVyxBjVP3_oPB6VmpSWGu8pJAfmBILMLzERD0Oqc2VlZENpcGhlcsQxKs9ChaZQOHan32GqaUrWqSvmQD5I7Kqj-PONJzZdcJm2-6bgW2oau5Q-SJLRg74JzadhcHBEYXRhxAA",
+      "unlock": [
+        {
+          "type": "pwHash",
+          "passphrase": "my passphrase with multiple words"
+        },
+        {
+          "type": "securityQuestions",
+          "questionList": ["Favorite Color?", "First Pet?", "Hair?"],
+          "answerList": ["\t  BLuE", "ZoMbOrG\t ", " nope "]
+        }
+      ],
+      "signPubKey": "EWiGg6Lx8apIGKOWcShIDMgksIhNcQVmUmThyZQ2Tf4",
+      "derivations": {
+        "m/68/0/65/0": "zItLvdD4cUGqTCVgZkhn2TeR5C1wdULyfZYtDSvcmsY"
       }
     }
   ]

@@ -36,8 +36,24 @@ impl Test {
                 let passphrase = unlock.passphrase.as_ref().unwrap();
                 let passphrase =
                     sodoken::BufRead::from(passphrase.as_bytes().to_vec());
-                cipher = cipher
-                    .add_pwhash_cipher(passphrase, Argon2idLimit::Interactive);
+                cipher = PwHashLimits::Interactive
+                    .with_exec(move || cipher.add_pwhash_cipher(passphrase));
+            } else if &unlock.r#type == "securityQuestions" {
+                let q_list = unlock.question_list.as_ref().unwrap();
+                let a_list = unlock.answer_list.as_ref().unwrap();
+                assert_eq!(3, q_list.len());
+                assert_eq!(3, a_list.len());
+                let q_list = (
+                    q_list[0].to_string(),
+                    q_list[1].to_string(),
+                    q_list[2].to_string(),
+                );
+                let a1 = sodoken::BufRead::from(a_list[0].as_bytes().to_vec());
+                let a2 = sodoken::BufRead::from(a_list[1].as_bytes().to_vec());
+                let a3 = sodoken::BufRead::from(a_list[2].as_bytes().to_vec());
+                cipher = PwHashLimits::Interactive.with_exec(move || {
+                    cipher.add_security_question_cipher(q_list, (a1, a2, a3))
+                });
             } else {
                 panic!("unsupported cipher type: {}", unlock.r#type);
             }
@@ -64,10 +80,39 @@ impl Test {
                     println!("{:?} with passphrase - {}", cipher, passphrase);
                     let passphrase =
                         sodoken::BufRead::from(passphrase.as_bytes().to_vec());
-                    let seed = cipher
-                        .unlock(passphrase, Argon2idLimit::Interactive)
-                        .await
+                    let seed = cipher.unlock(passphrase).await.unwrap();
+                    let pub_key = seed.get_sign_pub_key();
+                    assert_eq_b64(&self.sign_pub_key, &*pub_key.read_lock());
+                    out = Some(seed);
+                }
+                LockedSeedCipher::SecurityQuestions(cipher) => {
+                    let answer_list = self
+                        .unlock
+                        .get(cipher_index)
+                        .unwrap()
+                        .answer_list
+                        .as_ref()
                         .unwrap();
+                    println!(
+                        "{:?} with answer_list - {:?}",
+                        cipher, answer_list
+                    );
+                    // ensure the trimming / lcasing works
+                    let a1 = sodoken::BufRead::from(
+                        format!(
+                            "\t {} \t",
+                            answer_list[0].to_string().to_ascii_uppercase()
+                        )
+                        .as_bytes()
+                        .to_vec(),
+                    );
+                    let a2 = sodoken::BufRead::from(
+                        answer_list[1].as_bytes().to_vec(),
+                    );
+                    let a3 = sodoken::BufRead::from(
+                        answer_list[2].as_bytes().to_vec(),
+                    );
+                    let seed = cipher.unlock((a1, a2, a3)).await.unwrap();
                     let pub_key = seed.get_sign_pub_key();
                     assert_eq_b64(&self.sign_pub_key, &*pub_key.read_lock());
                     out = Some(seed);
