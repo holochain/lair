@@ -6,22 +6,35 @@ pub(crate) struct SeedBundle {
     pub app_data: Box<[u8]>,
 }
 
+#[derive(serde::Serialize)]
+struct ISer<'lt>(
+    &'lt str,
+    &'lt [SeedCipher],
+    #[serde(with = "serde_bytes")] &'lt [u8],
+);
+
 impl serde::Serialize for SeedBundle {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
     {
-        ("hcsb0", &self.cipher_list, &self.app_data).serialize(serializer)
+        ISer("hcsb0", &self.cipher_list, &self.app_data).serialize(serializer)
     }
 }
+
+#[derive(serde::Deserialize)]
+struct IDes<'lt>(
+    &'lt str,
+    Box<[SeedCipher]>,
+    #[serde(with = "serde_bytes")] Box<[u8]>,
+);
 
 impl<'de> serde::Deserialize<'de> for SeedBundle {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde::Deserializer<'de>,
     {
-        let dec: (&'de str, Box<[SeedCipher]>, Box<[u8]>) =
-            serde::Deserialize::deserialize(deserializer)?;
+        let dec: IDes<'de> = serde::Deserialize::deserialize(deserializer)?;
         if dec.0 != "hcsb0" {
             return Err(serde::de::Error::custom(format!(
                 "unsupported bundle version: {}",
