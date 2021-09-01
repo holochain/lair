@@ -1,3 +1,5 @@
+//! A module for seed bundle cipher related items
+
 use futures::future::{BoxFuture, FutureExt};
 use sodoken::{SodokenError, SodokenResult};
 use std::sync::Arc;
@@ -11,6 +13,9 @@ use seed_bundle::*;
 mod pw_utils;
 use pw_utils::*;
 
+mod pw_hash_limits;
+pub use pw_hash_limits::*;
+
 type PrivCalcCipher = Box<
     dyn FnOnce(
             sodoken::BufReadSized<32>,
@@ -18,62 +23,6 @@ type PrivCalcCipher = Box<
         + 'static
         + Send,
 >;
-
-/// Enum to specify limits (difficulty) for argon2id pwhashing algorithm
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PwHashLimits {
-    /// low cpu/mem limits
-    Interactive,
-
-    /// middle cpu/mem limits (default)
-    Moderate,
-
-    /// high cpu/mem limits
-    Sensitive,
-}
-
-thread_local! {
-    static PWHASH_LIMITS: std::cell::RefCell<PwHashLimits> = std::cell::RefCell::new(PwHashLimits::Moderate);
-}
-
-impl PwHashLimits {
-    /// Get the current set limits
-    /// or the default "Moderate" limits if none are set by `with_exec()`.
-    pub fn current() -> Self {
-        PWHASH_LIMITS.with(|s| *s.borrow())
-    }
-
-    /// Execute a closure with these pwhash limits set.
-    pub fn with_exec<R, F>(self, f: F) -> R
-    where
-        F: FnOnce() -> R,
-    {
-        PWHASH_LIMITS.with(move |s| {
-            *s.borrow_mut() = self;
-            let res = f();
-            *s.borrow_mut() = PwHashLimits::Moderate;
-            res
-        })
-    }
-
-    /// translate into mem limit
-    fn as_mem_limit(&self) -> usize {
-        match self {
-            Self::Interactive => sodoken::argon2id::MEMLIMIT_INTERACTIVE,
-            Self::Moderate => sodoken::argon2id::MEMLIMIT_MODERATE,
-            Self::Sensitive => sodoken::argon2id::MEMLIMIT_SENSITIVE,
-        }
-    }
-
-    /// translate into cpu limit
-    fn as_ops_limit(&self) -> u64 {
-        match self {
-            Self::Interactive => sodoken::argon2id::OPSLIMIT_INTERACTIVE,
-            Self::Moderate => sodoken::argon2id::OPSLIMIT_MODERATE,
-            Self::Sensitive => sodoken::argon2id::OPSLIMIT_SENSITIVE,
-        }
-    }
-}
 
 /// To lock a SeedBundle, we need a list of ciphers and their secrets.
 /// This builder allows specifying those, then generating the locked bytes.

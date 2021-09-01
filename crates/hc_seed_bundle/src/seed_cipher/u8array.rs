@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
-/// serde doesn't auto-derive for this byte count
+/// A fixed sized byte array with all the translation and serialization
+/// support we need for working with SeedBundles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct U8Array<const N: usize>(pub [u8; N]);
 
@@ -24,6 +25,7 @@ impl<const N: usize> From<sodoken::BufReadSized<N>> for U8Array<N> {
 
 impl<const N: usize> From<Box<[u8]>> for U8Array<N> {
     fn from(o: Box<[u8]>) -> Self {
+        // we need to runtime panic when loading from unsized sources
         assert_eq!(o.len(), N);
         let mut out = [0; N];
         out.copy_from_slice(&o[0..N]);
@@ -68,6 +70,7 @@ impl<const N: usize> serde::Serialize for U8Array<N> {
     where
         S: serde::Serializer,
     {
+        // serialize directly as bytes
         serializer.serialize_bytes(self.deref())
     }
 }
@@ -77,6 +80,10 @@ impl<'de, const N: usize> serde::Deserialize<'de> for U8Array<N> {
     where
         D: serde::Deserializer<'de>,
     {
+        // Unfortunately, by default javascript encodes Uint8Arrays as
+        // "ext" fields. We could fix this in our library, but if someone
+        // else writes one they may run into this problem. Instead, we
+        // can be forgiving and accept "ext" entries as binary data.
         let v: rmpv::Value = serde::Deserialize::deserialize(deserializer)?;
         let v = match v {
             rmpv::Value::Binary(b) => b,

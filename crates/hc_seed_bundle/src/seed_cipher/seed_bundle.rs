@@ -1,11 +1,21 @@
+//! We want both ergonomic structs on the rust side, and compact encoding
+//! on the encoded binary side. The hcSeedBundle encoding spec uses msgpack
+//! arrays to compact the encoding. These structs translate between that
+//! compact encoding and the more ergonomic rust data structures.
+
 use super::*;
 
+/// The more ergonomic rust structure of an (encrypted) seed bundle.
 #[derive(Debug)]
 pub(crate) struct SeedBundle {
+    /// The list of ciphers that will allow decrypting the seed.
     pub cipher_list: Box<[SeedCipher]>,
+
+    /// The encoded app_data associated with this bundle.
     pub app_data: Box<[u8]>,
 }
 
+/// A helper struct to serialize a seed bundle in the compact msgpack array fmt.
 #[derive(serde::Serialize)]
 struct ISer<'lt>(
     &'lt str,
@@ -22,6 +32,7 @@ impl serde::Serialize for SeedBundle {
     }
 }
 
+/// A helper struct for deserializing a seed bundle from the compact msgpack fmt
 #[derive(serde::Deserialize)]
 struct IDes<'lt>(
     &'lt str,
@@ -48,21 +59,44 @@ impl<'de> serde::Deserialize<'de> for SeedBundle {
     }
 }
 
+/// The more ergonomic rust structure of an (encrypted) seed cipher.
 #[derive(Debug)]
 pub(crate) enum SeedCipher {
+    /// PwHash type seed cipher
     PwHash {
+        /// argon salt
         salt: U8Array<16>,
+
+        /// argon mem limit
         mem_limit: u32,
+
+        /// argon ops limit
         ops_limit: u32,
+
+        /// secretstream header
         header: U8Array<24>,
+
+        /// secretstream cipher
         cipher: U8Array<49>,
     },
+    /// Security Questions type seed cipher
     SecurityQuestions {
+        /// argon salt
         salt: U8Array<16>,
+
+        /// argon mem limit
         mem_limit: u32,
+
+        /// argon ops limit
         ops_limit: u32,
+
+        /// the three security questions to ask the user
         question_list: (String, String, String),
+
+        /// secretstream header
         header: U8Array<24>,
+
+        /// secretstream cipher
         cipher: U8Array<49>,
     },
 }
@@ -72,6 +106,7 @@ impl serde::Serialize for SeedCipher {
     where
         S: serde::Serializer,
     {
+        // serialize into the more compact msgpack array format
         match self {
             Self::PwHash {
                 salt,
@@ -109,6 +144,11 @@ impl<'de> serde::Deserialize<'de> for SeedCipher {
     where
         D: serde::Deserializer<'de>,
     {
+        // deserializing the compact msgpack array format is a little more
+        // complicated. We need to implement a visitor that can change
+        // behavior after reading the first "type" marker at the beginning
+        // of the array
+
         struct V;
         impl<'de> serde::de::Visitor<'de> for V {
             type Value = SeedCipher;
@@ -124,6 +164,8 @@ impl<'de> serde::Deserialize<'de> for SeedCipher {
             where
                 A: serde::de::SeqAccess<'de>,
             {
+                // DRY out the following by macroizing the redundant
+                // next_element boilerplate.
                 macro_rules! next_elem {
                     ($t:ty, $s:ident, $e:literal) => {{
                         let out: $t = match $s.next_element() {
@@ -133,8 +175,12 @@ impl<'de> serde::Deserialize<'de> for SeedCipher {
                         out
                     }};
                 }
+
+                // read the first element of the array, the "type" marker
                 let type_name =
                     next_elem!(&'de str, seq, "expected cipher type_name");
+
+                // switch based on that type marker
                 match type_name {
                     "pw" => {
                         let salt =
