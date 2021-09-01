@@ -45,7 +45,7 @@
 //!
 //! #### SeedCipher::PwHash
 //!
-//! ```javascript=
+//! ```javascript
 //! // the PwHash type SeedCipher defines a straight-forward
 //! // pwhash secret that is use to secretstream encrypt a seed
 //! 'seed_cipher':array [
@@ -66,7 +66,7 @@
 //!
 //! #### SeedCipher::SecurityQuestions
 //!
-//! ```javascript=
+//! ```javascript
 //! // Security Questions SeedCipher defines a pwhash cipher
 //! // based on concatonating 3 answers that are lcased/trimmed
 //! 'seed_cipher':array [
