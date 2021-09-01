@@ -3,6 +3,7 @@ use sodoken::{SodokenError, SodokenResult};
 use std::future::Future;
 use std::sync::Arc;
 
+/// The hcSeedBundle spec specifies a fixed KDF context of b"SeedBndl".
 const KDF_CONTEXT: &[u8; 8] = b"SeedBndl";
 
 /// This is the main struct for interacting with SeedBundles.
@@ -19,10 +20,13 @@ impl UnlockedSeedBundle {
     pub(crate) async fn priv_from_seed(
         seed: sodoken::BufReadSized<32>,
     ) -> SodokenResult<Self> {
+        // generate the deterministic signature keypair represented by this seed
         let pk = sodoken::BufWriteSized::new_no_lock();
         let sk = sodoken::BufWriteSized::new_mem_locked()?;
         sodoken::sign::sign_seed_keypair(pk.clone(), sk.clone(), seed.clone())
             .await?;
+
+        // generate the full struct bundle with blank app_data
         Ok(Self {
             seed,
             sign_pub_key: pk.to_read_sized(),

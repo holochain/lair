@@ -53,9 +53,11 @@ impl SeedCipherBuilder {
         let passphrase = passphrase.into();
         let gen_cipher: PrivCalcCipher = Box::new(move |seed| {
             async move {
+                // encrypt the passphrase
                 let (salt, header, cipher) =
                     pw_enc(seed, passphrase, limits).await?;
 
+                // return the encrypted seed cipher struct
                 Ok(SeedCipher::PwHash {
                     salt: salt.into(),
                     mem_limit: limits.as_mem_limit() as u32,
@@ -82,11 +84,15 @@ impl SeedCipherBuilder {
         let limits = PwHashLimits::current();
         let gen_cipher: PrivCalcCipher = Box::new(move |seed| {
             async move {
+                // generate a deterministic passphrase from the answers
                 let (a1, a2, a3) = answer_list;
                 let passphrase = process_security_answers(a1, a2, a3)?;
+
+                // encrypt the passphrase
                 let (salt, header, cipher) =
                     pw_enc(seed, passphrase, limits).await?;
 
+                // return the encrypted seed cipher struct
                 Ok(SeedCipher::SecurityQuestions {
                     salt: salt.into(),
                     mem_limit: limits.as_mem_limit() as u32,
@@ -110,26 +116,31 @@ impl SeedCipherBuilder {
             cipher_list,
         } = self;
 
+        // aggregate the cipher generation futures
         let cipher_list = cipher_list
             .into_iter()
             .map(|c| c(seed.clone()))
             .collect::<Vec<_>>();
 
+        // process the cipher generation futures in parallel
         let cipher_list = futures::future::try_join_all(cipher_list)
             .await?
             .into_boxed_slice();
 
+        // collect the ciphers and app data into a serialization struct
         let bundle = SeedBundle {
             cipher_list,
             app_data: app_data.to_vec().into_boxed_slice(),
         };
 
+        // serialize the bundle
         use serde::Serialize;
         let mut se = rmp_serde::encode::Serializer::new(Vec::new())
             .with_struct_map()
             .with_string_variants();
         bundle.serialize(&mut se).map_err(SodokenError::other)?;
 
+        // return the serialized bundle
         Ok(se.into_inner().into_boxed_slice())
     }
 }
@@ -159,6 +170,7 @@ impl LockedSeedCipherPwHash {
     where
         P: Into<sodoken::BufRead> + 'static + Send,
     {
+        // destructure our decoding data
         let LockedSeedCipherPwHash {
             salt,
             mem_limit,
@@ -169,6 +181,7 @@ impl LockedSeedCipherPwHash {
         } = self;
         let passphrase = passphrase.into();
 
+        // decrypt the seed with the given passphrase
         let seed = pw_dec(
             passphrase,
             salt,
@@ -179,8 +192,11 @@ impl LockedSeedCipherPwHash {
         )
         .await?;
 
+        // build the "unlocked" seed bundle struct with the seed
         let mut bundle =
             crate::UnlockedSeedBundle::priv_from_seed(seed).await?;
+
+        // apply the app_data
         bundle.set_app_data_bytes(app_data);
 
         Ok(bundle)
@@ -220,6 +236,7 @@ impl LockedSeedCipherSecurityQuestions {
     where
         A: Into<sodoken::BufRead> + 'static + Send,
     {
+        // destructure our decoding data
         let LockedSeedCipherSecurityQuestions {
             salt,
             mem_limit,
@@ -229,9 +246,12 @@ impl LockedSeedCipherSecurityQuestions {
             app_data,
             ..
         } = self;
+
+        // generate a deterministic passphrase with the given answers
         let (a1, a2, a3) = answer_list;
         let passphrase = process_security_answers(a1, a2, a3)?;
 
+        // decrypt the seed with the generated passphrase
         let seed = pw_dec(
             passphrase,
             salt,
@@ -242,8 +262,11 @@ impl LockedSeedCipherSecurityQuestions {
         )
         .await?;
 
+        // build the "unlocked" seed bundle struct with the seed
         let mut bundle =
             crate::UnlockedSeedBundle::priv_from_seed(seed).await?;
+
+        // apply the app_data
         bundle.set_app_data_bytes(app_data);
 
         Ok(bundle)
@@ -265,10 +288,13 @@ pub enum LockedSeedCipher {
 }
 
 impl LockedSeedCipher {
+    /// used by UnlockedSeedBundle::from_locked to get a list of LockedSeeCipher
     pub(crate) fn from_locked(bytes: &[u8]) -> SodokenResult<Vec<Self>> {
+        // deserialize the top-level bundle
         let bundle: SeedBundle =
             rmp_serde::from_read_ref(bytes).map_err(SodokenError::other)?;
 
+        // destructure the cipher list and app data
         let SeedBundle {
             cipher_list,
             app_data,
@@ -278,6 +304,7 @@ impl LockedSeedCipher {
 
         let mut out = Vec::new();
 
+        // generate LockedSeedCipher instances for each available cipher
         for cipher in cipher_list.into_vec().into_iter() {
             match cipher {
                 SeedCipher::PwHash {
@@ -287,6 +314,7 @@ impl LockedSeedCipher {
                     header,
                     cipher,
                 } => {
+                    // this is a PwHash type, emit that
                     out.push(LockedSeedCipher::PwHash(
                         LockedSeedCipherPwHash {
                             salt: salt.into(),
@@ -306,6 +334,7 @@ impl LockedSeedCipher {
                     header,
                     cipher,
                 } => {
+                    // this is a SecurityQuestions type, emit that
                     out.push(LockedSeedCipher::SecurityQuestions(
                         LockedSeedCipherSecurityQuestions {
                             salt: salt.into(),
