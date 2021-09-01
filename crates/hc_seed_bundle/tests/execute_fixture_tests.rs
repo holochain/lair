@@ -2,7 +2,7 @@ use hc_seed_bundle::*;
 
 use std::collections::HashMap;
 
-const FIXTURES: &str = include_str!("seed_bundle_test_fixtures.json");
+const FIXTURES: &str = include_str!("fixtures/seed_bundle_test_fixtures.json");
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
