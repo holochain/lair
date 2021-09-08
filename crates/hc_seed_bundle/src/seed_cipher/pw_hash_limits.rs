@@ -50,18 +50,18 @@ impl PwHashLimits {
     /// translate into mem limit
     pub(crate) fn as_mem_limit(&self) -> usize {
         match self {
-            Self::Interactive => sodoken::argon2id::MEMLIMIT_INTERACTIVE,
-            Self::Moderate => sodoken::argon2id::MEMLIMIT_MODERATE,
-            Self::Sensitive => sodoken::argon2id::MEMLIMIT_SENSITIVE,
+            Self::Interactive => sodoken::hash::argon2id::MEMLIMIT_INTERACTIVE,
+            Self::Moderate => sodoken::hash::argon2id::MEMLIMIT_MODERATE,
+            Self::Sensitive => sodoken::hash::argon2id::MEMLIMIT_SENSITIVE,
         }
     }
 
     /// translate into cpu limit
     pub(crate) fn as_ops_limit(&self) -> u64 {
         match self {
-            Self::Interactive => sodoken::argon2id::OPSLIMIT_INTERACTIVE,
-            Self::Moderate => sodoken::argon2id::OPSLIMIT_MODERATE,
-            Self::Sensitive => sodoken::argon2id::OPSLIMIT_SENSITIVE,
+            Self::Interactive => sodoken::hash::argon2id::OPSLIMIT_INTERACTIVE,
+            Self::Moderate => sodoken::hash::argon2id::OPSLIMIT_MODERATE,
+            Self::Sensitive => sodoken::hash::argon2id::OPSLIMIT_SENSITIVE,
         }
     }
 }

@@ -102,13 +102,13 @@ pub async fn execute_load_ed25519_keypair(
     Ok(())
 }
 
-use sodoken::argon2id::SALTBYTES;
-use sodoken::secretstream_xchacha20poly1305::*;
+use sodoken::hash::argon2id::SALTBYTES;
+use sodoken::secretstream::xchacha20poly1305::*;
 
 #[derive(Clone)]
 pub(crate) struct DbKeyEnc {
     pub salt: sodoken::BufReadSized<SALTBYTES>,
-    pub header: sodoken::BufReadSized<SECRETSTREAM_HEADERBYTES>,
+    pub header: sodoken::BufReadSized<HEADERBYTES>,
     pub cipher: sodoken::BufRead,
 }
 
@@ -123,12 +123,11 @@ impl DbKeyEnc {
         let salt: sodoken::BufReadSized<SALTBYTES> =
             (&content[0..SALTBYTES]).into();
 
-        let header: sodoken::BufReadSized<SECRETSTREAM_HEADERBYTES> =
-            (&content[SALTBYTES..SALTBYTES + SECRETSTREAM_HEADERBYTES]).into();
+        let header: sodoken::BufReadSized<HEADERBYTES> =
+            (&content[SALTBYTES..SALTBYTES + HEADERBYTES]).into();
 
-        let cipher = sodoken::BufRead::new_no_lock(
-            &content[SALTBYTES + SECRETSTREAM_HEADERBYTES..],
-        );
+        let cipher =
+            sodoken::BufRead::new_no_lock(&content[SALTBYTES + HEADERBYTES..]);
 
         Ok(Self {
             salt,
@@ -182,12 +181,12 @@ impl DbKeyEnc {
             .expect("this semaphore is never closed");
 
         let pre_key = sodoken::BufWriteSized::new_mem_locked()?;
-        sodoken::argon2id::hash(
+        sodoken::hash::argon2id::hash(
             pre_key.clone(),
             passphrase,
             salt,
-            sodoken::argon2id::OPSLIMIT_MODERATE,
-            sodoken::argon2id::MEMLIMIT_MODERATE,
+            sodoken::hash::argon2id::OPSLIMIT_MODERATE,
+            sodoken::hash::argon2id::MEMLIMIT_MODERATE,
         )
         .await
         .map_err(|e| LairError::from(format!("argon fail: {:?}", e)))?;
@@ -224,7 +223,7 @@ impl DbKeyEnc {
     ) -> LairResult<(Self, sodoken::BufReadSized<32>)> {
         // generate a new random salt
         let salt = sodoken::BufWriteSized::new_no_lock();
-        sodoken::random::randombytes_buf(salt.clone()).await?;
+        sodoken::random::bytes_buf(salt.clone()).await?;
 
         // calculate the pre_key given salt and passphrase
         let pre_key =
@@ -232,7 +231,7 @@ impl DbKeyEnc {
 
         // generate a new random db_key
         let db_key = sodoken::BufWriteSized::new_mem_locked()?;
-        sodoken::random::randombytes_buf(db_key.clone()).await?;
+        sodoken::random::bytes_buf(db_key.clone()).await?;
 
         let header = sodoken::BufWriteSized::new_no_lock();
         let mut enc = SecretStreamEncrypt::new(pre_key, header.clone())?;

@@ -23,9 +23,9 @@ where
 
     // careful not to move any bytes out of protected memory
     // convert to utf8 so we can use the rust trim / lcase functions.
-    let a1 = std::str::from_utf8(&*a1).map_err(SodokenError::other)?;
-    let a2 = std::str::from_utf8(&*a2).map_err(SodokenError::other)?;
-    let a3 = std::str::from_utf8(&*a3).map_err(SodokenError::other)?;
+    let a1 = std::str::from_utf8(&*a1).map_err(OneErr::new)?;
+    let a2 = std::str::from_utf8(&*a2).map_err(OneErr::new)?;
+    let a3 = std::str::from_utf8(&*a3).map_err(OneErr::new)?;
 
     // trim
     let a1 = a1.trim();
@@ -70,19 +70,19 @@ pub(crate) async fn pw_enc(
     passphrase: sodoken::BufRead,
     limits: PwHashLimits,
 ) -> SodokenResult<(
-    sodoken::BufReadSized<{ sodoken::argon2id::SALTBYTES }>,
+    sodoken::BufReadSized<{ sodoken::hash::argon2id::SALTBYTES }>,
     sodoken::BufReadSized<24>,
     sodoken::BufReadSized<49>,
 )> {
     // generate a random salt
     let salt = sodoken::BufWriteSized::new_no_lock();
-    sodoken::random::randombytes_buf(salt.clone()).await?;
+    sodoken::random::bytes_buf(salt.clone()).await?;
 
     // generate a secret using the passphrase with argon
     let opslimit = limits.as_ops_limit();
     let memlimit = limits.as_mem_limit();
     let secret = sodoken::BufWriteSized::new_mem_locked()?;
-    sodoken::argon2id::hash(
+    sodoken::hash::argon2id::hash(
         secret.clone(),
         passphrase,
         salt.clone(),
@@ -92,7 +92,7 @@ pub(crate) async fn pw_enc(
     .await?;
 
     // initialize the secret stream encrypt item
-    use sodoken::secretstream_xchacha20poly1305::*;
+    use sodoken::secretstream::xchacha20poly1305::*;
     let header = sodoken::BufWriteSized::new_no_lock();
     let mut enc = SecretStreamEncrypt::new(secret, header.clone())?;
 
@@ -116,7 +116,7 @@ pub(crate) async fn pw_enc(
 /// Return that seed.
 pub(crate) async fn pw_dec(
     passphrase: sodoken::BufRead,
-    salt: sodoken::BufReadSized<{ sodoken::argon2id::SALTBYTES }>,
+    salt: sodoken::BufReadSized<{ sodoken::hash::argon2id::SALTBYTES }>,
     mem_limit: usize,
     ops_limit: u64,
     header: sodoken::BufReadSized<24>,
@@ -124,7 +124,7 @@ pub(crate) async fn pw_dec(
 ) -> SodokenResult<sodoken::BufReadSized<32>> {
     // generate the argon secret
     let secret = sodoken::BufWriteSized::new_mem_locked()?;
-    sodoken::argon2id::hash(
+    sodoken::hash::argon2id::hash(
         secret.clone(),
         passphrase,
         salt,
@@ -134,7 +134,7 @@ pub(crate) async fn pw_dec(
     .await?;
 
     // decrypt the seed
-    use sodoken::secretstream_xchacha20poly1305::*;
+    use sodoken::secretstream::xchacha20poly1305::*;
     let mut dec = SecretStreamDecrypt::new(secret, header)?;
     let seed = sodoken::BufWriteSized::new_mem_locked()?;
     dec.pull(cipher, <Option<sodoken::BufRead>>::None, seed.clone())
