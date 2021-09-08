@@ -118,11 +118,7 @@ impl Test {
                     out = Some(seed);
                 }
                 LockedSeedCipher::UnsupportedCipher(name) => {
-                    if &*name == "securityQuestions" {
-                        println!("HAVEN'T IMPLEMENTED securityQuestions YET");
-                    } else {
-                        panic!("invalid unsupported cipher: {}", name);
-                    }
+                    panic!("invalid unsupported cipher: {}", name);
                 }
                 _ => {
                     panic!("unsupported unknown cipher");
