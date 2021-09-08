@@ -7,6 +7,8 @@ include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 use ghost_actor::dependencies::tracing::*;
 use std::sync::Arc;
 
+pub mod sodium_secretstream;
+
 mod error;
 pub use error::*;
 

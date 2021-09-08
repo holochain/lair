@@ -12,7 +12,7 @@ pub const NONCE_BYTES: usize = 24;
 /// We have no idea how big incoming data is, but probably it is generally smallish.
 /// Devs can always do their own padding on top of this, but we want some safety for unpadded data.
 /// Libsodium optionally supports ISO 7816-4 padding algorithm.
-/// @see https://doc.libsodium.org/padding#algorithm
+/// @see <https://doc.libsodium.org/padding#algorithm>
 pub const BLOCK_PADDING_SIZE: usize = 32;
 /// The delimiter for padding as per ISO 7816-4.
 pub const BLOCK_PADDING_DELIMITER: u8 = 0x80;
@@ -165,7 +165,8 @@ impl From<Vec<u8>> for CryptoBoxData {
 /// private keys for later use BUT see above for the dangers of key re-use that the app dev
 /// really needs to be wary of.
 ///
-/// @see https://eprint.iacr.org/2019/519.pdf for 'context separable interfaces'
+/// @see <https://eprint.iacr.org/2019/519.pdf> for
+/// 'context separable interfaces'
 pub async fn crypto_box(
     sender: x25519::X25519PrivKey,
     recipient: x25519::X25519PubKey,
