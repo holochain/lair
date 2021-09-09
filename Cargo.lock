@@ -903,6 +903,8 @@ dependencies = [
  "rayon",
  "rcgen",
  "ring",
+ "rmp-serde",
+ "serde",
  "sodoken",
  "subtle",
  "tempfile",
@@ -1130,9 +1132,9 @@ checksum = "692fcb63b64b1758029e0a96ee63e049ce8c5948587f2f7208df04625e5f6b56"
 
 [[package]]
 name = "one_err"
-version = "0.0.3"
+version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b55eaea6875b5ff51b82291b20d17e49e9f68c723204d26016e938bbdb76452"
+checksum = "09fa80259b1d506870e7f48465911ff7977ff5344e8e306487d5a9ffdc23b06f"
 dependencies = [
  "indexmap",
  "libc",
@@ -1905,9 +1907,9 @@ checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
 
 [[package]]
 name = "sodoken"
-version = "0.0.1-alpha.13"
+version = "0.0.1-alpha.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c4efe570f6f7ed43b77e6c80a912f70994cb1a492f3a12bd8f79a23a9127aca"
+checksum = "7bf891eff7a6b5a813cb5e5cd2710da92a8c1fe3b571baf999ff057d7e11e842"
 dependencies = [
  "libc",
  "libsodium-sys",

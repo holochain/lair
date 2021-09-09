@@ -236,7 +236,7 @@ impl DbKeyEnc {
         let header = sodoken::BufWriteSized::new_no_lock();
         let mut enc = SecretStreamEncrypt::new(pre_key, header.clone())?;
 
-        let cipher = sodoken::BufWrite::new_unbound_no_lock();
+        let cipher = sodoken::BufExtend::new_no_lock(0);
         enc.push_final(
             db_key.clone(),
             <Option<sodoken::BufRead>>::None,

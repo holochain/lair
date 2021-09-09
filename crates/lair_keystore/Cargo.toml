@@ -19,7 +19,7 @@ lair_keystore_api = { version = "=0.0.5", path = "../lair_keystore_api" }
 num_cpus = "1.13.0"
 once_cell = "1.4"
 parking_lot = "0.11.1"
-sodoken = "=0.0.1-alpha.13"
+sodoken = "=0.0.1-alpha.15"
 structopt = "0.3"
 sysinfo = "0.15"
 thiserror = "1"

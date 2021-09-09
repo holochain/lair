@@ -113,3 +113,6 @@ impl From<LairError> for () {
 
 /// Lair Result Type.
 pub type LairResult<T> = Result<T, LairError>;
+
+/// Lair Result Type.
+pub type LairResult2<T> = Result<T, one_err::OneErr>;
