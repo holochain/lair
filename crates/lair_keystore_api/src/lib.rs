@@ -15,6 +15,8 @@ pub use error::*;
 mod config;
 pub use config::*;
 
+pub mod lair_core;
+
 pub mod internal;
 pub use internal::rayon::init_once_rayon_thread_pool;
 pub(crate) use internal::rayon::rayon_exec;
