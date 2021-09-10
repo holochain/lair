@@ -137,3 +137,87 @@ impl UnlockedSeedBundle {
         crate::SeedCipherBuilder::new(self.seed.clone(), self.app_data.clone())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::*;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_pwhash_cipher() {
+        let mut seed = UnlockedSeedBundle::new_random().await.unwrap();
+        seed.set_app_data(&42).unwrap();
+
+        let orig_pub_key = seed.get_sign_pub_key();
+
+        let passphrase = sodoken::BufRead::from(b"test-passphrase".to_vec());
+
+        let cipher = PwHashLimits::Interactive
+            .with_exec(|| seed.lock().add_pwhash_cipher(passphrase.clone()));
+
+        let encoded = cipher.lock().await.unwrap();
+
+        match UnlockedSeedBundle::from_locked(&encoded)
+            .await
+            .unwrap()
+            .remove(0)
+        {
+            LockedSeedCipher::PwHash(cipher) => {
+                let seed = cipher.unlock(passphrase).await.unwrap();
+                assert_eq!(
+                    &*orig_pub_key.read_lock(),
+                    &*seed.get_sign_pub_key().read_lock()
+                );
+                assert_eq!(42, seed.get_app_data().unwrap());
+            }
+            oth => panic!("unexpected cipher: {:?}", oth),
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_security_questions_cipher() {
+        let mut seed = UnlockedSeedBundle::new_random().await.unwrap();
+        seed.set_app_data(&42).unwrap();
+
+        let orig_pub_key = seed.get_sign_pub_key();
+
+        let q1 = "What Color?";
+        let q2 = "What Flavor?";
+        let q3 = "What Hair?";
+        let a1 = sodoken::BufRead::from(b"blUe".to_vec());
+        let a2 = sodoken::BufRead::from(b"spicy ".to_vec());
+        let a3 = sodoken::BufRead::from(b" big".to_vec());
+
+        let cipher = PwHashLimits::Interactive.with_exec(|| {
+            let q_list = (q1.to_string(), q2.to_string(), q3.to_string());
+            let a_list = (a1, a2, a3);
+            seed.lock().add_security_question_cipher(q_list, a_list)
+        });
+
+        let encoded = cipher.lock().await.unwrap();
+
+        match UnlockedSeedBundle::from_locked(&encoded)
+            .await
+            .unwrap()
+            .remove(0)
+        {
+            LockedSeedCipher::SecurityQuestions(cipher) => {
+                assert_eq!(q1, cipher.get_question_list().0);
+                assert_eq!(q2, cipher.get_question_list().1);
+                assert_eq!(q3, cipher.get_question_list().2);
+
+                let a1 = sodoken::BufRead::from(b" blue".to_vec());
+                let a2 = sodoken::BufRead::from(b" spicy".to_vec());
+                let a3 = sodoken::BufRead::from(b" bIg".to_vec());
+
+                let seed = cipher.unlock((a1, a2, a3)).await.unwrap();
+
+                assert_eq!(
+                    &*orig_pub_key.read_lock(),
+                    &*seed.get_sign_pub_key().read_lock()
+                );
+                assert_eq!(42, seed.get_app_data().unwrap());
+            }
+            oth => panic!("unexpected cipher: {:?}", oth),
+        }
+    }
+}
