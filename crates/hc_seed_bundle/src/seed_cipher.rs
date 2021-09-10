@@ -1,7 +1,8 @@
 //! A module for seed bundle cipher related items
 
 use futures::future::{BoxFuture, FutureExt};
-use sodoken::{SodokenError, SodokenResult};
+use one_err::*;
+use sodoken::SodokenResult;
 use std::sync::Arc;
 
 mod u8array;
@@ -138,7 +139,7 @@ impl SeedCipherBuilder {
         let mut se = rmp_serde::encode::Serializer::new(Vec::new())
             .with_struct_map()
             .with_string_variants();
-        bundle.serialize(&mut se).map_err(SodokenError::other)?;
+        bundle.serialize(&mut se).map_err(OneErr::new)?;
 
         // return the serialized bundle
         Ok(se.into_inner().into_boxed_slice())
@@ -292,7 +293,7 @@ impl LockedSeedCipher {
     pub(crate) fn from_locked(bytes: &[u8]) -> SodokenResult<Vec<Self>> {
         // deserialize the top-level bundle
         let bundle: SeedBundle =
-            rmp_serde::from_read_ref(bytes).map_err(SodokenError::other)?;
+            rmp_serde::from_read_ref(bytes).map_err(OneErr::new)?;
 
         // destructure the cipher list and app data
         let SeedBundle {

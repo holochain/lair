@@ -6,3 +6,7 @@ members = [
   "crates/lair_keystore_api",
   "crates/lair_keystore_client",
 ]
+
+[patch.crates-io]
+#one_err = { path = "../one_err" }
+#sodoken = { path = "../sodoken/crates/sodoken" }
