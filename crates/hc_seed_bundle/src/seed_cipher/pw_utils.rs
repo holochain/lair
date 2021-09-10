@@ -2,7 +2,7 @@ use super::*;
 
 /// For SeedCipherSecurityQuestions (and the "Locked" struct)
 /// we need to be able to translate three answers into a semi-deterministic
-/// passphrase. This process involves lower-casing, trimming, and concatonating.
+/// passphrase. This process involves lower-casing, trimming, and concatenating.
 pub(crate) fn process_security_answers<A1, A2, A3>(
     a1: A1,
     a2: A2,
@@ -63,7 +63,7 @@ where
 }
 
 /// Use the given passphrase to generate a deterministic secret with argon.
-/// Use that secret to secrestream encrypt the given seed.
+/// Use that secret to secretstream encrypt the given seed.
 /// Return the argon salt, and the secretstream header and cipher.
 pub(crate) async fn pw_enc(
     seed: sodoken::BufReadSized<32>,
