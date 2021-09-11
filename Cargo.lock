@@ -905,6 +905,7 @@ dependencies = [
  "ring",
  "rmp-serde",
  "serde",
+ "serde_json",
  "sodoken",
  "subtle",
  "tempfile",

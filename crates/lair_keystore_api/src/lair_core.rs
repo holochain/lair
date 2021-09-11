@@ -1,3 +1,4 @@
+#![allow(clippy::new_without_default)]
 //! Lair core types
 
 use crate::LairResult2 as LairResult;
@@ -40,20 +41,38 @@ pub mod traits {
         ) -> BoxFuture<'static, LairResult<LairStore>>;
     }
 
+    /// Defines a lair serialization object.
+    pub trait AsLairCodec:
+        'static
+        + std::fmt::Debug
+        + serde::Serialize
+        + for<'de> serde::Deserialize<'de>
+        + std::convert::TryFrom<LairApiEnum>
+    {
+        /// Convert this individual lair serialization object
+        /// into a combined API enum instance variant.
+        fn into_api_enum(self) -> LairApiEnum;
+    }
+
+    /// A "Request" type lair codec instance.
+    pub trait AsLairRequest: AsLairCodec {
+        /// The "Response" type associated with this request type.
+        type Response: AsLairCodec;
+    }
+
+    /// A "Response" type lair codec instance.
+    pub trait AsLairResponse: AsLairCodec {
+        /// The "Request" type associated with this response type.
+        type Request: AsLairCodec;
+    }
+
     /// Defines the lair client API.
     pub trait AsLairClient: 'static + Send + Sync {
-        /// List the entries tracked by lair.
-        /// This operation is a bit expensive, causing a lot of data cloning.
-        fn list_entries(
+        /// Handle a lair client request
+        fn request(
             &self,
-        ) -> BoxFuture<'static, LairResult<Vec<LairEntryListItem>>>;
-
-        /// Generate a new cryptographically secure random seed.
-        /// This will return the public 'SeedInfo' associated with this seed.
-        fn new_seed(
-            &self,
-            tag: String,
-        ) -> BoxFuture<'static, LairResult<SeedInfo>>;
+            request: LairApiEnum,
+        ) -> BoxFuture<'static, LairResult<LairApiEnum>>;
     }
 }
 use traits::*;
@@ -132,6 +151,182 @@ pub enum LairEntryInner {
 /// The LairEntry enum.
 pub type LairEntry = Arc<LairEntryInner>;
 
+fn new_msg_id() -> Arc<str> {
+    nanoid::nanoid!().into()
+}
+
+/// Request a list of entries from lair.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LairApiReqListEntries {
+    /// msg id to relate request / response.
+    pub msg_id: Arc<str>,
+}
+
+impl LairApiReqListEntries {
+    /// Make a new list entries request
+    pub fn new() -> Self {
+        Self {
+            msg_id: new_msg_id(),
+        }
+    }
+}
+
+impl std::convert::TryFrom<LairApiEnum> for LairApiReqListEntries {
+    type Error = one_err::OneErr;
+
+    fn try_from(e: LairApiEnum) -> Result<Self, Self::Error> {
+        if let LairApiEnum::LairApiReqListEntries(s) = e {
+            Ok(s)
+        } else {
+            Err(format!("Invalid response type: {:?}", e).into())
+        }
+    }
+}
+
+impl AsLairCodec for LairApiReqListEntries {
+    fn into_api_enum(self) -> LairApiEnum {
+        LairApiEnum::LairApiReqListEntries(self)
+    }
+}
+
+/// Respond to a list entries request.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LairApiResListEntries {
+    /// msg id to relate request / response.
+    pub msg_id: Arc<str>,
+    /// list of lair entry list items.
+    pub entry_list: Vec<LairEntryListItem>,
+}
+
+impl std::convert::TryFrom<LairApiEnum> for LairApiResListEntries {
+    type Error = one_err::OneErr;
+
+    fn try_from(e: LairApiEnum) -> Result<Self, Self::Error> {
+        if let LairApiEnum::LairApiResListEntries(s) = e {
+            Ok(s)
+        } else {
+            Err(format!("Invalid response type: {:?}", e).into())
+        }
+    }
+}
+
+impl AsLairCodec for LairApiResListEntries {
+    fn into_api_enum(self) -> LairApiEnum {
+        LairApiEnum::LairApiResListEntries(self)
+    }
+}
+
+impl AsLairRequest for LairApiReqListEntries {
+    type Response = LairApiResListEntries;
+}
+
+impl AsLairResponse for LairApiResListEntries {
+    type Request = LairApiReqListEntries;
+}
+
+/// Instruct lair to generate a new seed from cryptographically secure
+/// random data with given tag.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LairApiReqNewSeed {
+    /// msg id to relate request / response.
+    pub msg_id: Arc<str>,
+    /// user-defined tag to associate with the new seed.
+    pub tag: Arc<str>,
+}
+
+impl LairApiReqNewSeed {
+    /// Make a new list entries request
+    pub fn new(tag: String) -> Self {
+        Self {
+            msg_id: new_msg_id(),
+            tag: tag.into(),
+        }
+    }
+}
+
+impl std::convert::TryFrom<LairApiEnum> for LairApiReqNewSeed {
+    type Error = one_err::OneErr;
+
+    fn try_from(e: LairApiEnum) -> Result<Self, Self::Error> {
+        if let LairApiEnum::LairApiReqNewSeed(s) = e {
+            Ok(s)
+        } else {
+            Err(format!("Invalid response type: {:?}", e).into())
+        }
+    }
+}
+
+impl AsLairCodec for LairApiReqNewSeed {
+    fn into_api_enum(self) -> LairApiEnum {
+        LairApiEnum::LairApiReqNewSeed(self)
+    }
+}
+
+/// On new seed generation, lair will respond with info about
+/// that seed.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct LairApiResNewSeed {
+    /// msg id to relate request / response.
+    pub msg_id: Arc<str>,
+    /// user-defined tag associated with the generated seed.
+    pub tag: Arc<str>,
+    /// ed25519 signature public key derived from this seed.
+    pub ed25519_pub_key: Arc<[u8; 32]>,
+    /// x25519 encryption public key derived from this seed.
+    pub x25519_pub_key: Arc<[u8; 32]>,
+}
+
+impl std::convert::TryFrom<LairApiEnum> for LairApiResNewSeed {
+    type Error = one_err::OneErr;
+
+    fn try_from(e: LairApiEnum) -> Result<Self, Self::Error> {
+        if let LairApiEnum::LairApiResNewSeed(s) = e {
+            Ok(s)
+        } else {
+            Err(format!("Invalid response type: {:?}", e).into())
+        }
+    }
+}
+
+impl AsLairCodec for LairApiResNewSeed {
+    fn into_api_enum(self) -> LairApiEnum {
+        LairApiEnum::LairApiResNewSeed(self)
+    }
+}
+
+impl AsLairRequest for LairApiReqNewSeed {
+    type Response = LairApiResNewSeed;
+}
+
+impl AsLairResponse for LairApiResNewSeed {
+    type Request = LairApiReqNewSeed;
+}
+
+/// Lair Api enum
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+#[non_exhaustive]
+pub enum LairApiEnum {
+    /// Request a list of entries from lair.
+    LairApiReqListEntries(LairApiReqListEntries),
+
+    /// Respond to a list entries request.
+    LairApiResListEntries(LairApiResListEntries),
+
+    /// Instruct lair to generate a new seed from cryptographically secure
+    /// random data with given tag.
+    LairApiReqNewSeed(LairApiReqNewSeed),
+
+    /// On new seed generation, lair will respond with info about
+    /// that seed.
+    LairApiResNewSeed(LairApiResNewSeed),
+}
+
 /// Lair store concrete struct
 pub struct LairStore(Arc<dyn AsLairStore>);
 
@@ -172,5 +367,89 @@ impl LairStoreFactory {
         passphrase: sodoken::BufRead,
     ) -> impl Future<Output = LairResult<LairStore>> + 'static + Send {
         AsLairStoreFactory::connect_to_store(&*self.0, config, passphrase)
+    }
+}
+
+/// Concrete lair client struct.
+#[derive(Clone)]
+pub struct LairClient(pub Arc<dyn AsLairClient>);
+
+impl LairClient {
+    /// Handle a lair client request
+    pub fn request<R: AsLairRequest>(
+        &self,
+        request: R,
+    ) -> impl Future<Output = LairResult<R::Response>>
+    where
+        one_err::OneErr: std::convert::From<
+            <<R as AsLairRequest>::Response as std::convert::TryFrom<
+                LairApiEnum,
+            >>::Error,
+        >,
+    {
+        let request = request.into_api_enum();
+        let fut = AsLairClient::request(&*self.0, request);
+        async move {
+            let res = fut.await?;
+            let res: R::Response = std::convert::TryFrom::try_from(res)?;
+            Ok(res)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::future::FutureExt;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_lair_api() {
+        struct X;
+
+        impl AsLairClient for X {
+            fn request(
+                &self,
+                request: LairApiEnum,
+            ) -> BoxFuture<'static, LairResult<LairApiEnum>> {
+                println!("got: {}", serde_json::to_string(&request).unwrap());
+                async move {
+                    match request {
+                        LairApiEnum::LairApiReqListEntries(e) => {
+                            Ok(LairApiEnum::LairApiResListEntries(
+                                LairApiResListEntries {
+                                    msg_id: e.msg_id,
+                                    entry_list: Vec::new(),
+                                },
+                            ))
+                        }
+                        LairApiEnum::LairApiReqNewSeed(e) => Ok(
+                            LairApiEnum::LairApiResNewSeed(LairApiResNewSeed {
+                                msg_id: e.msg_id,
+                                tag: e.tag,
+                                ed25519_pub_key: Arc::new([0x01; 32]),
+                                x25519_pub_key: Arc::new([0x02; 32]),
+                            }),
+                        ),
+                        _ => {
+                            return Err(format!("bad req: {:?}", request).into())
+                        }
+                    }
+                }
+                .boxed()
+            }
+        }
+
+        let lair_client = LairClient(Arc::new(X));
+
+        println!(
+            "list: {:?}",
+            lair_client.request(LairApiReqListEntries::new()).await
+        );
+        println!(
+            "seed: {:?}",
+            lair_client
+                .request(LairApiReqNewSeed::new("test-tag".into()))
+                .await
+        );
     }
 }
