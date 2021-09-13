@@ -1,5 +1,4 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use futures::{future::FutureExt, stream::StreamExt};
 use lair_keystore_api::actor::*;
 use lair_keystore_api::*;
 use once_cell::sync::Lazy;
@@ -23,23 +22,8 @@ async fn init() -> (
 
     let config = Config::builder().set_root_path(tmpdir.path()).build();
 
-    let (api_send, mut evt_recv) = ipc::spawn_client_ipc(config).await.unwrap();
-
-    tokio::task::spawn(async move {
-        while let Some(msg) = evt_recv.next().await {
-            match msg {
-                LairClientEvent::RequestUnlockPassphrase {
-                    respond, ..
-                } => {
-                    respond.respond(Ok(
-                        async move { Ok("passphrase".to_string()) }
-                            .boxed()
-                            .into(),
-                    ));
-                }
-            }
-        }
-    });
+    let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
+    let api_send = ipc::spawn_client_ipc(config, passphrase).await.unwrap();
 
     let info = api_send.lair_get_server_info().await.unwrap();
     assert_eq!("lair-keystore", &info.name);
