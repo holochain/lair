@@ -13,12 +13,9 @@ pub(crate) struct LowLevelWireSender {
 impl LowLevelWireSender {
     pub fn new(
         raw_send: IpcWrite,
+        limit: Arc<tokio::sync::Semaphore>,
         notify_kill: Arc<tokio::sync::Notify>,
     ) -> Self {
-        // rather than having a single permit, it would be more efficient
-        // to batch up some number of messages while any sends are outstanding
-        // then send the whole batch at once while we have cpu time.
-        let limit = Arc::new(tokio::sync::Semaphore::new(1));
         let inner = Arc::new(Mutex::new(Some(raw_send)));
         Self {
             limit,
@@ -40,26 +37,38 @@ impl LowLevelWireSender {
         let notify_kill = self.notify_kill.clone();
         let inner = self.inner.clone();
         async move {
+            let msg_enc = msg.encode()?;
+
             let _permit = limit
                 .clone()
                 .acquire_owned()
                 .await
                 .map_err(LairError::other)?;
 
-            let msg_enc = msg.encode()?;
-
             // if we have a permit, the sender is available
             let mut raw_send = inner.lock().take().unwrap();
 
-            let res =
-                raw_send.write_all(&msg_enc).await.map_err(LairError::other);
-            *(inner.lock()) = Some(raw_send);
-            trace!("ll wrote {:?}", &msg);
-            if res.is_err() {
-                limit.close();
-                notify_kill.notify_waiters();
+            let write_fut = raw_send.write_all(&msg_enc);
+            let kill_fut = notify_kill.clone();
+            let kill_fut = kill_fut.notified();
+            tokio::select! {
+                _ = kill_fut => {
+                    // killed from the receiver side? let's try to shuttdown
+                    let _ = raw_send.shutdown().await;
+                    return Err("closed".into());
+                }
+                res = write_fut => {
+                    if let Err(err) = res.map_err(LairError::other) {
+                        limit.close();
+                        notify_kill.notify_waiters();
+                        return Err(err);
+                    }
+                }
             }
-            res
+
+            *(inner.lock()) = Some(raw_send);
+
+            Ok(())
         }
     }
 }
@@ -71,9 +80,11 @@ pub(crate) struct LowLevelWireReceiver(
 impl LowLevelWireReceiver {
     pub fn new(
         raw_recv: IpcRead,
+        limit: Arc<tokio::sync::Semaphore>,
         notify_kill: Arc<tokio::sync::Notify>,
     ) -> Self {
         struct State {
+            limit: Arc<tokio::sync::Semaphore>,
             notify_kill: Arc<tokio::sync::Notify>,
             raw_recv: IpcRead,
             pending_msgs: Vec<LairWire>,
@@ -82,6 +93,7 @@ impl LowLevelWireReceiver {
         }
 
         let state = State {
+            limit,
             notify_kill,
             raw_recv,
             pending_msgs: Vec::new(),
@@ -91,6 +103,7 @@ impl LowLevelWireReceiver {
 
         let stream = futures::stream::try_unfold(state, |state| async move {
             let State {
+                limit,
                 notify_kill,
                 mut raw_recv,
                 mut pending_msgs,
@@ -103,6 +116,7 @@ impl LowLevelWireReceiver {
                     return Ok(Some((
                         pending_msgs.remove(0),
                         State {
+                            limit,
                             notify_kill,
                             raw_recv,
                             pending_msgs,
@@ -110,6 +124,10 @@ impl LowLevelWireReceiver {
                             buffer,
                         },
                     )));
+                }
+
+                if limit.is_closed() {
+                    return Err("closed".into());
                 }
 
                 trace!("ll read tick");
@@ -121,12 +139,21 @@ impl LowLevelWireReceiver {
                         return Err("closed".into());
                     }
                     read = read_fut => {
-                        read.map_err(LairError::other)?
+                        match read.map_err(LairError::other) {
+                            Ok(read) => read,
+                            Err(err) => {
+                                limit.close();
+                                notify_kill.notify_waiters();
+                                return Err(err);
+                            }
+                        }
                     }
                 };
                 trace!(?read, "ll read count");
                 if read == 0 {
                     trace!("ll read end");
+                    limit.close();
+                    notify_kill.notify_waiters();
                     return Err("read returned 0 bytes".into());
                 }
                 pending_data.extend_from_slice(&buffer[..read]);
@@ -135,7 +162,14 @@ impl LowLevelWireReceiver {
                     if pending_data.len() < size {
                         break;
                     }
-                    let msg = LairWire::decode(&pending_data)?;
+                    let msg = match LairWire::decode(&pending_data) {
+                        Ok(msg) => msg,
+                        Err(err) => {
+                            limit.close();
+                            notify_kill.notify_waiters();
+                            return Err(err);
+                        }
+                    };
                     let _ = pending_data.drain(..size);
                     trace!("ll read {:?}", msg);
                     pending_msgs.push(msg);
