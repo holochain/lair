@@ -27,7 +27,7 @@ rcgen = "=0.8.11"
 ring = "0.16"
 rmp-serde = "0.15.5"
 serde = "1"
-sodoken = "=0.0.1-alpha.15"
+sodoken = "=0.0.1-alpha.17"
 thiserror = "1"
 tokio = { version = "1.8.1", features = [ "full" ] }
 toml = "0.5"
