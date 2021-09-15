@@ -17,6 +17,10 @@ pub use config::*;
 
 pub mod lair_core;
 
+pub mod mem_store;
+
+pub mod test_keystore;
+
 pub mod internal;
 pub use internal::rayon::init_once_rayon_thread_pool;
 pub(crate) use internal::rayon::rayon_exec;
