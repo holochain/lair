@@ -19,6 +19,8 @@ pub mod lair_core;
 
 pub mod mem_store;
 
+pub mod lair_server;
+
 pub mod test_keystore;
 
 pub mod internal;

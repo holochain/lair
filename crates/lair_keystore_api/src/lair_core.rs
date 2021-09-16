@@ -94,7 +94,8 @@ pub struct BinData(pub Arc<[u8]>);
 
 impl std::fmt::Debug for BinData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("BinData").field(&self.len()).finish()
+        let s = base64::encode_config(&*self.0, base64::URL_SAFE_NO_PAD);
+        f.debug_tuple("BinData").field(&s).finish()
     }
 }
 
@@ -124,7 +125,8 @@ impl serde::Serialize for BinData {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_bytes(&*self.0)
+        let s = base64::encode_config(&*self.0, base64::URL_SAFE_NO_PAD);
+        serializer.serialize_str(&s)
     }
 }
 
@@ -133,8 +135,10 @@ impl<'de> serde::Deserialize<'de> for BinData {
     where
         D: serde::Deserializer<'de>,
     {
-        let tmp: Box<[u8]> = serde::Deserialize::deserialize(deserializer)?;
-        Ok(Self(tmp.into()))
+        let tmp: &'de str = serde::Deserialize::deserialize(deserializer)?;
+        base64::decode_config(tmp, base64::URL_SAFE_NO_PAD)
+            .map_err(serde::de::Error::custom)
+            .map(|b| Self(b.into()))
     }
 }
 
@@ -144,7 +148,8 @@ pub struct BinDataSized<const N: usize>(pub Arc<[u8; N]>);
 
 impl<const N: usize> std::fmt::Debug for BinDataSized<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "BinDataSized<{}>", N)
+        let s = base64::encode_config(&*self.0, base64::URL_SAFE_NO_PAD);
+        write!(f, "BinDataSized<{}>({})", N, s)
     }
 }
 
@@ -174,7 +179,8 @@ impl<const N: usize> serde::Serialize for BinDataSized<N> {
     where
         S: serde::Serializer,
     {
-        serializer.serialize_bytes(&*self.0)
+        let s = base64::encode_config(&*self.0, base64::URL_SAFE_NO_PAD);
+        serializer.serialize_str(&s)
     }
 }
 
@@ -183,12 +189,14 @@ impl<'de, const N: usize> serde::Deserialize<'de> for BinDataSized<N> {
     where
         D: serde::Deserializer<'de>,
     {
-        let tmp: &'de [u8] = serde::Deserialize::deserialize(deserializer)?;
+        let tmp: &'de str = serde::Deserialize::deserialize(deserializer)?;
+        let tmp = base64::decode_config(tmp, base64::URL_SAFE_NO_PAD)
+            .map_err(serde::de::Error::custom)?;
         if tmp.len() != N {
             return Err(serde::de::Error::custom("invalid buffer length"));
         }
         let mut out = [0; N];
-        out.copy_from_slice(tmp);
+        out.copy_from_slice(&tmp);
         Ok(Self(Arc::new(out)))
     }
 }
@@ -310,6 +318,149 @@ pub type Ed25519Signature = BinDataSized<64>;
 
 /// x25519 encryption public key derived from this seed.
 pub type X25519PubKey = BinDataSized<32>;
+
+/// Config used by lair servers.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct LairServerConfigInner {
+    /// The public ed25519 key identifying the server
+    pub server_pub_key: Ed25519PubKey,
+
+    /// The connection url for communications between server / client.
+    /// - `unix:///path/to/unix/socket`
+    /// - `named_pipe:\\.\pipe\my_pipe_name`
+    /// - `tcp://127.0.0.1:12345`
+    pub connection_url: url::Url,
+
+    /// The pid file for managing a running lair-keystore process
+    pub pid_file: std::path::PathBuf,
+
+    /// The sqlcipher store file for persisting secrets
+    pub store_file: std::path::PathBuf,
+
+    /// salt for decrypting runtime data
+    pub runtime_secrets_salt: BinDataSized<16>,
+
+    /// argon2id mem_limit for decrypting runtime data
+    pub runtime_secrets_mem_limit: u32,
+
+    /// argon2id ops_limit for decrypting runtime data
+    pub runtime_secrets_ops_limit: u32,
+
+    /// the runtime context key secret
+    pub runtime_secrets_context_key: SecretDataSized<32, 49>,
+
+    /// the server identity signature keypair seed
+    pub runtime_secrets_sign_seed: SecretDataSized<32, 49>,
+}
+
+impl LairServerConfigInner {
+    /// Construct a new default lair server config instance.
+    pub async fn new<P>(
+        root_path: P,
+        passphrase: sodoken::BufRead,
+    ) -> LairResult<Self>
+    where
+        P: AsRef<std::path::Path>,
+    {
+        let root_path = root_path.as_ref();
+
+        #[cfg(windows)]
+        let connection_url = {
+            let id = nanoid::nanoid!();
+            url::Url::parse(&format!("named-pipe:\\\\.\\pipe\\{}", id)).unwrap()
+        };
+        #[cfg(not(windows))]
+        let connection_url = {
+            let mut con_path = root_path.to_owned();
+            con_path.push("socket");
+            url::Url::parse(&format!("unix://{}", con_path.to_str().unwrap()))
+                .unwrap()
+        };
+
+        let mut pid_file = root_path.to_owned();
+        pid_file.push("pid_file");
+
+        let mut store_file = root_path.to_owned();
+        store_file.push("store_file");
+
+        let salt = <sodoken::BufWriteSized<16>>::new_no_lock();
+        sodoken::random::bytes_buf(salt.clone()).await?;
+
+        let mem_limit = sodoken::hash::argon2id::MEMLIMIT_MODERATE as u32;
+        let ops_limit = sodoken::hash::argon2id::OPSLIMIT_MODERATE as u32;
+
+        let pre_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        sodoken::hash::argon2id::hash(
+            pre_secret.clone(),
+            passphrase,
+            salt.clone(),
+            ops_limit as u64,
+            mem_limit as usize,
+        )
+        .await?;
+
+        let ctx_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        sodoken::kdf::derive_from_key(
+            ctx_secret.clone(),
+            42,
+            *b"CONTEXTK",
+            pre_secret.clone(),
+        )?;
+
+        let sig_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        sodoken::kdf::derive_from_key(
+            sig_secret.clone(),
+            142,
+            *b"SIGNATRK",
+            pre_secret,
+        )?;
+
+        let context_key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        sodoken::random::bytes_buf(context_key.clone()).await?;
+
+        let sign_seed = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        sodoken::random::bytes_buf(sign_seed.clone()).await?;
+
+        let sign_pk = <sodoken::BufWriteSized<32>>::new_no_lock();
+        let sign_sk = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+        sodoken::sign::seed_keypair(
+            sign_pk.clone(),
+            sign_sk,
+            sign_seed.clone(),
+        )
+        .await?;
+
+        let context_key = SecretDataSized::encrypt(
+            ctx_secret.to_read_sized(),
+            context_key.to_read_sized(),
+        )
+        .await?;
+        let sign_seed = SecretDataSized::encrypt(
+            sig_secret.to_read_sized(),
+            sign_seed.to_read_sized(),
+        )
+        .await?;
+
+        let config = LairServerConfigInner {
+            server_pub_key: sign_pk.try_unwrap_sized().unwrap().into(),
+            connection_url,
+            pid_file,
+            store_file,
+            runtime_secrets_salt: salt.try_unwrap_sized().unwrap().into(),
+            runtime_secrets_mem_limit: mem_limit,
+            runtime_secrets_ops_limit: ops_limit,
+            runtime_secrets_context_key: context_key,
+            runtime_secrets_sign_seed: sign_seed,
+        };
+
+        Ok(config)
+    }
+}
+
+/// Additional config used by lair servers.
+pub type LairServerConfig = Arc<LairServerConfigInner>;
 
 /// Public information associated with a given seed
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1080,6 +1231,17 @@ impl LairClient {
 mod tests {
     use super::*;
     use futures::future::FutureExt;
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_config_yaml() {
+        let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
+        let srv = LairServerConfigInner::new("/tmp/my/path", passphrase)
+            .await
+            .unwrap();
+        println!("-- server config start --");
+        println!("{}", serde_yaml::to_string(&srv).unwrap());
+        println!("-- server config end --");
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_lair_api() {
