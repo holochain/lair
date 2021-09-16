@@ -99,6 +99,13 @@ impl std::fmt::Debug for BinData {
     }
 }
 
+impl std::fmt::Display for BinData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = base64::encode_config(&*self.0, base64::URL_SAFE_NO_PAD);
+        f.write_str(&s)
+    }
+}
+
 impl BinData {
     /// Get a clone of our inner Arc<[u8]>
     pub fn cloned_inner(&self) -> Arc<[u8]> {
@@ -150,6 +157,13 @@ impl<const N: usize> std::fmt::Debug for BinDataSized<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = base64::encode_config(&*self.0, base64::URL_SAFE_NO_PAD);
         write!(f, "BinDataSized<{}>({})", N, s)
+    }
+}
+
+impl<const N: usize> std::fmt::Display for BinDataSized<N> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = base64::encode_config(&*self.0, base64::URL_SAFE_NO_PAD);
+        f.write_str(&s)
     }
 }
 
@@ -324,13 +338,10 @@ pub type X25519PubKey = BinDataSized<32>;
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct LairServerConfigInner {
-    /// The public ed25519 key identifying the server
-    pub server_pub_key: Ed25519PubKey,
-
     /// The connection url for communications between server / client.
-    /// - `unix:///path/to/unix/socket`
-    /// - `named_pipe:\\.\pipe\my_pipe_name`
-    /// - `tcp://127.0.0.1:12345`
+    /// - `unix:///path/to/unix/socket?k=Yada`
+    /// - `named_pipe:\\.\pipe\my_pipe_name?k=Yada`
+    /// - `tcp://127.0.0.1:12345?k=Yada`
     pub connection_url: url::Url,
 
     /// The pid file for managing a running lair-keystore process
@@ -366,19 +377,6 @@ impl LairServerConfigInner {
     {
         let root_path = root_path.as_ref();
 
-        #[cfg(windows)]
-        let connection_url = {
-            let id = nanoid::nanoid!();
-            url::Url::parse(&format!("named-pipe:\\\\.\\pipe\\{}", id)).unwrap()
-        };
-        #[cfg(not(windows))]
-        let connection_url = {
-            let mut con_path = root_path.to_owned();
-            con_path.push("socket");
-            url::Url::parse(&format!("unix://{}", con_path.to_str().unwrap()))
-                .unwrap()
-        };
-
         let mut pid_file = root_path.to_owned();
         pid_file.push("pid_file");
 
@@ -405,7 +403,7 @@ impl LairServerConfigInner {
         sodoken::kdf::derive_from_key(
             ctx_secret.clone(),
             42,
-            *b"CONTEXTK",
+            *b"CTXSECKY",
             pre_secret.clone(),
         )?;
 
@@ -413,7 +411,7 @@ impl LairServerConfigInner {
         sodoken::kdf::derive_from_key(
             sig_secret.clone(),
             142,
-            *b"SIGNATRK",
+            *b"SIGSECKY",
             pre_secret,
         )?;
 
@@ -443,8 +441,33 @@ impl LairServerConfigInner {
         )
         .await?;
 
+        let sign_pk: BinDataSized<32> =
+            sign_pk.try_unwrap_sized().unwrap().into();
+
+        #[cfg(windows)]
+        let connection_url = {
+            let id = nanoid::nanoid!();
+            url::Url::parse(&format!(
+                "named-pipe:\\\\.\\pipe\\{}?k={}",
+                id, sign_pk
+            ))
+            .unwrap()
+        };
+        // for named pipe: println!("URL PART: {}", connection_url.path());
+
+        #[cfg(not(windows))]
+        let connection_url = {
+            let mut con_path = root_path.to_owned();
+            con_path.push("socket");
+            url::Url::parse(&format!(
+                "unix://{}?k={}",
+                con_path.to_str().unwrap(),
+                sign_pk
+            ))
+            .unwrap()
+        };
+
         let config = LairServerConfigInner {
-            server_pub_key: sign_pk.try_unwrap_sized().unwrap().into(),
             connection_url,
             pid_file,
             store_file,
