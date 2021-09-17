@@ -21,6 +21,7 @@ derive_more = "0.99"
 directories = "3"
 futures = "0.3"
 ghost_actor = "0.3.0-alpha.1"
+hc_seed_bundle = { version = "=0.0.5", path = "../hc_seed_bundle" }
 nanoid = "0.3"
 num_cpus = "1"
 one_err = "0.0.4"

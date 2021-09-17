@@ -8,6 +8,7 @@ use futures::stream::StreamExt;
 use ghost_actor::dependencies::tracing;
 use parking_lot::RwLock;
 use std::future::Future;
+use std::sync::atomic;
 use std::sync::Arc;
 
 /// Traits related to LairServer. Unless you're writing a new
@@ -235,12 +236,20 @@ fn priv_srv_accept(
         )?;
         let dec_ctx_key = dec_ctx_key.to_read_sized();
 
+        // even if our core inner state is unlocked, we still need
+        // every connection to go through the process, so this is
+        // the connection-level unlock state.
+        let unlocked = Arc::new(atomic::AtomicBool::new(false));
+
         tokio::task::spawn(async move {
             let inner = &inner;
+            let send = &send;
             let enc_ctx_key = &enc_ctx_key;
             let dec_ctx_key = &dec_ctx_key;
-            let send = &send;
+            let unlocked = &unlocked;
             recv.for_each_concurrent(4096, move |incoming| async move {
+                //println!("SRV_RECV: {:?}", incoming);
+
                 let incoming = match incoming {
                     Err(e) => {
                         tracing::warn!("incoming channel error: {:?}", e);
@@ -253,9 +262,10 @@ fn priv_srv_accept(
 
                 if let Err(e) = priv_dispatch_incoming(
                     inner,
+                    send,
                     enc_ctx_key,
                     dec_ctx_key,
-                    send,
+                    unlocked,
                     incoming,
                 )
                 .await
@@ -282,9 +292,10 @@ fn priv_srv_accept(
 
 fn priv_dispatch_incoming<'a>(
     inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
     _enc_ctx_key: &'a sodoken::BufReadSized<32>,
     dec_ctx_key: &'a sodoken::BufReadSized<32>,
-    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
     incoming: LairApiEnum,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
     async move {
@@ -293,13 +304,13 @@ fn priv_dispatch_incoming<'a>(
                 priv_req_hello(inner, send, req).await
             }
             LairApiEnum::ReqUnlock(req) => {
-                priv_req_unlock(inner, dec_ctx_key, send, req).await
+                priv_req_unlock(inner, send, dec_ctx_key, unlocked, req).await
             }
             LairApiEnum::ReqListEntries(req) => {
-                priv_req_list_entries(inner, send, req).await
+                priv_req_list_entries(inner, send, unlocked, req).await
             }
             LairApiEnum::ReqNewSeed(req) => {
-                priv_req_new_seed(inner, send, req).await
+                priv_req_new_seed(inner, send, unlocked, req).await
             }
             LairApiEnum::ResError(_)
             | LairApiEnum::ResHello(_)
@@ -350,15 +361,25 @@ fn priv_req_hello<'a>(
 
 fn priv_req_unlock<'a>(
     inner: &'a Arc<RwLock<SrvInnerEnum>>,
-    dec_ctx_key: &'a sodoken::BufReadSized<32>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    dec_ctx_key: &'a sodoken::BufReadSized<32>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqUnlock,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
     async move {
         let passphrase = req.passphrase.decrypt(dec_ctx_key.clone()).await?;
+
+        // performe the internal state-level unlock process
         priv_srv_unlock(inner.clone(), passphrase).await?;
+
+        // if that was successfull, we can also set the connection level
+        // unlock state to unlocked
+        unlocked.store(true, atomic::Ordering::Relaxed);
+
+        // return the success
         send.send(LairApiResUnlock { msg_id: req.msg_id }.into_api_enum())
             .await?;
+
         Ok(())
     }
 }
@@ -366,9 +387,14 @@ fn priv_req_unlock<'a>(
 fn priv_req_list_entries<'a>(
     inner: &'a Arc<RwLock<SrvInnerEnum>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqListEntries,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
     async move {
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("keystore still locked".into());
+        }
+
         let store = match &*inner.read() {
             SrvInnerEnum::Running(p) => (p.store.clone()),
             SrvInnerEnum::Pending(_) => {
@@ -391,9 +417,14 @@ fn priv_req_list_entries<'a>(
 fn priv_req_new_seed<'a>(
     inner: &'a Arc<RwLock<SrvInnerEnum>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqNewSeed,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
     async move {
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("keystore still locked".into());
+        }
+
         let store = match &*inner.read() {
             SrvInnerEnum::Running(p) => (p.store.clone()),
             SrvInnerEnum::Pending(_) => {
@@ -429,26 +460,5 @@ impl AsLairServer for Srv {
         recv: RawRecv,
     ) -> BoxFuture<'static, LairResult<()>> {
         priv_srv_accept(self.0.clone(), send, recv)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_lair_server() {
-        let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
-
-        let config = LairServerConfigInner::new("/tmp", passphrase.clone())
-            .await
-            .unwrap();
-        println!("CONFIG: {}", config);
-
-        let store = crate::mem_store::create_mem_store_factory();
-
-        let srv = spawn_lair_server_task(config, store).await.unwrap();
-
-        srv.unlock(passphrase).await.unwrap();
     }
 }

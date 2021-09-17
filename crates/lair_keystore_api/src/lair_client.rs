@@ -7,6 +7,7 @@ use futures::future::{BoxFuture, FutureExt};
 use futures::stream::StreamExt;
 use ghost_actor::dependencies::tracing;
 use parking_lot::RwLock;
+use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
 
@@ -92,14 +93,36 @@ impl LairClient {
     /// it likely handles this for you in its constructor.
     pub fn hello(
         &self,
-        nonce: BinData,
-    ) -> impl Future<Output = LairResult<LairApiResHello>> + 'static + Send
-    {
+        expected_server_pub_key: BinDataSized<32>,
+    ) -> impl Future<Output = LairResult<()>> + 'static + Send {
         let inner = self.0.clone();
         async move {
-            let req = LairApiReqHello::new(nonce);
+            let nonce = sodoken::BufWrite::new_no_lock(24);
+            sodoken::random::bytes_buf(nonce.clone()).await.unwrap();
+            let nonce = nonce.try_unwrap().unwrap();
+
+            let req = LairApiReqHello::new(nonce.clone().into());
             let res = priv_lair_api_request(&*inner, req).await?;
-            Ok(res)
+
+            if res.server_pub_key != expected_server_pub_key {
+                return Err(one_err::OneErr::with_message(
+                    "ServerPubKeyMismatch",
+                    format!(
+                        "expected {} != returned {}",
+                        expected_server_pub_key, res.server_pub_key,
+                    ),
+                ));
+            }
+
+            if let Ok(true) = res
+                .server_pub_key
+                .verify_detached(res.hello_sig.cloned_inner(), nonce)
+                .await
+            {
+                return Ok(());
+            }
+
+            Err("ServerValidationFailed".into())
         }
     }
 
@@ -251,9 +274,10 @@ where
         let dec_ctx_key = dec_ctx_key.to_read_sized();
 
         let inner = CliInner {
-            enc_ctx_key: enc_ctx_key.clone(),
-            dec_ctx_key: dec_ctx_key.clone(),
+            enc_ctx_key,
+            dec_ctx_key,
             send: send.clone(),
+            pending: HashMap::new(),
         };
 
         let inner = Arc::new(RwLock::new(inner));
@@ -262,10 +286,11 @@ where
             let inner = inner.clone();
             tokio::task::spawn(async move {
                 let inner = &inner;
-                let enc_ctx_key = &enc_ctx_key;
-                let dec_ctx_key = &dec_ctx_key;
                 let send = &send;
+
                 recv.for_each_concurrent(4096, move |incoming| async move {
+                    //println!("CLI_RECV: {:?}", incoming);
+
                     let incoming = match incoming {
                         Err(e) => {
                             tracing::warn!("incoming channel error: {:?}", e);
@@ -274,21 +299,19 @@ where
                         Ok(incoming) => incoming,
                     };
 
-                    if let Err(e) = priv_dispatch_incoming(
-                        inner,
-                        enc_ctx_key,
-                        dec_ctx_key,
-                        incoming,
-                    )
-                    .await
-                    {
-                        tracing::warn!("error handling response: {:?}", e);
+                    let msg_id = incoming.msg_id();
+                    if let Some(resp) = inner.write().pending.remove(&msg_id) {
+                        let _ = resp.send(incoming);
                     }
                 })
                 .await;
+
                 let _ = send.shutdown().await;
+
                 tracing::warn!("lair connection recv loop ended");
-                // TODO - kill any pending requests - they won't ever get response.
+
+                // kill any pending requests - they won't ever get responses.
+                inner.write().pending.clear();
             });
         }
 
@@ -302,18 +325,10 @@ struct CliInner {
     enc_ctx_key: sodoken::BufReadSized<32>,
     dec_ctx_key: sodoken::BufReadSized<32>,
     send: crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    pending: HashMap<Arc<str>, tokio::sync::oneshot::Sender<LairApiEnum>>,
 }
 
 struct Cli(Arc<RwLock<CliInner>>);
-
-fn priv_dispatch_incoming<'a>(
-    _inner: &'a Arc<RwLock<CliInner>>,
-    _enc_ctx_key: &'a sodoken::BufReadSized<32>,
-    _dec_ctx_key: &'a sodoken::BufReadSized<32>,
-    _incoming: LairApiEnum,
-) -> impl Future<Output = LairResult<()>> + 'a + Send {
-    async move { unimplemented!() }
-}
 
 impl AsLairClient for Cli {
     fn get_enc_ctx_key(&self) -> sodoken::BufReadSized<32> {
@@ -328,10 +343,38 @@ impl AsLairClient for Cli {
         &self,
         request: LairApiEnum,
     ) -> BoxFuture<'static, LairResult<LairApiEnum>> {
-        let send = self.0.read().send.clone();
+        let (s, r) = tokio::sync::oneshot::channel();
+        let msg_id = request.msg_id();
+
+        struct Clean(Arc<RwLock<CliInner>>, Arc<str>);
+
+        impl Drop for Clean {
+            fn drop(&mut self) {
+                let _ = self.0.write().pending.remove(&self.1);
+            }
+        }
+
+        let clean = Clean(self.0.clone(), msg_id.clone());
+
+        let send = {
+            let mut lock = self.0.write();
+            lock.pending.insert(msg_id, s);
+            lock.send.clone()
+        };
+
         async move {
+            let _clean = clean;
+            //println!("CLI_SEND: {:?}", request);
             send.send(request).await?;
-            unimplemented!()
+
+            tokio::time::timeout(std::time::Duration::from_secs(30), r)
+                .await
+                .map_err(|_| {
+                    one_err::OneErr::from(std::io::ErrorKind::TimedOut)
+                })?
+                .map_err(|_| {
+                    one_err::OneErr::from(std::io::ErrorKind::ConnectionAborted)
+                })
         }
         .boxed()
     }

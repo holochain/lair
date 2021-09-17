@@ -125,8 +125,8 @@ impl<'de> serde::Deserialize<'de> for BinData {
     where
         D: serde::Deserializer<'de>,
     {
-        let tmp: &'de str = serde::Deserialize::deserialize(deserializer)?;
-        base64::decode_config(tmp, base64::URL_SAFE_NO_PAD)
+        let tmp: String = serde::Deserialize::deserialize(deserializer)?;
+        base64::decode_config(&tmp, base64::URL_SAFE_NO_PAD)
             .map_err(serde::de::Error::custom)
             .map(|b| Self(b.into()))
     }
@@ -186,8 +186,8 @@ impl<'de, const N: usize> serde::Deserialize<'de> for BinDataSized<N> {
     where
         D: serde::Deserializer<'de>,
     {
-        let tmp: &'de str = serde::Deserialize::deserialize(deserializer)?;
-        let tmp = base64::decode_config(tmp, base64::URL_SAFE_NO_PAD)
+        let tmp: String = serde::Deserialize::deserialize(deserializer)?;
+        let tmp = base64::decode_config(&tmp, base64::URL_SAFE_NO_PAD)
             .map_err(serde::de::Error::custom)?;
         if tmp.len() != N {
             return Err(serde::de::Error::custom("invalid buffer length"));
@@ -358,117 +358,144 @@ impl std::fmt::Display for LairServerConfigInner {
 
 impl LairServerConfigInner {
     /// Construct a new default lair server config instance.
-    pub async fn new<P>(
+    /// Respects hc_seed_bundle::PwHashLimits.
+    pub fn new<P>(
         root_path: P,
         passphrase: sodoken::BufRead,
-    ) -> LairResult<Self>
+    ) -> impl Future<Output = LairResult<Self>> + 'static + Send
     where
         P: AsRef<std::path::Path>,
     {
-        let root_path = root_path.as_ref();
+        let root_path = root_path.as_ref().to_owned();
+        let limits = hc_seed_bundle::PwHashLimits::current();
+        async move {
+            let mut pid_file = root_path.clone();
+            pid_file.push("pid_file");
 
-        let mut pid_file = root_path.to_owned();
-        pid_file.push("pid_file");
+            let mut store_file = root_path.clone();
+            store_file.push("store_file");
 
-        let mut store_file = root_path.to_owned();
-        store_file.push("store_file");
+            let salt = <sodoken::BufWriteSized<16>>::new_no_lock();
+            sodoken::random::bytes_buf(salt.clone()).await?;
 
-        let salt = <sodoken::BufWriteSized<16>>::new_no_lock();
-        sodoken::random::bytes_buf(salt.clone()).await?;
+            let ops_limit = limits.as_ops_limit();
+            let mem_limit = limits.as_mem_limit();
 
-        let mem_limit = sodoken::hash::argon2id::MEMLIMIT_MODERATE;
-        let ops_limit = sodoken::hash::argon2id::OPSLIMIT_MODERATE;
+            let pre_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            sodoken::hash::argon2id::hash(
+                pre_secret.clone(),
+                passphrase,
+                salt.clone(),
+                ops_limit,
+                mem_limit,
+            )
+            .await?;
 
-        let pre_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-        sodoken::hash::argon2id::hash(
-            pre_secret.clone(),
-            passphrase,
-            salt.clone(),
-            ops_limit,
-            mem_limit,
-        )
-        .await?;
+            let ctx_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            sodoken::kdf::derive_from_key(
+                ctx_secret.clone(),
+                42,
+                *b"CtxSecKy",
+                pre_secret.clone(),
+            )?;
 
-        let ctx_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-        sodoken::kdf::derive_from_key(
-            ctx_secret.clone(),
-            42,
-            *b"CtxSecKy",
-            pre_secret.clone(),
-        )?;
+            let sig_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            sodoken::kdf::derive_from_key(
+                sig_secret.clone(),
+                142,
+                *b"SigSecKy",
+                pre_secret,
+            )?;
 
-        let sig_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-        sodoken::kdf::derive_from_key(
-            sig_secret.clone(),
-            142,
-            *b"SigSecKy",
-            pre_secret,
-        )?;
+            let context_key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            sodoken::random::bytes_buf(context_key.clone()).await?;
 
-        let context_key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-        sodoken::random::bytes_buf(context_key.clone()).await?;
+            let sign_seed = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            sodoken::random::bytes_buf(sign_seed.clone()).await?;
 
-        let sign_seed = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-        sodoken::random::bytes_buf(sign_seed.clone()).await?;
+            let sign_pk = <sodoken::BufWriteSized<32>>::new_no_lock();
+            let sign_sk = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+            sodoken::sign::seed_keypair(
+                sign_pk.clone(),
+                sign_sk,
+                sign_seed.clone(),
+            )
+            .await?;
 
-        let sign_pk = <sodoken::BufWriteSized<32>>::new_no_lock();
-        let sign_sk = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-        sodoken::sign::seed_keypair(
-            sign_pk.clone(),
-            sign_sk,
-            sign_seed.clone(),
-        )
-        .await?;
+            let context_key = SecretDataSized::encrypt(
+                ctx_secret.to_read_sized(),
+                context_key.to_read_sized(),
+            )
+            .await?;
+            let sign_seed = SecretDataSized::encrypt(
+                sig_secret.to_read_sized(),
+                sign_seed.to_read_sized(),
+            )
+            .await?;
 
-        let context_key = SecretDataSized::encrypt(
-            ctx_secret.to_read_sized(),
-            context_key.to_read_sized(),
-        )
-        .await?;
-        let sign_seed = SecretDataSized::encrypt(
-            sig_secret.to_read_sized(),
-            sign_seed.to_read_sized(),
-        )
-        .await?;
+            let sign_pk: BinDataSized<32> =
+                sign_pk.try_unwrap_sized().unwrap().into();
 
-        let sign_pk: BinDataSized<32> =
-            sign_pk.try_unwrap_sized().unwrap().into();
+            #[cfg(windows)]
+            let connection_url = {
+                let id = nanoid::nanoid!();
+                url::Url::parse(&format!(
+                    "named-pipe:\\\\.\\pipe\\{}?k={}",
+                    id, sign_pk
+                ))
+                .unwrap()
+            };
+            // for named pipe: println!("URL PART: {}", connection_url.path());
 
-        #[cfg(windows)]
-        let connection_url = {
-            let id = nanoid::nanoid!();
-            url::Url::parse(&format!(
-                "named-pipe:\\\\.\\pipe\\{}?k={}",
-                id, sign_pk
-            ))
-            .unwrap()
-        };
-        // for named pipe: println!("URL PART: {}", connection_url.path());
+            #[cfg(not(windows))]
+            let connection_url = {
+                let mut con_path = root_path.clone();
+                con_path.push("socket");
+                url::Url::parse(&format!(
+                    "unix://{}?k={}",
+                    con_path.to_str().unwrap(),
+                    sign_pk
+                ))
+                .unwrap()
+            };
 
-        #[cfg(not(windows))]
-        let connection_url = {
-            let mut con_path = root_path.to_owned();
-            con_path.push("socket");
-            url::Url::parse(&format!(
-                "unix://{}?k={}",
-                con_path.to_str().unwrap(),
-                sign_pk
-            ))
-            .unwrap()
-        };
+            let config = LairServerConfigInner {
+                connection_url,
+                pid_file,
+                store_file,
+                runtime_secrets_salt: salt.try_unwrap_sized().unwrap().into(),
+                runtime_secrets_mem_limit: mem_limit,
+                runtime_secrets_ops_limit: ops_limit,
+                runtime_secrets_context_key: context_key,
+                runtime_secrets_sign_seed: sign_seed,
+            };
 
-        let config = LairServerConfigInner {
-            connection_url,
-            pid_file,
-            store_file,
-            runtime_secrets_salt: salt.try_unwrap_sized().unwrap().into(),
-            runtime_secrets_mem_limit: mem_limit,
-            runtime_secrets_ops_limit: ops_limit,
-            runtime_secrets_context_key: context_key,
-            runtime_secrets_sign_seed: sign_seed,
-        };
+            Ok(config)
+        }
+    }
 
-        Ok(config)
+    /// Get the server pub key BinDataSized<32> bytes from the connectionUrl
+    pub fn get_server_pub_key(&self) -> LairResult<BinDataSized<32>> {
+        for (k, v) in self.connection_url.query_pairs() {
+            if k == "k" {
+                let tmp = base64::decode_config(
+                    v.as_bytes(),
+                    base64::URL_SAFE_NO_PAD,
+                )
+                .map_err(one_err::OneErr::new)?;
+                if tmp.len() != 32 {
+                    return Err(format!(
+                        "invalid server_pub_key len, expected 32, got {}",
+                        tmp.len()
+                    )
+                    .into());
+                }
+                let mut out = [0; 32];
+                out.copy_from_slice(&tmp);
+                return Ok(out.into());
+            }
+        }
+        Err("no server_pub_key on connection_url".into())
     }
 }
 
@@ -476,7 +503,7 @@ impl LairServerConfigInner {
 pub type LairServerConfig = Arc<LairServerConfigInner>;
 
 /// Public information associated with a given seed
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct SeedInfo {
@@ -491,7 +518,7 @@ pub struct SeedInfo {
 pub type CertDigest = BinDataSized<32>;
 
 /// Public information associated with a given tls certificate.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct CertInfo {
@@ -1087,7 +1114,6 @@ impl LairStoreFactory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    //use futures::future::FutureExt;
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_config_yaml() {
@@ -1099,144 +1125,4 @@ mod tests {
         println!("{}", serde_yaml::to_string(&srv).unwrap());
         println!("-- server config end --");
     }
-
-    /*
-    #[tokio::test(flavor = "multi_thread")]
-    async fn test_lair_api() {
-        let key = sodoken::BufReadSized::from([0xdb; 32]);
-        let data = sodoken::BufRead::from(b"test-data".to_vec());
-        let secret = SecretData::encrypt(key.clone(), data).await.unwrap();
-        let data = secret.decrypt(key).await.unwrap();
-        println!(
-            "GOT DEC SECRET: {}",
-            String::from_utf8_lossy(&*data.read_lock())
-        );
-
-        let key = sodoken::BufReadSized::from([0xdb; 32]);
-        let data = sodoken::BufReadSized::from(*b"test-data");
-        let secret = <SecretDataSized<9, 26>>::encrypt(key.clone(), data)
-            .await
-            .unwrap();
-        let data = secret.decrypt(key).await.unwrap();
-        println!(
-            "GOT DEC SECRET SIZED: {}",
-            String::from_utf8_lossy(&*data.read_lock_sized())
-        );
-
-        struct X {
-            srv_pub_key: BinDataSized<32>,
-            srv_sec_key: sodoken::BufReadSized<64>,
-        }
-
-        impl AsLairClient for X {
-            fn get_enc_ctx_key(&self) -> sodoken::BufReadSized<32> {
-                sodoken::BufReadSized::from([0xff; 32])
-            }
-
-            fn get_dec_ctx_key(&self) -> sodoken::BufReadSized<32> {
-                sodoken::BufReadSized::from([0xff; 32])
-            }
-
-            fn request(
-                &self,
-                request: LairApiEnum,
-            ) -> BoxFuture<'static, LairResult<LairApiEnum>> {
-                println!("got: {}", serde_json::to_string(&request).unwrap());
-                let pub_key = self.srv_pub_key.clone();
-                let sec_key = self.srv_sec_key.clone();
-                async move {
-                    match request {
-                        LairApiEnum::ReqHello(e) => {
-                            let sig = sodoken::BufWriteSized::new_no_lock();
-                            sodoken::sign::detached(
-                                sig.clone(),
-                                e.nonce.cloned_inner(),
-                                sec_key,
-                            )
-                            .await?;
-                            let sig = sig.try_unwrap_sized().unwrap();
-                            Ok(LairApiEnum::ResHello(LairApiResHello {
-                                msg_id: e.msg_id,
-                                name: "test-server".into(),
-                                version: "0.0.0".into(),
-                                server_pub_key: pub_key,
-                                hello_sig: sig.into(),
-                            }))
-                        }
-                        LairApiEnum::ReqUnlock(e) => {
-                            Ok(LairApiEnum::ResUnlock(LairApiResUnlock {
-                                msg_id: e.msg_id,
-                            }))
-                        }
-                        LairApiEnum::ReqListEntries(e) => {
-                            Ok(LairApiEnum::ResListEntries(
-                                LairApiResListEntries {
-                                    msg_id: e.msg_id,
-                                    entry_list: Vec::new(),
-                                },
-                            ))
-                        }
-                        LairApiEnum::ReqNewSeed(e) => {
-                            Ok(LairApiEnum::ResNewSeed(LairApiResNewSeed {
-                                msg_id: e.msg_id,
-                                tag: e.tag,
-                                seed_info: SeedInfo {
-                                    ed25519_pub_key: [0x01; 32].into(),
-                                    x25519_pub_key: [0x02; 32].into(),
-                                },
-                            }))
-                        }
-                        _ => {
-                            return Err(format!("bad req: {:?}", request).into())
-                        }
-                    }
-                }
-                .boxed()
-            }
-        }
-
-        let srv_pub_key = sodoken::BufWriteSized::new_no_lock();
-        let srv_sec_key = sodoken::BufWriteSized::new_mem_locked().unwrap();
-        sodoken::sign::keypair(srv_pub_key.clone(), srv_sec_key.clone())
-            .await
-            .unwrap();
-
-        let lair_client = LairClient(Arc::new(X {
-            srv_pub_key: srv_pub_key.try_unwrap_sized().unwrap().into(),
-            srv_sec_key: srv_sec_key.to_read_sized(),
-        }));
-
-        let nonce = sodoken::BufWrite::new_no_lock(24);
-        sodoken::random::bytes_buf(nonce.clone()).await.unwrap();
-        let nonce = nonce.try_unwrap().unwrap();
-
-        let hello_res = lair_client.hello(nonce.clone().into()).await.unwrap();
-        println!("hello: {:?}", hello_res);
-        println!(
-            "verify_sig: {:?}",
-            hello_res
-                .server_pub_key
-                .verify_detached(hello_res.hello_sig.cloned_inner(), nonce)
-                .await
-        );
-
-        let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
-        println!("unlock: {:?}", lair_client.unlock(passphrase).await);
-
-        println!("list: {:?}", lair_client.list_entries().await);
-        println!(
-            "seed: {:?}",
-            lair_client.new_seed("test-tag".into(), None).await
-        );
-        println!(
-            "seed: {:?}",
-            lair_client
-                .new_seed(
-                    "test-tag-deep".into(),
-                    Some(sodoken::BufRead::from(b"passphrase".to_vec()))
-                )
-                .await
-        );
-    }
-    */
 }

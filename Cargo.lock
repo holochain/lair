@@ -922,6 +922,7 @@ dependencies = [
  "directories",
  "futures",
  "ghost_actor",
+ "hc_seed_bundle",
  "nanoid",
  "num_cpus",
  "once_cell",
