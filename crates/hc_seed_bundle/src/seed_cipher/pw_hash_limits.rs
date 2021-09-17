@@ -48,7 +48,7 @@ impl PwHashLimits {
     }
 
     /// translate into mem limit
-    pub(crate) fn as_mem_limit(&self) -> usize {
+    pub(crate) fn as_mem_limit(&self) -> u32 {
         match self {
             Self::Interactive => sodoken::hash::argon2id::MEMLIMIT_INTERACTIVE,
             Self::Moderate => sodoken::hash::argon2id::MEMLIMIT_MODERATE,
@@ -57,7 +57,7 @@ impl PwHashLimits {
     }
 
     /// translate into cpu limit
-    pub(crate) fn as_ops_limit(&self) -> u64 {
+    pub(crate) fn as_ops_limit(&self) -> u32 {
         match self {
             Self::Interactive => sodoken::hash::argon2id::OPSLIMIT_INTERACTIVE,
             Self::Moderate => sodoken::hash::argon2id::OPSLIMIT_MODERATE,

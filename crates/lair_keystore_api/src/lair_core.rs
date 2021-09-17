@@ -366,6 +366,13 @@ pub struct LairServerConfigInner {
     pub runtime_secrets_sign_seed: SecretDataSized<32, 49>,
 }
 
+impl std::fmt::Display for LairServerConfigInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = serde_yaml::to_string(&self).map_err(|_| std::fmt::Error)?;
+        f.write_str(&s)
+    }
+}
+
 impl LairServerConfigInner {
     /// Construct a new default lair server config instance.
     pub async fn new<P>(
@@ -386,16 +393,16 @@ impl LairServerConfigInner {
         let salt = <sodoken::BufWriteSized<16>>::new_no_lock();
         sodoken::random::bytes_buf(salt.clone()).await?;
 
-        let mem_limit = sodoken::hash::argon2id::MEMLIMIT_MODERATE as u32;
-        let ops_limit = sodoken::hash::argon2id::OPSLIMIT_MODERATE as u32;
+        let mem_limit = sodoken::hash::argon2id::MEMLIMIT_MODERATE;
+        let ops_limit = sodoken::hash::argon2id::OPSLIMIT_MODERATE;
 
         let pre_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
         sodoken::hash::argon2id::hash(
             pre_secret.clone(),
             passphrase,
             salt.clone(),
-            ops_limit as u64,
-            mem_limit as usize,
+            ops_limit,
+            mem_limit,
         )
         .await?;
 
@@ -403,7 +410,7 @@ impl LairServerConfigInner {
         sodoken::kdf::derive_from_key(
             ctx_secret.clone(),
             42,
-            *b"CTXSECKY",
+            *b"CtxSecKy",
             pre_secret.clone(),
         )?;
 
@@ -411,7 +418,7 @@ impl LairServerConfigInner {
         sodoken::kdf::derive_from_key(
             sig_secret.clone(),
             142,
-            *b"SIGSECKY",
+            *b"SigSecKy",
             pre_secret,
         )?;
 
@@ -980,6 +987,31 @@ pub enum LairApiEnum {
     /// On new seed generation, lair will respond with info about
     /// that seed.
     ResNewSeed(LairApiResNewSeed),
+}
+
+impl LairApiEnum {
+    /// Get the msg_id associated with this msg variant.
+    pub fn msg_id(&self) -> Arc<str> {
+        match self {
+            Self::ResError(LairApiResError { msg_id, .. }) => msg_id.clone(),
+            Self::ReqHello(LairApiReqHello { msg_id, .. }) => msg_id.clone(),
+            Self::ResHello(LairApiResHello { msg_id, .. }) => msg_id.clone(),
+            Self::ReqUnlock(LairApiReqUnlock { msg_id, .. }) => msg_id.clone(),
+            Self::ResUnlock(LairApiResUnlock { msg_id, .. }) => msg_id.clone(),
+            Self::ReqListEntries(LairApiReqListEntries { msg_id, .. }) => {
+                msg_id.clone()
+            }
+            Self::ResListEntries(LairApiResListEntries { msg_id, .. }) => {
+                msg_id.clone()
+            }
+            Self::ReqNewSeed(LairApiReqNewSeed { msg_id, .. }) => {
+                msg_id.clone()
+            }
+            Self::ResNewSeed(LairApiResNewSeed { msg_id, .. }) => {
+                msg_id.clone()
+            }
+        }
+    }
 }
 
 /// Lair store concrete struct

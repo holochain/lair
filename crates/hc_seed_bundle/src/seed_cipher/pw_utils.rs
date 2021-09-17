@@ -117,8 +117,8 @@ pub(crate) async fn pw_enc(
 pub(crate) async fn pw_dec(
     passphrase: sodoken::BufRead,
     salt: sodoken::BufReadSized<{ sodoken::hash::argon2id::SALTBYTES }>,
-    mem_limit: usize,
-    ops_limit: u64,
+    mem_limit: u32,
+    ops_limit: u32,
     header: sodoken::BufReadSized<24>,
     cipher: sodoken::BufReadSized<49>,
 ) -> SodokenResult<sodoken::BufReadSized<32>> {

@@ -85,41 +85,43 @@ where
 }
 
 /// Create a new S3 send/receive pair.
-pub async fn new_s3_pair<T, S, R>(
+pub fn new_s3_pair<T, S, R>(
     send: S,
     recv: R,
     is_srv: bool,
-) -> LairResult<(S3Sender<T>, S3Receiver<T>)>
+) -> impl Future<Output = LairResult<(S3Sender<T>, S3Receiver<T>)>> + 'static + Send
 where
     T: 'static + serde::Serialize + for<'de> serde::Deserialize<'de> + Send,
     S: 'static + tokio::io::AsyncWrite + Send + Unpin,
     R: 'static + tokio::io::AsyncRead + Send + Unpin,
 {
-    // box these up into trait objects so we can easily refer to their types.
-    let mut send: PrivRawSend = Box::new(send);
-    let mut recv: PrivRawRecv = Box::new(recv);
+    async move {
+        // box these up into trait objects so we can easily refer to their types.
+        let mut send: PrivRawSend = Box::new(send);
+        let mut recv: PrivRawRecv = Box::new(recv);
 
-    // perform a key exchange with the remote.
-    let (tx, rx) = priv_kx(&mut send, &mut recv, is_srv).await?;
+        // perform a key exchange with the remote.
+        let (tx, rx) = priv_kx(&mut send, &mut recv, is_srv).await?;
 
-    // perform a secretstream init handshake with the remote.
-    let (enc, dec) = priv_init_ss(&mut send, tx, &mut recv, rx).await?;
+        // perform a secretstream init handshake with the remote.
+        let (enc, dec) = priv_init_ss(&mut send, tx, &mut recv, rx).await?;
 
-    // initialize framing so we know when we've got complete messages.
-    let (send, recv) = priv_framed(send, recv);
+        // initialize framing so we know when we've got complete messages.
+        let (send, recv) = priv_framed(send, recv);
 
-    // wrap the streams with cryptography.
-    let (send, recv) = priv_crypt(send, enc, recv, dec);
+        // wrap the streams with cryptography.
+        let (send, recv) = priv_crypt(send, enc, recv, dec);
 
-    // bundle up our output sender type.
-    let send: PrivSend<T> = PrivSend::new(send);
-    let send: S3Sender<T> = S3Sender(Arc::new(send));
+        // bundle up our output sender type.
+        let send: PrivSend<T> = PrivSend::new(send);
+        let send: S3Sender<T> = S3Sender(Arc::new(send));
 
-    // bundle up our output receiver type.
-    let recv: PrivRecv<T> = PrivRecv::new(recv);
-    let recv: S3Receiver<T> = S3Receiver(Box::new(recv));
+        // bundle up our output receiver type.
+        let recv: PrivRecv<T> = PrivRecv::new(recv);
+        let recv: S3Receiver<T> = S3Receiver(Box::new(recv));
 
-    Ok((send, recv))
+        Ok((send, recv))
+    }
 }
 
 // -- private -- //
@@ -131,68 +133,85 @@ type PrivRawSend = Box<dyn tokio::io::AsyncWrite + 'static + Send + Unpin>;
 type PrivRawRecv = Box<dyn tokio::io::AsyncRead + 'static + Send + Unpin>;
 
 /// perform key exchange to generate secret rx key and secret tx key.
-async fn priv_kx(
-    send: &mut PrivRawSend,
-    recv: &mut PrivRawRecv,
+fn priv_kx<'a>(
+    send: &'a mut PrivRawSend,
+    recv: &'a mut PrivRawRecv,
     is_srv: bool,
-) -> LairResult<(
-    sodoken::BufReadSized<{ sss::KEYBYTES }>,
-    sodoken::BufReadSized<{ sss::KEYBYTES }>,
-)> {
-    // generate an ephemeral kx keypair
-    let eph_kx_pub = sodoken::BufWriteSized::new_no_lock();
-    let eph_kx_sec = sodoken::BufWriteSized::new_mem_locked()?;
-    sodoken::kx::keypair(eph_kx_pub.clone(), eph_kx_sec.clone())?;
-    send.write_all(&*eph_kx_pub.read_lock()).await?;
+) -> impl Future<
+    Output = LairResult<(
+        sodoken::BufReadSized<{ sss::KEYBYTES }>,
+        sodoken::BufReadSized<{ sss::KEYBYTES }>,
+    )>,
+>
+       + 'a
+       + Send {
+    async move {
+        // generate an ephemeral kx keypair
+        let eph_kx_pub = sodoken::BufWriteSized::new_no_lock();
+        let eph_kx_sec = sodoken::BufWriteSized::new_mem_locked()?;
+        sodoken::kx::keypair(eph_kx_pub.clone(), eph_kx_sec.clone())?;
+        // clone to keep this future 'Send'
+        let eph_kx_pub2 = eph_kx_pub.read_lock().to_vec();
+        send.write_all(&eph_kx_pub2).await?;
 
-    // read the remote kx pubkey.
-    let oth_eph_kx_pub = sodoken::BufWriteSized::new_no_lock();
-    recv.read_exact(&mut *oth_eph_kx_pub.write_lock()).await?;
+        // read the remote kx pubkey.
+        let mut oth_eph_kx_pub = [0; 32];
+        recv.read_exact(&mut oth_eph_kx_pub).await?;
+        let oth_eph_kx_pub = sodoken::BufReadSized::from(oth_eph_kx_pub);
 
-    // prepare our transport secrets
-    let rx = sodoken::BufWriteSized::new_mem_locked()?;
-    let tx = sodoken::BufWriteSized::new_mem_locked()?;
+        // prepare our transport secrets
+        let rx = sodoken::BufWriteSized::new_mem_locked()?;
+        let tx = sodoken::BufWriteSized::new_mem_locked()?;
 
-    // do the key exchange calculation
-    // depending on if we're the "server" or "client".
-    if is_srv {
-        sodoken::kx::server_session_keys(
-            rx.clone(),
-            tx.clone(),
-            eph_kx_pub,
-            eph_kx_sec,
-            oth_eph_kx_pub,
-        )?;
-    } else {
-        sodoken::kx::client_session_keys(
-            rx.clone(),
-            tx.clone(),
-            eph_kx_pub,
-            eph_kx_sec,
-            oth_eph_kx_pub,
-        )?;
+        // do the key exchange calculation
+        // depending on if we're the "server" or "client".
+        if is_srv {
+            sodoken::kx::server_session_keys(
+                rx.clone(),
+                tx.clone(),
+                eph_kx_pub,
+                eph_kx_sec,
+                oth_eph_kx_pub,
+            )?;
+        } else {
+            sodoken::kx::client_session_keys(
+                rx.clone(),
+                tx.clone(),
+                eph_kx_pub,
+                eph_kx_sec,
+                oth_eph_kx_pub,
+            )?;
+        }
+
+        Ok((tx.to_read_sized(), rx.to_read_sized()))
     }
-
-    Ok((tx.to_read_sized(), rx.to_read_sized()))
 }
 
 /// use secret keys to initialize secretstream encryption / decryption.
-async fn priv_init_ss(
-    send: &mut PrivRawSend,
+fn priv_init_ss<'a>(
+    send: &'a mut PrivRawSend,
     tx: sodoken::BufReadSized<{ sss::KEYBYTES }>,
-    recv: &mut PrivRawRecv,
+    recv: &'a mut PrivRawRecv,
     rx: sodoken::BufReadSized<{ sss::KEYBYTES }>,
-) -> LairResult<(sss::SecretStreamEncrypt, sss::SecretStreamDecrypt)> {
-    // for our sender, initialize encryption by generating / sending header.
-    let header = sodoken::BufWriteSized::new_no_lock();
-    let enc = sss::SecretStreamEncrypt::new(tx, header.clone())?;
-    send.write_all(&*header.read_lock()).await?;
+) -> impl Future<
+    Output = LairResult<(sss::SecretStreamEncrypt, sss::SecretStreamDecrypt)>,
+>
+       + 'a
+       + Send {
+    async move {
+        // for our sender, initialize encryption by generating / sending header.
+        let header = sodoken::BufWriteSized::new_no_lock();
+        let enc = sss::SecretStreamEncrypt::new(tx, header.clone())?;
+        // clone to keep this future 'Send'
+        let mut header2 = *header.read_lock_sized();
+        send.write_all(&header2).await?;
 
-    // for our receiver, parse the incoming header
-    recv.read_exact(&mut *header.write_lock()).await?;
-    let dec = sss::SecretStreamDecrypt::new(rx, header)?;
+        // for our receiver, parse the incoming header
+        recv.read_exact(&mut header2).await?;
+        let dec = sss::SecretStreamDecrypt::new(rx, header2)?;
 
-    Ok((enc, dec))
+        Ok((enc, dec))
+    }
 }
 
 /// wrap our streams with framing so we know message boundaries.
@@ -222,26 +241,33 @@ struct PrivFramedSend(PrivRawSend);
 
 impl PrivFramedSend {
     /// Send framed data.
-    pub async fn send(&mut self, d: Box<[u8]>) -> LairResult<()> {
-        if d.len() > MAX_FRAME {
-            return Err(OneErr::with_message(
-                "FrameOverflow",
-                format!("{} > {}", d.len(), MAX_FRAME),
-            ));
+    pub fn send(
+        &mut self,
+        d: Box<[u8]>,
+    ) -> impl Future<Output = LairResult<()>> + '_ + Send {
+        async move {
+            if d.len() > MAX_FRAME {
+                return Err(OneErr::with_message(
+                    "FrameOverflow",
+                    format!("{} > {}", d.len(), MAX_FRAME),
+                ));
+            }
+
+            let ltag = (d.len() as u16).to_le_bytes();
+
+            // TODO - something more efficient than just writing both buffers?
+
+            self.0.write_all(&ltag).await?;
+            self.0.write_all(&d).await?;
+            Ok(())
         }
-
-        let ltag = (d.len() as u16).to_le_bytes();
-
-        // TODO - something more efficient than just writing both buffers?
-
-        self.0.write_all(&ltag).await?;
-        self.0.write_all(&d).await?;
-        Ok(())
     }
 
     /// Forwards shutdown to the underlying raw sender.
-    pub async fn shutdown(&mut self) -> LairResult<()> {
-        self.0.shutdown().await.map_err(OneErr::new)
+    pub fn shutdown(
+        &mut self,
+    ) -> impl Future<Output = LairResult<()>> + '_ + Send {
+        async move { self.0.shutdown().await.map_err(OneErr::new) }
     }
 }
 
@@ -312,34 +338,39 @@ impl PrivCryptSend {
     }
 
     /// Send encrypted data to the remote.
-    async fn send<D: Into<sodoken::BufRead>>(
+    fn send(
         &mut self,
-        d: D,
-    ) -> LairResult<()> {
-        // calculate the cipher length
-        let d = d.into();
-        let len = d.len() + sss::ABYTES;
+        data: Box<[u8]>,
+    ) -> impl Future<Output = LairResult<()>> + '_ + Send {
+        async move {
+            // calculate the cipher length
+            let len = data.len() + sss::ABYTES;
 
-        // initialize the cipher buffer
-        let cipher = sodoken::BufExtend::new_no_lock(len);
+            // initialize the cipher buffer
+            let cipher = sodoken::BufExtend::new_no_lock(len);
 
-        // encrypt the message
-        self.enc
-            .push_message(d, <Option<sodoken::BufRead>>::None, cipher.clone())
-            .await?;
+            // encrypt the message
+            self.enc
+                .push_message(
+                    data,
+                    <Option<sodoken::BufRead>>::None,
+                    cipher.clone(),
+                )
+                .await?;
 
-        // extract the raw cipher data
-        let cipher = cipher.try_unwrap().unwrap();
+            // extract the raw cipher data
+            let cipher = cipher.try_unwrap().unwrap();
 
-        // send the cipher to the remote
-        self.send.send(cipher).await?;
+            // send the cipher to the remote
+            self.send.send(cipher).await?;
 
-        Ok(())
+            Ok(())
+        }
     }
 
     /// Forwards shutdown to the underlying framed sender.
-    async fn shutdown(&mut self) -> LairResult<()> {
-        self.send.shutdown().await
+    fn shutdown(&mut self) -> impl Future<Output = LairResult<()>> + '_ + Send {
+        async move { self.send.shutdown().await }
     }
 }
 

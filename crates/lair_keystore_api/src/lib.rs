@@ -1,3 +1,5 @@
+// grrr clippy... you cannot specify extra bounds with the async fn syntax...
+#![allow(clippy::manual_async_fn)]
 #![deny(missing_docs)]
 #![deny(warnings)]
 //! secret lair private keystore types
