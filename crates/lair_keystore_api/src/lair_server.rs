@@ -1,5 +1,6 @@
 //! host a lair keystore
 
+use crate::lair_core::traits::*;
 use crate::lair_core::*;
 use crate::LairResult2 as LairResult;
 use futures::future::{BoxFuture, FutureExt};
@@ -56,8 +57,8 @@ impl LairServer {
     /// accept an incoming connection, servicing the lair protocol.
     pub fn accept<S, R>(
         &self,
-        send: RawSend,
-        recv: RawRecv,
+        send: S,
+        recv: R,
     ) -> impl Future<Output = LairResult<()>> + 'static + Send
     where
         S: tokio::io::AsyncWrite + 'static + Send + Unpin,
@@ -68,22 +69,24 @@ impl LairServer {
 }
 
 /// spawn a tokio task managing a lair server with given store factory.
-pub async fn spawn_lair_server_task<C>(
+pub fn spawn_lair_server_task<C>(
     config: C,
     store_factory: crate::lair_core::LairStoreFactory,
-) -> LairResult<LairServer>
+) -> impl Future<Output = LairResult<LairServer>> + 'static + Send
 where
     C: Into<LairServerConfig> + 'static + Send,
 {
-    let inner = SrvPendingInner {
-        config: config.into(),
-        store_factory,
-    };
+    async move {
+        let inner = SrvPendingInner {
+            config: config.into(),
+            store_factory,
+        };
 
-    let inner = SrvInnerEnum::Pending(inner);
-    let inner = Arc::new(RwLock::new(inner));
+        let inner = SrvInnerEnum::Pending(inner);
+        let inner = Arc::new(RwLock::new(inner));
 
-    Ok(LairServer(Arc::new(Srv(inner))))
+        Ok(LairServer(Arc::new(Srv(inner))))
+    }
 }
 
 // -- private -- //
@@ -213,8 +216,29 @@ fn priv_srv_accept(
                 send, recv, true,
             )
             .await?;
+
+        let enc_ctx_key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        sodoken::kdf::derive_from_key(
+            enc_ctx_key.clone(),
+            42,
+            *b"ToCliCxK",
+            send.get_enc_ctx_key(),
+        )?;
+        let enc_ctx_key = enc_ctx_key.to_read_sized();
+
+        let dec_ctx_key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        sodoken::kdf::derive_from_key(
+            dec_ctx_key.clone(),
+            142,
+            *b"ToSrvCxK",
+            send.get_dec_ctx_key(),
+        )?;
+        let dec_ctx_key = dec_ctx_key.to_read_sized();
+
         tokio::task::spawn(async move {
             let inner = &inner;
+            let enc_ctx_key = &enc_ctx_key;
+            let dec_ctx_key = &dec_ctx_key;
             let send = &send;
             recv.for_each_concurrent(4096, move |incoming| async move {
                 let incoming = match incoming {
@@ -227,8 +251,14 @@ fn priv_srv_accept(
 
                 let msg_id = incoming.msg_id();
 
-                if let Err(e) =
-                    priv_dispatch_incoming(inner, send, incoming).await
+                if let Err(e) = priv_dispatch_incoming(
+                    inner,
+                    enc_ctx_key,
+                    dec_ctx_key,
+                    send,
+                    incoming,
+                )
+                .await
                 {
                     if let Err(e) = send
                         .send(LairApiEnum::ResError(LairApiResError {
@@ -242,7 +272,8 @@ fn priv_srv_accept(
                 }
             })
             .await;
-            panic!("lair listening socket loop ended!");
+            let _ = send.shutdown().await;
+            tracing::warn!("lair connection recv loop ended");
         });
         Ok(())
     }
@@ -251,6 +282,8 @@ fn priv_srv_accept(
 
 fn priv_dispatch_incoming<'a>(
     inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    _enc_ctx_key: &'a sodoken::BufReadSized<32>,
+    dec_ctx_key: &'a sodoken::BufReadSized<32>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
     incoming: LairApiEnum,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
@@ -260,7 +293,7 @@ fn priv_dispatch_incoming<'a>(
                 priv_req_hello(inner, send, req).await
             }
             LairApiEnum::ReqUnlock(req) => {
-                priv_req_unlock(inner, send, req).await
+                priv_req_unlock(inner, dec_ctx_key, send, req).await
             }
             LairApiEnum::ReqListEntries(req) => {
                 priv_req_list_entries(inner, send, req).await
@@ -280,35 +313,106 @@ fn priv_dispatch_incoming<'a>(
 }
 
 fn priv_req_hello<'a>(
-    _inner: &'a Arc<RwLock<SrvInnerEnum>>,
-    _send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
-    _req: LairApiReqHello,
+    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    req: LairApiReqHello,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
-    async move { unimplemented!() }
+    async move {
+        let (sign_pk, sign_sk) = match &*inner.read() {
+            SrvInnerEnum::Running(p) => (p.sign_pk.clone(), p.sign_sk.clone()),
+            SrvInnerEnum::Pending(_) => {
+                return Err("keystore still locked".into());
+            }
+        };
+
+        let hello_sig = sodoken::BufWriteSized::new_no_lock();
+        sodoken::sign::detached(
+            hello_sig.clone(),
+            req.nonce.cloned_inner(),
+            sign_sk,
+        )
+        .await?;
+        let hello_sig = hello_sig.try_unwrap_sized().unwrap().into();
+        send.send(
+            LairApiResHello {
+                msg_id: req.msg_id,
+                name: "test-server".into(), // TODO
+                version: "0.0.0".into(),    // TODO
+                server_pub_key: sign_pk,
+                hello_sig,
+            }
+            .into_api_enum(),
+        )
+        .await?;
+        Ok(())
+    }
 }
 
 fn priv_req_unlock<'a>(
-    _inner: &'a Arc<RwLock<SrvInnerEnum>>,
-    _send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
-    _req: LairApiReqUnlock,
+    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    dec_ctx_key: &'a sodoken::BufReadSized<32>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    req: LairApiReqUnlock,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
-    async move { unimplemented!() }
+    async move {
+        let passphrase = req.passphrase.decrypt(dec_ctx_key.clone()).await?;
+        priv_srv_unlock(inner.clone(), passphrase).await?;
+        send.send(LairApiResUnlock { msg_id: req.msg_id }.into_api_enum())
+            .await?;
+        Ok(())
+    }
 }
 
 fn priv_req_list_entries<'a>(
-    _inner: &'a Arc<RwLock<SrvInnerEnum>>,
-    _send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
-    _req: LairApiReqListEntries,
+    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    req: LairApiReqListEntries,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
-    async move { unimplemented!() }
+    async move {
+        let store = match &*inner.read() {
+            SrvInnerEnum::Running(p) => (p.store.clone()),
+            SrvInnerEnum::Pending(_) => {
+                return Err("keystore still locked".into());
+            }
+        };
+        let entry_list = store.list_entries().await?;
+        send.send(
+            LairApiResListEntries {
+                msg_id: req.msg_id,
+                entry_list,
+            }
+            .into_api_enum(),
+        )
+        .await?;
+        Ok(())
+    }
 }
 
 fn priv_req_new_seed<'a>(
-    _inner: &'a Arc<RwLock<SrvInnerEnum>>,
-    _send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
-    _req: LairApiReqNewSeed,
+    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    req: LairApiReqNewSeed,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
-    async move { unimplemented!() }
+    async move {
+        let store = match &*inner.read() {
+            SrvInnerEnum::Running(p) => (p.store.clone()),
+            SrvInnerEnum::Pending(_) => {
+                return Err("keystore still locked".into());
+            }
+        };
+        // TODO handle deep locked
+        let seed_info = store.new_seed(req.tag.clone()).await?;
+        send.send(
+            LairApiResNewSeed {
+                msg_id: req.msg_id,
+                tag: req.tag.clone(),
+                seed_info,
+            }
+            .into_api_enum(),
+        )
+        .await?;
+        Ok(())
+    }
 }
 
 impl AsLairServer for Srv {

@@ -29,6 +29,12 @@ pub mod traits {
         /// Send data to the remote side of this connection.
         fn send(&self, t: T) -> BoxFuture<'static, LairResult<()>>;
 
+        /// Get outgoing encryption context key
+        fn get_enc_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }>;
+
+        /// Get incoming decryption context key
+        fn get_dec_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }>;
+
         /// Shutdown the channel.
         fn shutdown(&self) -> BoxFuture<'static, LairResult<()>>;
     }
@@ -44,8 +50,13 @@ pub mod traits {
 use traits::*;
 
 /// SodiumSecretStream - Sender
-#[derive(Clone)]
 pub struct S3Sender<T>(pub Arc<dyn AsS3Sender<T>>);
+
+impl<T> Clone for S3Sender<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
 
 impl<T> S3Sender<T>
 where
@@ -57,6 +68,16 @@ where
         t: T,
     ) -> impl Future<Output = LairResult<()>> + 'static + Send {
         AsS3Sender::send(&*self.0, t)
+    }
+
+    /// Get outgoing encryption context key
+    pub fn get_enc_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }> {
+        AsS3Sender::get_enc_ctx_key(&*self.0)
+    }
+
+    /// Get incoming decryption context key
+    pub fn get_dec_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }> {
+        AsS3Sender::get_dec_ctx_key(&*self.0)
     }
 
     /// Shutdown the channel.
@@ -104,7 +125,8 @@ where
         let (tx, rx) = priv_kx(&mut send, &mut recv, is_srv).await?;
 
         // perform a secretstream init handshake with the remote.
-        let (enc, dec) = priv_init_ss(&mut send, tx, &mut recv, rx).await?;
+        let (enc, dec) =
+            priv_init_ss(&mut send, tx.clone(), &mut recv, rx.clone()).await?;
 
         // initialize framing so we know when we've got complete messages.
         let (send, recv) = priv_framed(send, recv);
@@ -113,7 +135,7 @@ where
         let (send, recv) = priv_crypt(send, enc, recv, dec);
 
         // bundle up our output sender type.
-        let send: PrivSend<T> = PrivSend::new(send);
+        let send: PrivSend<T> = PrivSend::new(send, tx, rx);
         let send: S3Sender<T> = S3Sender(Arc::new(send));
 
         // bundle up our output receiver type.
@@ -418,6 +440,12 @@ struct PrivSendInner {
 
     /// The single encryption sender.
     send: Option<PrivCryptSend>,
+
+    /// Our transmit encryption key
+    tx: sodoken::BufReadSized<{ sss::KEYBYTES }>,
+
+    /// Our receive decryption key
+    rx: sodoken::BufReadSized<{ sss::KEYBYTES }>,
 }
 
 /// Typed sender.
@@ -433,11 +461,17 @@ where
     T: 'static + serde::Serialize + Send,
 {
     /// Initialize a new typed sender.
-    pub fn new(send: PrivCryptSend) -> Self {
+    pub fn new(
+        send: PrivCryptSend,
+        tx: sodoken::BufReadSized<{ sss::KEYBYTES }>,
+        rx: sodoken::BufReadSized<{ sss::KEYBYTES }>,
+    ) -> Self {
         Self(
             Arc::new(Mutex::new(PrivSendInner {
                 limit: Arc::new(tokio::sync::Semaphore::new(1)),
                 send: Some(send),
+                tx,
+                rx,
             })),
             std::marker::PhantomData,
         )
@@ -448,7 +482,6 @@ impl<T> AsS3Sender<T> for PrivSend<T>
 where
     T: 'static + serde::Serialize + Send,
 {
-    /// Send typed data to the underlying encryption sender.
     fn send(&self, t: T) -> BoxFuture<'static, LairResult<()>> {
         let inner = self.0.clone();
         async move {
@@ -478,7 +511,14 @@ where
         .boxed()
     }
 
-    /// Forwards shutdown to the underlying encryption sender.
+    fn get_enc_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }> {
+        self.0.lock().tx.clone()
+    }
+
+    fn get_dec_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }> {
+        self.0.lock().rx.clone()
+    }
+
     fn shutdown(&self) -> BoxFuture<'static, LairResult<()>> {
         let inner = self.0.clone();
         async move {
@@ -564,6 +604,16 @@ mod tests {
         // await initialization in parallel to handshake properly.
         let ((alice_send, mut alice_recv), (bob_send, mut bob_recv)) =
             futures::future::try_join(alice_fut, bob_fut).await.unwrap();
+
+        assert_eq!(
+            &*alice_send.get_enc_ctx_key().read_lock(),
+            &*bob_send.get_dec_ctx_key().read_lock(),
+        );
+
+        assert_eq!(
+            &*alice_send.get_dec_ctx_key().read_lock(),
+            &*bob_send.get_enc_ctx_key().read_lock(),
+        );
 
         // try out sending
         alice_send.send(42).await.unwrap();

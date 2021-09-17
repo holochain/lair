@@ -1,5 +1,7 @@
 // grrr clippy... you cannot specify extra bounds with the async fn syntax...
 #![allow(clippy::manual_async_fn)]
+// default implementations don't always make sense...
+#![allow(clippy::new_without_default)]
 #![deny(missing_docs)]
 #![deny(warnings)]
 //! secret lair private keystore types
@@ -22,6 +24,8 @@ pub mod lair_core;
 pub mod mem_store;
 
 pub mod lair_server;
+
+pub mod lair_client;
 
 pub mod test_keystore;
 

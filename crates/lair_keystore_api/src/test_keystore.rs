@@ -1,6 +1,7 @@
 #![allow(clippy::manual_async_fn)]
 //! a test keystore that runs in-process
 
+/*
 use crate::lair_core::traits::*;
 use crate::lair_core::*;
 use crate::LairResult2 as LairResult;
@@ -68,11 +69,11 @@ struct PrivTestClientInner {
 struct PrivTestClient(Arc<RwLock<PrivTestClientInner>>);
 
 impl AsLairClient for PrivTestClient {
-    fn get_encryption_context_key(&self) -> sodoken::BufReadSized<32> {
+    fn get_enc_ctx_key(&self) -> sodoken::BufReadSized<32> {
         self.0.read().cli_to_srv_key.clone()
     }
 
-    fn get_decryption_context_key(&self) -> sodoken::BufReadSized<32> {
+    fn get_dec_ctx_key(&self) -> sodoken::BufReadSized<32> {
         self.0.read().srv_to_cli_key.clone()
     }
 
@@ -228,3 +229,4 @@ mod tests {
         println!("list: {:#?}", keystore.list_entries().await);
     }
 }
+*/
