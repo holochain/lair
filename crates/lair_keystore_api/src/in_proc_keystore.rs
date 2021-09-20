@@ -31,6 +31,8 @@ impl InProcKeystore {
 
             let srv_hnd = crate::lair_server::spawn_lair_server_task(
                 config.clone(),
+                "lair-keystore-in-proc".into(),
+                crate::LAIR_VER.into(),
                 store_factory,
             )
             .await?;

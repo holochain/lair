@@ -72,6 +72,8 @@ impl LairServer {
 /// spawn a tokio task managing a lair server with given store factory.
 pub fn spawn_lair_server_task<C>(
     config: C,
+    server_name: Arc<str>,
+    server_version: Arc<str>,
     store_factory: crate::lair_core::LairStoreFactory,
 ) -> impl Future<Output = LairResult<LairServer>> + 'static + Send
 where
@@ -80,6 +82,8 @@ where
     async move {
         let inner = SrvPendingInner {
             config: config.into(),
+            server_name,
+            server_version,
             store_factory,
         };
 
@@ -94,14 +98,18 @@ where
 
 struct SrvPendingInner {
     config: LairServerConfig,
-    #[allow(dead_code)]
+    server_name: Arc<str>,
+    server_version: Arc<str>,
     store_factory: crate::lair_core::LairStoreFactory,
 }
 
-#[allow(dead_code)]
 struct SrvRunningInner {
     config: LairServerConfig,
+    server_name: Arc<str>,
+    server_version: Arc<str>,
     store: crate::lair_core::LairStore,
+    // TODO - do we need this??
+    #[allow(dead_code)]
     context_key: sodoken::BufReadSized<32>,
     sign_pk: Ed25519PubKey,
     sign_sk: sodoken::BufReadSized<64>,
@@ -109,7 +117,6 @@ struct SrvRunningInner {
 
 enum SrvInnerEnum {
     Pending(SrvPendingInner),
-    #[allow(dead_code)]
     Running(SrvRunningInner),
 }
 
@@ -119,12 +126,21 @@ fn priv_srv_unlock(
     inner: Arc<RwLock<SrvInnerEnum>>,
     passphrase: sodoken::BufRead,
 ) -> BoxFuture<'static, LairResult<()>> {
-    let (config, store_factory) = match &*inner.read() {
-        SrvInnerEnum::Running(p) => (p.config.clone(), None),
-        SrvInnerEnum::Pending(p) => {
-            (p.config.clone(), Some(p.store_factory.clone()))
-        }
-    };
+    let (config, server_name, server_version, store_factory) =
+        match &*inner.read() {
+            SrvInnerEnum::Running(p) => (
+                p.config.clone(),
+                p.server_name.clone(),
+                p.server_version.clone(),
+                None,
+            ),
+            SrvInnerEnum::Pending(p) => (
+                p.config.clone(),
+                p.server_name.clone(),
+                p.server_version.clone(),
+                Some(p.store_factory.clone()),
+            ),
+        };
 
     async move {
         let salt = sodoken::BufReadSized::from(
@@ -195,6 +211,8 @@ fn priv_srv_unlock(
             }
             *lock = SrvInnerEnum::Running(SrvRunningInner {
                 config,
+                server_name,
+                server_version,
                 store,
                 context_key,
                 sign_pk: sign_pk.try_unwrap_sized().unwrap().into(),
@@ -329,12 +347,22 @@ fn priv_req_hello<'a>(
     req: LairApiReqHello,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
     async move {
-        let (sign_pk, sign_sk) = match &*inner.read() {
-            SrvInnerEnum::Running(p) => (p.sign_pk.clone(), p.sign_sk.clone()),
-            SrvInnerEnum::Pending(_) => {
-                return Err("keystore still locked".into());
-            }
-        };
+        // DON'T check connection 'unlocked' here,
+        // we want to be able to verify the server,
+        // before we unlock the individual connection.
+
+        let (sign_pk, sign_sk, server_name, server_version) =
+            match &*inner.read() {
+                SrvInnerEnum::Running(p) => (
+                    p.sign_pk.clone(),
+                    p.sign_sk.clone(),
+                    p.server_name.clone(),
+                    p.server_version.clone(),
+                ),
+                SrvInnerEnum::Pending(_) => {
+                    return Err("KeystoreLocked".into());
+                }
+            };
 
         let hello_sig = sodoken::BufWriteSized::new_no_lock();
         sodoken::sign::detached(
@@ -344,17 +372,19 @@ fn priv_req_hello<'a>(
         )
         .await?;
         let hello_sig = hello_sig.try_unwrap_sized().unwrap().into();
+
         send.send(
             LairApiResHello {
                 msg_id: req.msg_id,
-                name: "test-server".into(), // TODO
-                version: "0.0.0".into(),    // TODO
+                name: server_name,
+                version: server_version,
                 server_pub_key: sign_pk,
                 hello_sig,
             }
             .into_api_enum(),
         )
         .await?;
+
         Ok(())
     }
 }
@@ -392,13 +422,13 @@ fn priv_req_list_entries<'a>(
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
     async move {
         if !unlocked.load(atomic::Ordering::Relaxed) {
-            return Err("keystore still locked".into());
+            return Err("KeystoreLocked".into());
         }
 
         let store = match &*inner.read() {
             SrvInnerEnum::Running(p) => (p.store.clone()),
             SrvInnerEnum::Pending(_) => {
-                return Err("keystore still locked".into());
+                return Err("KeystoreLocked".into());
             }
         };
         let entry_list = store.list_entries().await?;
@@ -423,13 +453,13 @@ fn priv_req_new_seed<'a>(
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
     async move {
         if !unlocked.load(atomic::Ordering::Relaxed) {
-            return Err("keystore still locked".into());
+            return Err("KeystoreLocked".into());
         }
 
         let store = match &*inner.read() {
             SrvInnerEnum::Running(p) => (p.store.clone()),
             SrvInnerEnum::Pending(_) => {
-                return Err("keystore still locked".into());
+                return Err("KeystoreLocked".into());
             }
         };
 

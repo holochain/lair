@@ -94,7 +94,7 @@ impl LairClient {
     pub fn hello(
         &self,
         expected_server_pub_key: BinDataSized<32>,
-    ) -> impl Future<Output = LairResult<()>> + 'static + Send {
+    ) -> impl Future<Output = LairResult<Arc<str>>> + 'static + Send {
         let inner = self.0.clone();
         async move {
             let nonce = sodoken::BufWrite::new_no_lock(24);
@@ -119,7 +119,7 @@ impl LairClient {
                 .verify_detached(res.hello_sig.cloned_inner(), nonce)
                 .await
             {
-                return Ok(());
+                return Ok(res.version);
             }
 
             Err("ServerValidationFailed".into())

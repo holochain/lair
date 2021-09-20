@@ -31,6 +31,8 @@ impl IpcKeystoreServer {
 
             let srv_hnd = crate::lair_server::spawn_lair_server_task(
                 config.clone(),
+                "lair-keystore-ipc".into(),
+                crate::LAIR_VER.into(),
                 store_factory,
             )
             .await?;
@@ -88,6 +90,9 @@ pub struct IpcKeystoreClientOptions {
     pub connection_url: url::Url,
     /// the passphrase to use to connect
     pub passphrase: sodoken::BufRead,
+    /// Require the client and server to have exactly matching
+    /// client / server versions.
+    pub exact_client_server_version_match: bool,
     /// If it is not possible to unlock the server "interactively" on
     /// the server side... we can unlock it from the client side without
     /// validating the server's authenticity...
@@ -117,6 +122,7 @@ impl IpcKeystoreClient {
         Self::connect_options(IpcKeystoreClientOptions {
             connection_url,
             passphrase,
+            exact_client_server_version_match: false,
             danger_unlock_without_server_validate: false,
         })
     }
@@ -130,34 +136,55 @@ impl IpcKeystoreClient {
             let server_pub_key =
                 get_server_pub_key_from_connection_url(&opts.connection_url)?;
             let (send, recv) =
-                raw_ipc::ipc_connect(opts.connection_url).await?;
+                raw_ipc::ipc_connect(opts.connection_url.clone()).await?;
             let cli_hnd =
                 crate::lair_client::wrap_raw_lair_client(send, recv).await?;
             if opts.danger_unlock_without_server_validate {
                 // even if they tell us to do this backwards,
                 // let's at least try to do it correctly to start
                 match cli_hnd.hello(server_pub_key.clone()).await {
-                    Ok(_) => {
+                    Ok(ver) => {
+                        priv_check_hello_ver(&opts, &ver)?;
                         // hey, it worked, unlock and proceed
-                        cli_hnd.unlock(opts.passphrase).await?;
+                        cli_hnd.unlock(opts.passphrase.clone()).await?;
                     }
-                    Err(_) => {
+                    Err(e) if e.str_kind() == "KestoreLocked" => {
                         // lame, the server really is not unlocked...
                         // unlock, but some attacker may get our passphrase
-                        cli_hnd.unlock(opts.passphrase).await?;
+                        cli_hnd.unlock(opts.passphrase.clone()).await?;
                         // now do the verification, and hope it was
                         // the correct server
-                        cli_hnd.hello(server_pub_key).await?;
+                        let ver = cli_hnd.hello(server_pub_key).await?;
+                        priv_check_hello_ver(&opts, &ver)?;
                     }
+                    Err(e) => return Err(e),
                 }
             } else {
-                cli_hnd.hello(server_pub_key).await?;
+                let ver = cli_hnd.hello(server_pub_key).await?;
+                priv_check_hello_ver(&opts, &ver)?;
                 cli_hnd.unlock(opts.passphrase).await?;
             }
 
             Ok(cli_hnd)
         }
     }
+}
+
+fn priv_check_hello_ver(
+    opts: &IpcKeystoreClientOptions,
+    server_version: &str,
+) -> LairResult<()> {
+    if opts.exact_client_server_version_match
+        && server_version != crate::LAIR_VER
+    {
+        return Err(format!(
+            "Invalid lair server version, this client requires '{}', but got '{}'.",
+            crate::LAIR_VER,
+            server_version,
+        ).into());
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
