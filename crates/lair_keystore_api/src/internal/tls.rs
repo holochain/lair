@@ -1,8 +1,8 @@
 //! Utilities for generating / managing TLS certificates and keypairs.
 
 use crate::*;
-use actor::{TlsCertAlg, TlsCertOptions};
 use once_cell::sync::Lazy;
+use std::sync::Arc;
 
 /// The well-known CA keypair in plaintext pem format.
 /// Some TLS clients require CA roots to validate client-side certificates.
@@ -47,15 +47,27 @@ pub static WK_CA_CERT_DER: Lazy<Arc<Vec<u8>>> = Lazy::new(|| {
     Arc::new(cert)
 });
 
+/// Result data for new tls cert generation
+pub struct TlsCertGenResult {
+    /// sni used in cert
+    pub sni: Arc<str>,
+    /// certificate private key
+    pub priv_key: sodoken::BufRead,
+    /// the der encoded certificate
+    pub cert: Arc<[u8]>,
+    /// blake2b digest of der encoded certificate
+    pub digest: Arc<[u8; 32]>,
+}
+
 /// Generate a new random Tls keypair and self signed certificate.
-pub async fn tls_cert_self_signed_new_from_entropy(
-    options: TlsCertOptions,
-) -> LairResult<entry::EntryTlsCert> {
-    rayon_exec(move || {
+pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
+    let (sni, priv_key, cert) = tokio::task::spawn_blocking(|| {
         let sni = format!("a{}a.a{}a", nanoid::nanoid!(), nanoid::nanoid!());
 
         let mut params = rcgen::CertificateParams::new(vec![sni.clone()]);
+        params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
 
+        /*
         #[allow(unreachable_patterns)]
         match options.alg {
             TlsCertAlg::PkcsEd25519 => params.alg = &rcgen::PKCS_ED25519,
@@ -72,6 +84,7 @@ pub async fn tls_cert_self_signed_new_from_entropy(
                 )
             }
         };
+        */
 
         params
             .extended_key_usages
@@ -89,33 +102,32 @@ pub async fn tls_cert_self_signed_new_from_entropy(
         );
 
         let cert = rcgen::Certificate::from_params(params)
-            .map_err(LairError::other)?;
+            .map_err(one_err::OneErr::new)?;
 
-        let priv_key_der = cert.serialize_private_key_der();
+        let priv_key = sodoken::BufRead::from(cert.serialize_private_key_der());
 
         let root_cert = &**WK_CA_RCGEN_CERT;
         let cert_der = cert
             .serialize_der_with_signer(root_cert)
-            .map_err(LairError::other)?;
+            .map_err(one_err::OneErr::new)?;
 
-        let cert_digest = blake2b_simd::Params::new()
-            .hash_length(32)
-            .to_state()
-            .update(&cert_der)
-            .finalize()
-            .as_bytes()
-            .to_vec();
-
-        Ok(entry::EntryTlsCert {
-            sni: sni.into(),
-            priv_key_der: priv_key_der.into(),
-            cert_der: cert_der.into(),
-            cert_digest: cert_digest.into(),
-        })
+        LairResult::Ok((sni, priv_key, cert_der))
     })
     .await
+    .map_err(one_err::OneErr::new)??;
+
+    let digest = sodoken::BufWriteSized::new_no_lock();
+    sodoken::hash::blake2b::hash(digest.clone(), cert.clone()).await?;
+
+    Ok(TlsCertGenResult {
+        sni: sni.into(),
+        priv_key,
+        cert: cert.into(),
+        digest: digest.try_unwrap_sized().unwrap().into(),
+    })
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -133,3 +145,4 @@ mod tests {
         // to encrypt / decrypt
     }
 }
+*/

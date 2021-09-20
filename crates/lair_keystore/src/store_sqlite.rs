@@ -1,6 +1,7 @@
-use lair_keystore_api::{LairError, LairResult};
+//! lair store backed by a sqlite / sqlcipher database file
+
+use lair_keystore_api::LairResult;
 use parking_lot::Mutex;
-use rusqlite::params;
 use sodoken::*;
 use std::future::Future;
 use std::sync::Arc;
@@ -63,13 +64,13 @@ impl SqlCon {
         let (con, r) = tokio::task::spawn_blocking(move || {
             let r = match con
                 .transaction_with_behavior(b)
-                .map_err(LairError::other)
+                .map_err(one_err::OneErr::new)
             {
                 Err(err) => Err(err),
                 Ok(mut txn) => match f(&mut txn) {
                     Ok(r) => {
                         if let Err(err) = txn.commit() {
-                            Err(LairError::other(err))
+                            Err(one_err::OneErr::new(err))
                         } else {
                             Ok(r)
                         }
@@ -80,7 +81,7 @@ impl SqlCon {
             (con, r)
         })
         .await
-        .map_err(LairError::other)?;
+        .map_err(one_err::OneErr::new)?;
         self.con = Some(con);
         r
     }
@@ -101,7 +102,7 @@ impl ExecExt for rusqlite::Connection {
         use rusqlite::OptionalExtension;
         self.query_row(sql, params, |_| Ok(()))
             .optional()
-            .map_err(LairError::other)?;
+            .map_err(one_err::OneErr::new)?;
         Ok(())
     }
 }
@@ -125,7 +126,7 @@ impl SqlPool {
                 | OpenFlags::SQLITE_OPEN_NO_MUTEX
                 | OpenFlags::SQLITE_OPEN_URI,
         )
-        .map_err(LairError::other)?;
+        .map_err(one_err::OneErr::new)?;
 
         set_pragmas(&write_con, key_pragma.clone())?;
 
@@ -147,7 +148,7 @@ impl SqlPool {
                     | OpenFlags::SQLITE_OPEN_NO_MUTEX
                     | OpenFlags::SQLITE_OPEN_URI,
             )
-            .map_err(LairError::other)?;
+            .map_err(one_err::OneErr::new)?;
 
             set_pragmas(&read_con, key_pragma.clone())?;
 
@@ -169,7 +170,7 @@ impl SqlPool {
         async move {
             tokio::task::spawn_blocking(move || Self::new_sync(path, db_key))
                 .await
-                .map_err(LairError::other)?
+                .map_err(one_err::OneErr::new)?
         }
     }
 
@@ -215,101 +216,6 @@ impl SqlPool {
             }
         }
     }
-
-    pub fn init_load_unlock(
-        &self,
-    ) -> impl Future<Output = LairResult<Option<Vec<u8>>>> + 'static + Send
-    {
-        let reader = self.read();
-        async move {
-            let mut reader = reader.await;
-            match reader
-                .transaction(|txn| {
-                    txn.query_row(
-                        "SELECT data FROM lair_entries WHERE id = 0;",
-                        [],
-                        |row| row.get(0),
-                    )
-                    .map_err(LairError::other)
-                })
-                .await
-            {
-                Ok(data) => Ok(Some(data)),
-                Err(_) => Ok(None),
-            }
-        }
-    }
-
-    pub fn write_unlock(
-        &self,
-        entry_data: Vec<u8>,
-    ) -> impl Future<Output = LairResult<()>> + 'static + Send {
-        let writer = self.write();
-        async move {
-            let mut writer = writer.await;
-            writer
-                .transaction(move |txn| {
-                    txn.execute_optional(
-                        "INSERT INTO lair_entries (id, data) VALUES (?1, ?2);",
-                        params![0, entry_data],
-                    )?;
-                    Ok(())
-                })
-                .await
-        }
-    }
-
-    pub fn load_all_entries(
-        &self,
-    ) -> impl Future<Output = LairResult<Vec<(super::KeystoreIndex, Vec<u8>)>>>
-           + 'static
-           + Send {
-        let reader = self.read();
-        async move {
-            let mut reader = reader.await;
-            reader
-                .transaction(|txn| {
-                    let mut s = txn
-                        .prepare(
-                            "SELECT id, data FROM lair_entries WHERE id > 0;",
-                        )
-                        .map_err(LairError::other)?;
-                    let it = s
-                        .query_map([], |row| {
-                            let id: u32 = row.get(0)?;
-                            Ok((id.into(), row.get(1)?))
-                        })
-                        .map_err(LairError::other)?;
-                    let mut out = Vec::new();
-                    for i in it {
-                        out.push(i.map_err(LairError::other)?);
-                    }
-                    Ok(out)
-                })
-                .await
-        }
-    }
-
-    pub fn write_next_entry(
-        &self,
-        entry_data: Vec<u8>,
-    ) -> impl Future<Output = LairResult<super::KeystoreIndex>> + 'static + Send
-    {
-        let writer = self.write();
-        async move {
-            let mut writer = writer.await;
-            writer
-                .transaction(move |txn| {
-                    txn.execute_optional(
-                        "INSERT INTO lair_entries (data) VALUES (?1);",
-                        params![entry_data],
-                    )?;
-                    Ok(())
-                })
-                .await?;
-            Ok((writer.last_insert_rowid() as u32).into())
-        }
-    }
 }
 
 const KEY_PRAGMA_LEN: usize = 83;
@@ -322,7 +228,7 @@ fn secure_write_key_pragma(
 ) -> LairResult<BufRead> {
     // write the pragma line
     let key_pragma: BufWriteSized<KEY_PRAGMA_LEN> =
-        BufWriteSized::new_mem_locked().map_err(LairError::other)?;
+        BufWriteSized::new_mem_locked().map_err(one_err::OneErr::new)?;
 
     {
         use std::io::Write;
@@ -331,7 +237,7 @@ fn secure_write_key_pragma(
         key_pragma.copy_from_slice(KEY_PRAGMA);
         let mut c = std::io::Cursor::new(&mut key_pragma[16..80]);
         for b in &*key.read_lock() {
-            write!(c, "{:02X}", b).map_err(LairError::other)?;
+            write!(c, "{:02X}", b).map_err(one_err::OneErr::new)?;
         }
     }
 
@@ -343,7 +249,7 @@ fn set_pragmas(
     key_pragma: BufRead,
 ) -> LairResult<()> {
     con.busy_timeout(std::time::Duration::from_millis(30_000))
-        .map_err(LairError::other)?;
+        .map_err(one_err::OneErr::new)?;
 
     con.execute_optional(
         std::str::from_utf8(&*key_pragma.read_lock()).unwrap(),
@@ -351,10 +257,10 @@ fn set_pragmas(
     )?;
 
     con.pragma_update(None, "trusted_schema", &"0".to_string())
-        .map_err(LairError::other)?;
+        .map_err(one_err::OneErr::new)?;
 
     con.pragma_update(None, "journal_mode", &"WAL".to_string())
-        .map_err(LairError::other)?;
+        .map_err(one_err::OneErr::new)?;
 
     Ok(())
 }
@@ -365,54 +271,13 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn sqlite_sanity() {
-        let tmpdir = tempfile::tempdir().unwrap();
+        let tmpdir = tempdir::TempDir::new("lair-keystore-test").unwrap();
         let mut sqlite = tmpdir.path().to_path_buf();
         sqlite.push("db.sqlite3");
 
         let db_key = sodoken::BufReadSized::new_no_lock([0; 32]);
-        let pool = SqlPool::new(sqlite, db_key).await.unwrap();
+        let _pool = SqlPool::new(sqlite, db_key).await.unwrap();
 
-        assert!(pool.init_load_unlock().await.unwrap().is_none());
-        pool.write_unlock(b"testing".to_vec()).await.unwrap();
-        assert!(pool.init_load_unlock().await.unwrap().is_some());
-
-        let cont: Arc<std::sync::atomic::AtomicBool> =
-            Arc::new(std::sync::atomic::AtomicBool::new(true));
-
-        let mut all_read = Vec::new();
-        for _ in 0..2 {
-            let pool = pool.clone();
-            let cont = cont.clone();
-            all_read.push(tokio::task::spawn(async move {
-                loop {
-                    let c = cont.load(std::sync::atomic::Ordering::Relaxed);
-
-                    tokio::time::sleep(std::time::Duration::from_millis(10))
-                        .await;
-
-                    let count = pool.load_all_entries().await.unwrap().len();
-                    println!("got count: {}", count);
-
-                    if !c {
-                        break;
-                    }
-                }
-            }));
-        }
-
-        let mut all_write = Vec::new();
-        for _ in 0..10 {
-            let pool = pool.clone();
-            all_write.push(tokio::task::spawn(async move {
-                let start = std::time::Instant::now();
-                let id =
-                    pool.write_next_entry(b"testing".to_vec()).await.unwrap();
-                println!("write {} in {} s", id, start.elapsed().as_secs_f64());
-            }));
-        }
-
-        futures::future::try_join_all(all_write).await.unwrap();
-        cont.store(false, std::sync::atomic::Ordering::Relaxed);
-        futures::future::try_join_all(all_read).await.unwrap();
+        tmpdir.close().unwrap();
     }
 }

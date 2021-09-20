@@ -4,7 +4,6 @@ members = [
   "crates/hc_seed_bundle",
   "crates/lair_keystore",
   "crates/lair_keystore_api",
-  "crates/lair_keystore_client",
 ]
 
 [patch.crates-io]
