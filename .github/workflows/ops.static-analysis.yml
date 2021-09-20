@@ -1,5 +1,5 @@
 name: static analysis
-on: [ push ]
+on: [ push, v0.1.x ]
 jobs:
   static-analysis:
     runs-on: ${{ matrix.os }}

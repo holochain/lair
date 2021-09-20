@@ -1,5 +1,5 @@
 name: binary tests
-on: [ push ]
+on: [ push, v0.1.x ]
 jobs:
   bin-test:
     runs-on: ${{ matrix.os }}
