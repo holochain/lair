@@ -474,29 +474,45 @@ impl LairServerConfigInner {
         }
     }
 
+    /// Get the connection "scheme". i.e. "unix", "named-pipe", or "tcp".
+    pub fn get_connection_scheme(&self) -> &str {
+        self.connection_url.scheme()
+    }
+
+    /// Get the connection "path". This could have different meanings
+    /// depending on if we are a unix domain socket or named pipe, etc.
+    pub fn get_connection_path(&self) -> &str {
+        self.connection_url.path()
+    }
+
     /// Get the server pub key BinDataSized<32> bytes from the connectionUrl
     pub fn get_server_pub_key(&self) -> LairResult<BinDataSized<32>> {
-        for (k, v) in self.connection_url.query_pairs() {
-            if k == "k" {
-                let tmp = base64::decode_config(
-                    v.as_bytes(),
-                    base64::URL_SAFE_NO_PAD,
-                )
-                .map_err(one_err::OneErr::new)?;
-                if tmp.len() != 32 {
-                    return Err(format!(
-                        "invalid server_pub_key len, expected 32, got {}",
-                        tmp.len()
-                    )
-                    .into());
-                }
-                let mut out = [0; 32];
-                out.copy_from_slice(&tmp);
-                return Ok(out.into());
-            }
-        }
-        Err("no server_pub_key on connection_url".into())
+        get_server_pub_key_from_connection_url(&self.connection_url)
     }
+}
+
+/// extract a server_pub_key from a connection_url
+pub fn get_server_pub_key_from_connection_url(
+    url: &url::Url,
+) -> LairResult<BinDataSized<32>> {
+    for (k, v) in url.query_pairs() {
+        if k == "k" {
+            let tmp =
+                base64::decode_config(v.as_bytes(), base64::URL_SAFE_NO_PAD)
+                    .map_err(one_err::OneErr::new)?;
+            if tmp.len() != 32 {
+                return Err(format!(
+                    "invalid server_pub_key len, expected 32, got {}",
+                    tmp.len()
+                )
+                .into());
+            }
+            let mut out = [0; 32];
+            out.copy_from_slice(&tmp);
+            return Ok(out.into());
+        }
+    }
+    Err("no server_pub_key on connection_url".into())
 }
 
 /// Additional config used by lair servers.
@@ -877,6 +893,19 @@ impl AsLairResponse for LairApiResListEntries {
     type Request = LairApiReqListEntries;
 }
 
+/// Instructions for how to argon2id pwhash a passphrase
+/// for use in deep locking a seed.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeepLockPassphrase {
+    /// argon2id ops_limit for decrypting runtime data
+    pub ops_limit: u32,
+    /// argon2id mem_limit for decrypting runtime data
+    pub mem_limit: u32,
+    /// if this new seed is to be deep_locked, the passphrase for that.
+    pub passphrase: SecretData,
+}
+
 /// Instruct lair to generate a new seed from cryptographically secure
 /// random data with given tag.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -888,14 +917,14 @@ pub struct LairApiReqNewSeed {
     pub tag: Arc<str>,
     /// if this new seed is to be deep_locked, the passphrase for that.
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub deep_lock_passphrase: Option<SecretData>,
+    pub deep_lock_passphrase: Option<DeepLockPassphrase>,
 }
 
 impl LairApiReqNewSeed {
     /// Make a new_seed request
     pub fn new(
         tag: Arc<str>,
-        deep_lock_passphrase: Option<SecretData>,
+        deep_lock_passphrase: Option<DeepLockPassphrase>,
     ) -> Self {
         Self {
             msg_id: new_msg_id(),
@@ -1071,6 +1100,74 @@ impl LairStore {
             let entry = LairEntryInner::Seed {
                 tag,
                 seed_info: seed_info.clone(),
+                seed,
+            };
+
+            inner.write_entry(Arc::new(entry)).await?;
+
+            Ok(seed_info)
+        }
+    }
+
+    /// Generate a new cryptographically secure random seed,
+    /// and associate it with the given tag, returning the
+    /// seed_info derived from the generated seed.
+    /// This seed is deep_locked, meaning it needs an additional
+    /// runtime passphrase to be decrypted / used.
+    pub fn new_deep_locked_seed(
+        &self,
+        tag: Arc<str>,
+        ops_limit: u32,
+        mem_limit: u32,
+        deep_lock_passphrase: sodoken::BufRead,
+    ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
+        let inner = self.0.clone();
+        async move {
+            let seed = sodoken::BufWriteSized::new_mem_locked()?;
+            sodoken::random::bytes_buf(seed.clone()).await?;
+
+            let ed_pk = sodoken::BufWriteSized::new_no_lock();
+            let ed_sk = sodoken::BufWriteSized::new_mem_locked()?;
+            sodoken::sign::keypair(ed_pk.clone(), ed_sk).await?;
+
+            let x_pk = sodoken::BufWriteSized::new_no_lock();
+            let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
+            sodoken::sealed_box::curve25519xchacha20poly1305::keypair(
+                x_pk.clone(),
+                x_sk,
+            )
+            .await?;
+
+            let salt = <sodoken::BufWriteSized<16>>::new_no_lock();
+            sodoken::random::bytes_buf(salt.clone()).await?;
+
+            let key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            sodoken::hash::argon2id::hash(
+                key.clone(),
+                deep_lock_passphrase,
+                salt.clone(),
+                ops_limit,
+                mem_limit,
+            )
+            .await?;
+
+            let seed = SecretDataSized::encrypt(
+                key.to_read_sized(),
+                seed.to_read_sized(),
+            )
+            .await?;
+
+            let seed_info = SeedInfo {
+                ed25519_pub_key: ed_pk.try_unwrap_sized().unwrap().into(),
+                x25519_pub_key: x_pk.try_unwrap_sized().unwrap().into(),
+            };
+
+            let entry = LairEntryInner::DeepLockedSeed {
+                tag,
+                seed_info: seed_info.clone(),
+                salt: salt.try_unwrap_sized().unwrap().into(),
+                ops_limit,
+                mem_limit,
                 seed,
             };
 

@@ -168,18 +168,25 @@ impl LairClient {
     /// Instruct lair to generate a new seed from cryptographically secure
     /// random data with given tag. If the seed should be deeply locked,
     /// supply the deep_lock_passphrase as well.
+    /// Respects hc_seed_bundle::PwHashLimits.
     pub fn new_seed(
         &self,
         tag: Arc<str>,
         deep_lock_passphrase: Option<sodoken::BufRead>,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
+        let limits = hc_seed_bundle::PwHashLimits::current();
         let inner = self.0.clone();
         async move {
             let secret = match deep_lock_passphrase {
                 None => None,
                 Some(pass) => {
                     let key = inner.get_enc_ctx_key();
-                    Some(SecretData::encrypt(key, pass).await?)
+                    let secret = SecretData::encrypt(key, pass).await?;
+                    Some(DeepLockPassphrase {
+                        ops_limit: limits.as_ops_limit(),
+                        mem_limit: limits.as_mem_limit(),
+                        passphrase: secret,
+                    })
                 }
             };
             let req = LairApiReqNewSeed::new(tag, secret);

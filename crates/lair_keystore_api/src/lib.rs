@@ -27,7 +27,9 @@ pub mod lair_server;
 
 pub mod lair_client;
 
-pub mod test_keystore;
+pub mod in_proc_keystore;
+
+pub mod ipc_keystore;
 
 pub mod internal;
 pub use internal::rayon::init_once_rayon_thread_pool;

@@ -310,7 +310,7 @@ fn priv_dispatch_incoming<'a>(
                 priv_req_list_entries(inner, send, unlocked, req).await
             }
             LairApiEnum::ReqNewSeed(req) => {
-                priv_req_new_seed(inner, send, unlocked, req).await
+                priv_req_new_seed(inner, send, dec_ctx_key, unlocked, req).await
             }
             LairApiEnum::ResError(_)
             | LairApiEnum::ResHello(_)
@@ -417,6 +417,7 @@ fn priv_req_list_entries<'a>(
 fn priv_req_new_seed<'a>(
     inner: &'a Arc<RwLock<SrvInnerEnum>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    dec_ctx_key: &'a sodoken::BufReadSized<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqNewSeed,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
@@ -431,8 +432,23 @@ fn priv_req_new_seed<'a>(
                 return Err("keystore still locked".into());
             }
         };
-        // TODO handle deep locked
-        let seed_info = store.new_seed(req.tag.clone()).await?;
+
+        let seed_info = match req.deep_lock_passphrase {
+            Some(secret) => {
+                let deep_lock_passphrase =
+                    secret.passphrase.decrypt(dec_ctx_key.clone()).await?;
+                store
+                    .new_deep_locked_seed(
+                        req.tag.clone(),
+                        secret.ops_limit,
+                        secret.mem_limit,
+                        deep_lock_passphrase,
+                    )
+                    .await?
+            }
+            None => store.new_seed(req.tag.clone()).await?,
+        };
+
         send.send(
             LairApiResNewSeed {
                 msg_id: req.msg_id,
@@ -442,6 +458,7 @@ fn priv_req_new_seed<'a>(
             .into_api_enum(),
         )
         .await?;
+
         Ok(())
     }
 }
