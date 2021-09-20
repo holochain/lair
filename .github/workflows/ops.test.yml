@@ -1,5 +1,9 @@
 name: test
-on: [ push, v0.1.x ]
+on:
+  push:
+    branches:
+      - main
+      - v0.1.x
 jobs:
   test:
     runs-on: ${{ matrix.os }}
