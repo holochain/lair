@@ -277,7 +277,5 @@ mod tests {
 
         let db_key = sodoken::BufReadSized::new_no_lock([0; 32]);
         let _pool = SqlPool::new(sqlite, db_key).await.unwrap();
-
-        tmpdir.close().unwrap();
     }
 }

@@ -1,7 +1,15 @@
-name: binary tests
-on: [ push ]
+name: Release Build
+on:
+  push:
+    branches:
+      - main
+      - v0.1.x
+  pull_request:
+    branches:
+      - main
+      - v0.1.x
 jobs:
-  bin-test:
+  release-build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -30,16 +38,8 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
 
-      - name: Install Lair
+      - name: Build Release
         uses: actions-rs/cargo@v1
         with:
-          command: install
-          args: -f --path crates/lair_keystore
-
-      - name: Run Bin Tests
-        uses: actions-rs/cargo@v1
-        env:
-          RUST_BACKTRACE: 1
-        with:
-          command: test
-          args: --manifest-path crates/lair_keystore_client/Cargo.toml --features=bin-tests
+          command: build
+          args: --release
