@@ -100,72 +100,65 @@ pub struct IpcKeystoreClientOptions {
     pub danger_unlock_without_server_validate: bool,
 }
 
-/// client keystore item for dealing with ipc keystores,
-/// both unix domain sockets and windows named pipes.
-#[derive(Clone)]
-pub struct IpcKeystoreClient {}
+/// Connect to an IpcKeystoreServer instance via
+/// unix domain socket on linux/macOs or named pipe on windows.
+/// This constructor will first validate server authenticity,
+/// then unlock the connection with the supplied passphrase.
+pub fn ipc_keystore_connect<P>(
+    connection_url: url::Url,
+    passphrase: P,
+) -> impl Future<Output = LairResult<LairClient>> + 'static + Send
+where
+    P: Into<sodoken::BufRead> + 'static + Send,
+{
+    let passphrase = passphrase.into();
+    ipc_keystore_connect_options(IpcKeystoreClientOptions {
+        connection_url,
+        passphrase,
+        exact_client_server_version_match: false,
+        danger_unlock_without_server_validate: false,
+    })
+}
 
-impl IpcKeystoreClient {
-    /// Connect to an IpcKeystoreServer instance via
-    /// unix domain socket on linux/macOs or named pipe on windows.
-    /// This constructor will first validate server authenticity,
-    /// then unlock the connection with the supplied passphrase.
-    pub fn connect<P>(
-        connection_url: url::Url,
-        passphrase: P,
-    ) -> impl Future<Output = LairResult<LairClient>> + 'static + Send
-    where
-        P: Into<sodoken::BufRead> + 'static + Send,
-    {
-        let passphrase = passphrase.into();
-        Self::connect_options(IpcKeystoreClientOptions {
-            connection_url,
-            passphrase,
-            exact_client_server_version_match: false,
-            danger_unlock_without_server_validate: false,
-        })
-    }
-
-    /// Connect to an IpcKeystoreServer instance via
-    /// unix domain socket on linux/macOs or named pipe on windows.
-    pub fn connect_options(
-        opts: IpcKeystoreClientOptions,
-    ) -> impl Future<Output = LairResult<LairClient>> + 'static + Send {
-        async move {
-            let server_pub_key =
-                get_server_pub_key_from_connection_url(&opts.connection_url)?;
-            let (send, recv) =
-                raw_ipc::ipc_connect(opts.connection_url.clone()).await?;
-            let cli_hnd =
-                crate::lair_client::wrap_raw_lair_client(send, recv).await?;
-            if opts.danger_unlock_without_server_validate {
-                // even if they tell us to do this backwards,
-                // let's at least try to do it correctly to start
-                match cli_hnd.hello(server_pub_key.clone()).await {
-                    Ok(ver) => {
-                        priv_check_hello_ver(&opts, &ver)?;
-                        // hey, it worked, unlock and proceed
-                        cli_hnd.unlock(opts.passphrase.clone()).await?;
-                    }
-                    Err(e) if e.str_kind() == "KestoreLocked" => {
-                        // lame, the server really is not unlocked...
-                        // unlock, but some attacker may get our passphrase
-                        cli_hnd.unlock(opts.passphrase.clone()).await?;
-                        // now do the verification, and hope it was
-                        // the correct server
-                        let ver = cli_hnd.hello(server_pub_key).await?;
-                        priv_check_hello_ver(&opts, &ver)?;
-                    }
-                    Err(e) => return Err(e),
+/// Connect to an IpcKeystoreServer instance via
+/// unix domain socket on linux/macOs or named pipe on windows.
+pub fn ipc_keystore_connect_options(
+    opts: IpcKeystoreClientOptions,
+) -> impl Future<Output = LairResult<LairClient>> + 'static + Send {
+    async move {
+        let server_pub_key =
+            get_server_pub_key_from_connection_url(&opts.connection_url)?;
+        let (send, recv) =
+            raw_ipc::ipc_connect(opts.connection_url.clone()).await?;
+        let cli_hnd =
+            crate::lair_client::wrap_raw_lair_client(send, recv).await?;
+        if opts.danger_unlock_without_server_validate {
+            // even if they tell us to do this backwards,
+            // let's at least try to do it correctly to start
+            match cli_hnd.hello(server_pub_key.clone()).await {
+                Ok(ver) => {
+                    priv_check_hello_ver(&opts, &ver)?;
+                    // hey, it worked, unlock and proceed
+                    cli_hnd.unlock(opts.passphrase.clone()).await?;
                 }
-            } else {
-                let ver = cli_hnd.hello(server_pub_key).await?;
-                priv_check_hello_ver(&opts, &ver)?;
-                cli_hnd.unlock(opts.passphrase).await?;
+                Err(e) if e.str_kind() == "KestoreLocked" => {
+                    // lame, the server really is not unlocked...
+                    // unlock, but some attacker may get our passphrase
+                    cli_hnd.unlock(opts.passphrase.clone()).await?;
+                    // now do the verification, and hope it was
+                    // the correct server
+                    let ver = cli_hnd.hello(server_pub_key).await?;
+                    priv_check_hello_ver(&opts, &ver)?;
+                }
+                Err(e) => return Err(e),
             }
-
-            Ok(cli_hnd)
+        } else {
+            let ver = cli_hnd.hello(server_pub_key).await?;
+            priv_check_hello_ver(&opts, &ver)?;
+            cli_hnd.unlock(opts.passphrase).await?;
         }
+
+        Ok(cli_hnd)
     }
 }
 
@@ -227,12 +220,10 @@ mod tests {
         keystore.unlock(passphrase.clone()).await.unwrap();
 
         // create a client connection
-        let client = IpcKeystoreClient::connect(
-            config.connection_url.clone(),
-            passphrase,
-        )
-        .await
-        .unwrap();
+        let client =
+            ipc_keystore_connect(config.connection_url.clone(), passphrase)
+                .await
+                .unwrap();
 
         // create a new seed
         let seed_info_ref =
