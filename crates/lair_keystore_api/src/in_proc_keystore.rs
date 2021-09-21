@@ -1,9 +1,7 @@
 //! an in-process keystore that manages the entire lair server life-cycle
 //! without needing to call out to an external process.
 
-use crate::lair_client::LairClient;
-use crate::lair_core::*;
-use crate::LairResult;
+use crate::prelude::*;
 use std::future::Future;
 
 /// an in-process keystore that manages the entire lair server life-cycle

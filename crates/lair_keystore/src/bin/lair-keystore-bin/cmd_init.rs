@@ -52,10 +52,7 @@ pub(crate) async fn exec(
 
     println!("\n# lair-keystore init generating secure config...");
 
-    let config = lair_keystore_api::lair_core::LairServerConfigInner::new(
-        &lair_root, passphrase,
-    )
-    .await?;
+    let config = LairServerConfigInner::new(&lair_root, passphrase).await?;
 
     let mut config_f = tokio::fs::OpenOptions::new()
         .write(true)

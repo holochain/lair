@@ -1,8 +1,7 @@
 //! interact with a lair keystore
 
-use crate::lair_core::traits::*;
-use crate::lair_core::*;
-use crate::LairResult;
+use crate::lair_api::traits::*;
+use crate::prelude::*;
 use futures::future::{BoxFuture, FutureExt};
 use futures::stream::StreamExt;
 use parking_lot::RwLock;

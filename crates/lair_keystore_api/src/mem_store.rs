@@ -1,8 +1,7 @@
 //! Lair in-memory store - usually for testing
 
-use crate::lair_core::traits::*;
-use crate::lair_core::*;
-use crate::LairResult;
+use crate::lair_store::traits::*;
+use crate::prelude::*;
 use futures::future::{BoxFuture, FutureExt};
 use parking_lot::RwLock;
 use std::collections::HashMap;

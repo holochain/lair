@@ -1,9 +1,7 @@
 //! client / server keystore items for dealing with ipc keystores,
 //! both unix domain sockets and windows named pipes.
 
-use crate::lair_client::LairClient;
-use crate::lair_core::*;
-use crate::LairResult;
+use crate::prelude::*;
 use futures::stream::StreamExt;
 use std::future::Future;
 

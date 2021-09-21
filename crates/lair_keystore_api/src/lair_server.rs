@@ -1,8 +1,7 @@
 //! host a lair keystore
 
-use crate::lair_core::traits::*;
-use crate::lair_core::*;
-use crate::LairResult;
+use crate::lair_api::traits::AsLairCodec;
+use crate::prelude::*;
 use futures::future::{BoxFuture, FutureExt};
 use futures::stream::StreamExt;
 use parking_lot::RwLock;
@@ -73,7 +72,7 @@ pub fn spawn_lair_server_task<C>(
     config: C,
     server_name: Arc<str>,
     server_version: Arc<str>,
-    store_factory: crate::lair_core::LairStoreFactory,
+    store_factory: LairStoreFactory,
 ) -> impl Future<Output = LairResult<LairServer>> + 'static + Send
 where
     C: Into<LairServerConfig> + 'static + Send,
@@ -99,14 +98,14 @@ struct SrvPendingInner {
     config: LairServerConfig,
     server_name: Arc<str>,
     server_version: Arc<str>,
-    store_factory: crate::lair_core::LairStoreFactory,
+    store_factory: LairStoreFactory,
 }
 
 struct SrvRunningInner {
     config: LairServerConfig,
     server_name: Arc<str>,
     server_version: Arc<str>,
-    store: crate::lair_core::LairStore,
+    store: LairStore,
     // TODO - do we need this??
     #[allow(dead_code)]
     context_key: sodoken::BufReadSized<32>,

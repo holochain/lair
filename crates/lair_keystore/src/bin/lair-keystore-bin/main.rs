@@ -8,8 +8,7 @@
 
 //! sqlite/sqlcipher backed LairKeystore server control binary
 
-use lair_keystore_api::lair_core::*;
-use lair_keystore_api::LairResult;
+use lair_keystore_api::prelude::*;
 use std::sync::Arc;
 use structopt::StructOpt;
 
@@ -81,10 +80,7 @@ async fn get_config(
         Ok(b) => b,
     };
 
-    let config =
-        lair_keystore_api::lair_core::LairServerConfigInner::from_bytes(
-            &bytes,
-        )?;
+    let config = LairServerConfigInner::from_bytes(&bytes)?;
 
     Ok(Arc::new(config))
 }

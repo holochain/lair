@@ -1,7 +1,6 @@
 //! Utilities for dealing with pid files.
 
-use lair_keystore_api::lair_core::*;
-use lair_keystore_api::LairResult;
+use lair_keystore_api::prelude::*;
 use std::{
     io::{Read, Write},
     str::FromStr,
