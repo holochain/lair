@@ -262,7 +262,5 @@ mod tests {
             .unwrap();
 
         println!("{:#?}", client.list_entries().await.unwrap());
-
-        tmp_dir.close().unwrap();
     }
 }
