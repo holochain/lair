@@ -13,6 +13,28 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 const READ_CON_COUNT: usize = 3;
 
+/// create a LairStoreFactory that will construct a SqlPool instance
+/// at the given sqlite/sqlcipher file path.
+pub fn create_sql_pool_factory<P>(sqlite_file_path: P) -> LairStoreFactory
+where
+    P: AsRef<std::path::Path>,
+{
+    let sqlite_file_path = sqlite_file_path.as_ref().to_owned();
+    struct X(std::path::PathBuf);
+    impl AsLairStoreFactory for X {
+        fn connect_to_store(
+            &self,
+            unlock_secret: sodoken::BufReadSized<32>,
+        ) -> BoxFuture<'static, LairResult<LairStore>> {
+            let sqlite_file_path = self.0.clone();
+            async move { SqlPool::new(sqlite_file_path, unlock_secret).await }
+                .boxed()
+        }
+    }
+    let inner = X(sqlite_file_path);
+    LairStoreFactory(Arc::new(inner))
+}
+
 struct SqlPoolInner {
     db_key: sodoken::BufReadSized<32>,
     write_limit: Arc<Semaphore>,

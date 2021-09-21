@@ -25,10 +25,16 @@ pub(crate) async fn exec(
         .into());
     }
 
-    let mut pass_tmp =
-        rpassword::read_password_from_tty(Some("\n# passphrase> "))
-            .map_err(one_err::OneErr::new)?
-            .into_bytes();
+    let mut pass_tmp = tokio::task::spawn_blocking(|| {
+        LairResult::Ok(
+            rpassword::read_password_from_tty(Some("\n# passphrase> "))
+                .map_err(one_err::OneErr::new)?
+                .into_bytes(),
+        )
+    })
+    .await
+    .map_err(one_err::OneErr::new)??;
+
     let passphrase = match sodoken::BufWrite::new_mem_locked(pass_tmp.len()) {
         Err(e) => {
             pass_tmp.fill(0);
