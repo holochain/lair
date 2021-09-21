@@ -12,10 +12,12 @@ categories = [ "cryptography" ]
 edition = "2018"
 
 [dependencies]
+dunce = "1.0.2"
 futures = "0.3.17"
 lair_keystore_api = { version = "=0.1.0-alpha.1", path = "../lair_keystore_api" }
 one_err = "0.0.4"
 parking_lot = "0.11.2"
+rpassword = "5.0.1"
 sodoken = "=0.0.1-alpha.18"
 structopt = "0.3.23"
 sysinfo = "0.20.3"
@@ -46,6 +48,6 @@ tempdir = "0.3.7"
 name = "lair_keystore"
 path = "src/lib.rs"
 
-#[[bin]]
-#name = "lair-keystore"
-#path = "src/bin/lair-keystore/main.rs"
+[[bin]]
+name = "lair-keystore"
+path = "src/bin/lair-keystore/main.rs"

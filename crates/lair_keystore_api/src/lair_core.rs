@@ -357,6 +357,11 @@ impl std::fmt::Display for LairServerConfigInner {
 }
 
 impl LairServerConfigInner {
+    /// decode yaml bytes into a config struct
+    pub fn from_bytes(bytes: &[u8]) -> LairResult<Self> {
+        serde_yaml::from_slice(bytes).map_err(one_err::OneErr::new)
+    }
+
     /// Construct a new default lair server config instance.
     /// Respects hc_seed_bundle::PwHashLimits.
     pub fn new<P>(
