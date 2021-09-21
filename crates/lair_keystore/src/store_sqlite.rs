@@ -1,7 +1,11 @@
 //! lair store backed by a sqlite / sqlcipher database file
 
+use futures::future::{BoxFuture, FutureExt};
+use lair_keystore_api::lair_core::traits::*;
+use lair_keystore_api::lair_core::*;
 use lair_keystore_api::LairResult;
 use parking_lot::Mutex;
+use rusqlite::params;
 use sodoken::*;
 use std::future::Future;
 use std::sync::Arc;
@@ -10,6 +14,7 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 const READ_CON_COUNT: usize = 3;
 
 struct SqlPoolInner {
+    db_key: sodoken::BufReadSized<32>,
     write_limit: Arc<Semaphore>,
     write_con: Option<rusqlite::Connection>,
     read_limit: Arc<Semaphore>,
@@ -44,11 +49,13 @@ impl Drop for SqlCon {
 }
 
 impl SqlCon {
-    pub fn last_insert_rowid(&self) -> i64 {
+    /*
+    fn last_insert_rowid(&self) -> i64 {
         self.con.as_ref().unwrap().last_insert_rowid()
     }
+    */
 
-    pub async fn transaction<R, F>(&mut self, f: F) -> LairResult<R>
+    async fn transaction<R, F>(&mut self, f: F) -> LairResult<R>
     where
         R: 'static + Send,
         F: 'static
@@ -107,6 +114,7 @@ impl ExecExt for rusqlite::Connection {
     }
 }
 
+/// SqlPool is a sqlite/sqlcipher connection pool LairStore.
 #[derive(Clone)]
 pub struct SqlPool(Arc<Mutex<SqlPoolInner>>);
 
@@ -114,10 +122,10 @@ impl SqlPool {
     fn new_sync(
         path: std::path::PathBuf,
         db_key: sodoken::BufReadSized<32>,
-    ) -> LairResult<Self> {
+    ) -> LairResult<LairStore> {
         use rusqlite::OpenFlags;
 
-        let key_pragma = secure_write_key_pragma(db_key)?;
+        let key_pragma = secure_write_key_pragma(db_key.clone())?;
 
         let write_con = rusqlite::Connection::open_with_flags(
             &path,
@@ -130,11 +138,34 @@ impl SqlPool {
 
         set_pragmas(&write_con, key_pragma.clone())?;
 
+        // only set WAL mode on the first write connection
+        // it's a slow operation, and not needed on subsequent connections.
+        write_con
+            .pragma_update(None, "journal_mode", &"WAL".to_string())
+            .map_err(one_err::OneErr::new)?;
+
         write_con.execute_optional(
-            "CREATE TABLE IF NOT EXISTS lair_entries (
-                id INTEGER PRIMARY KEY NOT NULL,
-                data BLOB NOT NULL
-            );",
+            r#"
+            CREATE TABLE IF NOT EXISTS lair_keystore (
+                id                INTEGER  PRIMARY KEY  NOT NULL,
+                tag               TEXT                  NOT NULL,
+                ed25519_pub_key   BLOB                  NULL,
+                x25519_pub_key    BLOB                  NULL,
+                data              BLOB                  NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS lair_keystore_tag_idx
+                ON lair_keystore
+                ( tag );
+
+            CREATE INDEX IF NOT EXISTS lair_keystore_ed25519_pub_key_idx
+                ON lair_keystore
+                ( ed25519_pub_key );
+
+            CREATE INDEX IF NOT EXISTS lair_keystore_x25519_pub_key_idx
+                ON lair_keystore
+                ( x25519_pub_key );
+            "#,
             [],
         )?;
 
@@ -155,18 +186,23 @@ impl SqlPool {
             *rc_mut = Some(read_con);
         }
 
-        Ok(Self(Arc::new(Mutex::new(SqlPoolInner {
+        let inner = Self(Arc::new(Mutex::new(SqlPoolInner {
+            db_key,
             write_limit: Arc::new(Semaphore::new(1)),
             write_con: Some(write_con),
             read_limit: Arc::new(Semaphore::new(READ_CON_COUNT)),
             read_cons,
-        }))))
+        })));
+
+        Ok(LairStore(Arc::new(inner)))
     }
 
+    /// Construct a new SqlPool instance.
+    #[allow(clippy::new_ret_no_self)]
     pub fn new(
         path: std::path::PathBuf,
         db_key: sodoken::BufReadSized<32>,
-    ) -> impl Future<Output = LairResult<Self>> + 'static + Send {
+    ) -> impl Future<Output = LairResult<LairStore>> + 'static + Send {
         async move {
             tokio::task::spawn_blocking(move || Self::new_sync(path, db_key))
                 .await
@@ -218,6 +254,108 @@ impl SqlPool {
     }
 }
 
+impl AsLairStore for SqlPool {
+    fn get_bidi_context_key(&self) -> sodoken::BufReadSized<32> {
+        self.0.lock().db_key.clone()
+    }
+
+    fn list_entries(
+        &self,
+    ) -> BoxFuture<'static, LairResult<Vec<LairEntryInfo>>> {
+        let read = self.read();
+        async move {
+            let mut read = read.await;
+            read.transaction(|txn| {
+                let mut s = txn
+                    .prepare("SELECT data FROM lair_keystore;")
+                    .map_err(one_err::OneErr::new)?;
+                let it = s
+                    .query_map([], |row| {
+                        // go ahead and clone here, so we're not doing the decoding
+                        // while the database is connected...
+                        let data: Vec<u8> = row.get(0)?;
+                        Ok(data.into_boxed_slice())
+                    })
+                    .map_err(one_err::OneErr::new)?;
+                let mut out = Vec::new();
+                for i in it {
+                    let e = LairEntryInner::decode(
+                        &i.map_err(one_err::OneErr::new)?,
+                    )?;
+                    let e = match e {
+                        LairEntryInner::Seed { tag, seed_info, .. } => {
+                            LairEntryInfo::Seed { tag, seed_info }
+                        }
+                        LairEntryInner::DeepLockedSeed {
+                            tag,
+                            seed_info,
+                            ..
+                        } => LairEntryInfo::DeepLockedSeed { tag, seed_info },
+                        LairEntryInner::TlsCert { tag, cert_info, .. } => {
+                            LairEntryInfo::TlsCert { tag, cert_info }
+                        }
+                        _ => continue,
+                    };
+                    out.push(e);
+                }
+                Ok(out)
+            })
+            .await
+        }
+        .boxed()
+    }
+
+    fn write_entry(
+        &self,
+        entry: LairEntry,
+    ) -> BoxFuture<'static, LairResult<()>> {
+        let write = self.write();
+        async move {
+            let mut write = write.await;
+            let bytes = entry.encode()?;
+            write
+                .transaction(move |txn| {
+                    txn.execute_optional(
+                        r#"
+                    INSERT INTO lair_keystore (
+                        tag,
+                        data
+                    ) VALUES (
+                        ?1,
+                        ?2
+                    );"#,
+                        params![entry.tag(), bytes],
+                    )
+                })
+                .await
+        }
+        .boxed()
+    }
+
+    fn get_entry_by_tag(
+        &self,
+        tag: Arc<str>,
+    ) -> BoxFuture<'static, LairResult<LairEntry>> {
+        let read = self.read();
+        async move {
+            let mut read = read.await;
+            let data = read
+                .transaction(move |txn| {
+                    txn.query_row(
+                        "SELECT data FROM lair_keystore WHERE tag = ?1;",
+                        params![tag],
+                        |row| row.get::<_, Vec<u8>>(0),
+                    )
+                    .map_err(one_err::OneErr::new)
+                })
+                .await?;
+            let e = LairEntryInner::decode(&data)?;
+            Ok(Arc::new(e))
+        }
+        .boxed()
+    }
+}
+
 const KEY_PRAGMA_LEN: usize = 83;
 const KEY_PRAGMA: &[u8; KEY_PRAGMA_LEN] =
     br#"PRAGMA key = "x'0000000000000000000000000000000000000000000000000000000000000000'";"#;
@@ -259,7 +397,7 @@ fn set_pragmas(
     con.pragma_update(None, "trusted_schema", &"0".to_string())
         .map_err(one_err::OneErr::new)?;
 
-    con.pragma_update(None, "journal_mode", &"WAL".to_string())
+    con.pragma_update(None, "synchronous", &"1".to_string())
         .map_err(one_err::OneErr::new)?;
 
     Ok(())
@@ -276,8 +414,29 @@ mod tests {
         sqlite.push("db.sqlite3");
 
         let db_key = sodoken::BufReadSized::new_no_lock([0; 32]);
-        let _pool = SqlPool::new(sqlite, db_key).await.unwrap();
+        let pool = SqlPool::new(sqlite, db_key).await.unwrap();
 
-        tmpdir.close().unwrap();
+        let pk = pool
+            .new_seed("test-tag".into())
+            .await
+            .unwrap()
+            .ed25519_pub_key;
+
+        let mut list = pool.list_entries().await.unwrap();
+        assert_eq!(1, list.len());
+        match list.remove(0) {
+            LairEntryInfo::Seed { seed_info, .. } => {
+                assert_eq!(&*seed_info.ed25519_pub_key, &*pk);
+            }
+            oth => panic!("unexpected: {:?}", oth),
+        }
+
+        let entry = pool.get_entry_by_tag("test-tag".into()).await.unwrap();
+        match &*entry {
+            LairEntryInner::Seed { seed_info, .. } => {
+                assert_eq!(&*seed_info.ed25519_pub_key, &*pk);
+            }
+            oth => panic!("unexpected: {:?}", oth),
+        }
     }
 }

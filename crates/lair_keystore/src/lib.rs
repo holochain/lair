@@ -10,8 +10,5 @@
 
 include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 
-#[allow(dead_code)]
-mod pid_check;
-
-#[allow(dead_code)]
-mod store_sqlite;
+pub mod pid_check;
+pub mod store_sqlite;

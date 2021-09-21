@@ -526,7 +526,6 @@ pub type LairServerConfig = Arc<LairServerConfigInner>;
 /// Public information associated with a given seed
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-#[non_exhaustive]
 pub struct SeedInfo {
     /// The ed25519 signature public key derived from this seed.
     pub ed25519_pub_key: Ed25519PubKey,
@@ -541,7 +540,6 @@ pub type CertDigest = BinDataSized<32>;
 /// Public information associated with a given tls certificate.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-#[non_exhaustive]
 pub struct CertInfo {
     /// The random sni that was generated for this certificate.
     pub sni: Arc<str>,
@@ -630,6 +628,34 @@ pub enum LairEntryInner {
         /// the certificate private key, encrypted with context key
         priv_key: SecretData,
     },
+}
+
+impl LairEntryInner {
+    /// encode this LairEntry as bytes
+    pub fn encode(&self) -> LairResult<Box<[u8]>> {
+        use serde::Serialize;
+        let mut se = rmp_serde::encode::Serializer::new(Vec::new())
+            .with_struct_map()
+            .with_string_variants();
+        self.serialize(&mut se).map_err(one_err::OneErr::new)?;
+        Ok(se.into_inner().into_boxed_slice())
+    }
+
+    /// decode a LairEntry from bytes
+    pub fn decode(bytes: &[u8]) -> LairResult<LairEntryInner> {
+        let item: LairEntryInner =
+            rmp_serde::from_read(bytes).map_err(one_err::OneErr::new)?;
+        Ok(item)
+    }
+
+    /// get the tag associated with this entry
+    pub fn tag(&self) -> Arc<str> {
+        match self {
+            Self::Seed { tag, .. } => tag.clone(),
+            Self::DeepLockedSeed { tag, .. } => tag.clone(),
+            Self::TlsCert { tag, .. } => tag.clone(),
+        }
+    }
 }
 
 /// The LairEntry enum.
