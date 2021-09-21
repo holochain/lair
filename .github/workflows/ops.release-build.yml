@@ -9,7 +9,7 @@ on:
       - main
       - v0.1.x
 jobs:
-  test:
+  release-build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
