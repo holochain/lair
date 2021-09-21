@@ -328,11 +328,15 @@ fn priv_dispatch_incoming<'a>(
             LairApiEnum::ReqNewSeed(req) => {
                 priv_req_new_seed(inner, send, dec_ctx_key, unlocked, req).await
             }
+            LairApiEnum::ReqNewWkaTlsCert(req) => {
+                priv_req_new_wka_tls_cert(inner, send, unlocked, req).await
+            }
             LairApiEnum::ResError(_)
             | LairApiEnum::ResHello(_)
             | LairApiEnum::ResUnlock(_)
             | LairApiEnum::ResListEntries(_)
-            | LairApiEnum::ResNewSeed(_) => {
+            | LairApiEnum::ResNewSeed(_)
+            | LairApiEnum::ResNewWkaTlsCert(_) => {
                 Err(format!("invalid request: {:?}", incoming).into())
             }
         }
@@ -482,6 +486,40 @@ fn priv_req_new_seed<'a>(
                 msg_id: req.msg_id,
                 tag: req.tag.clone(),
                 seed_info,
+            }
+            .into_api_enum(),
+        )
+        .await?;
+
+        Ok(())
+    }
+}
+
+fn priv_req_new_wka_tls_cert<'a>(
+    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqNewWkaTlsCert,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("KeystoreLocked".into());
+        }
+
+        let store = match &*inner.read() {
+            SrvInnerEnum::Running(p) => (p.store.clone()),
+            SrvInnerEnum::Pending(_) => {
+                return Err("KeystoreLocked".into());
+            }
+        };
+
+        let cert_info = store.new_wka_tls_cert(req.tag.clone()).await?;
+
+        send.send(
+            LairApiResNewWkaTlsCert {
+                msg_id: req.msg_id,
+                tag: req.tag.clone(),
+                cert_info,
             }
             .into_api_enum(),
         )

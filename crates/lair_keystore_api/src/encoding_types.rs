@@ -35,6 +35,12 @@ impl From<Box<[u8]>> for BinData {
     }
 }
 
+impl From<Arc<[u8]>> for BinData {
+    fn from(b: Arc<[u8]>) -> Self {
+        Self(b)
+    }
+}
+
 impl std::ops::Deref for BinData {
     type Target = [u8];
 
@@ -93,6 +99,12 @@ impl<const N: usize> BinDataSized<N> {
 impl<const N: usize> From<[u8; N]> for BinDataSized<N> {
     fn from(b: [u8; N]) -> Self {
         Self(Arc::new(b))
+    }
+}
+
+impl<const N: usize> From<Arc<[u8; N]>> for BinDataSized<N> {
+    fn from(b: Arc<[u8; N]>) -> Self {
+        Self(b)
     }
 }
 

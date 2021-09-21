@@ -312,9 +312,9 @@ impl AsLairStore for SqlPool {
                             seed_info,
                             ..
                         } => LairEntryInfo::DeepLockedSeed { tag, seed_info },
-                        LairEntryInner::TlsCert { tag, cert_info, .. } => {
-                            LairEntryInfo::TlsCert { tag, cert_info }
-                        }
+                        LairEntryInner::WkaTlsCert {
+                            tag, cert_info, ..
+                        } => LairEntryInfo::WkaTlsCert { tag, cert_info },
                         _ => continue,
                     };
                     out.push(e);

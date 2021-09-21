@@ -95,7 +95,7 @@ pub enum LairEntryInfo {
     },
 
     /// This entry is type 'TlsCert' (see LairEntryInner).
-    TlsCert {
+    WkaTlsCert {
         /// user-supplied tag for this seed
         tag: Arc<str>,
         /// the certificate info
@@ -142,7 +142,7 @@ pub enum LairEntryInner {
     /// This tls cert and private key can be used to establish tls cryptography
     /// The secretstream priv_key uses the base passphrase-derived secret
     /// for decryption.
-    TlsCert {
+    WkaTlsCert {
         /// user-supplied tag for this tls certificate
         tag: Arc<str>,
         /// the certificate info
@@ -175,7 +175,7 @@ impl LairEntryInner {
         match self {
             Self::Seed { tag, .. } => tag.clone(),
             Self::DeepLockedSeed { tag, .. } => tag.clone(),
-            Self::TlsCert { tag, .. } => tag.clone(),
+            Self::WkaTlsCert { tag, .. } => tag.clone(),
         }
     }
 }
@@ -304,6 +304,45 @@ impl LairStore {
             inner.write_entry(Arc::new(entry)).await?;
 
             Ok(seed_info)
+        }
+    }
+
+    /// Generate a new cryptographically secure random wka tls cert,
+    /// and associate it with the given tag, returning the
+    /// cert_info derived from the generated cert.
+    pub fn new_wka_tls_cert(
+        &self,
+        tag: Arc<str>,
+    ) -> impl Future<Output = LairResult<CertInfo>> + 'static + Send {
+        let inner = self.0.clone();
+        async move {
+            use crate::internal::tls::*;
+
+            let TlsCertGenResult {
+                sni,
+                priv_key,
+                cert,
+                digest,
+            } = tls_cert_self_signed_new().await?;
+
+            let key = inner.get_bidi_context_key();
+            let priv_key = SecretData::encrypt(key, priv_key).await?;
+
+            let cert_info = CertInfo {
+                sni,
+                digest: digest.into(),
+                cert: cert.into(),
+            };
+
+            let entry = LairEntryInner::WkaTlsCert {
+                tag,
+                cert_info: cert_info.clone(),
+                priv_key,
+            };
+
+            inner.write_entry(Arc::new(entry)).await?;
+
+            Ok(cert_info)
         }
     }
 

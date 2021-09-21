@@ -71,8 +71,8 @@ impl AsLairStore for PrivMemStore {
                         seed_info: seed_info.clone(),
                     }
                 }
-                LairEntryInner::TlsCert { tag, cert_info, .. } => {
-                    LairEntryInfo::TlsCert {
+                LairEntryInner::WkaTlsCert { tag, cert_info, .. } => {
+                    LairEntryInfo::WkaTlsCert {
                         tag: tag.clone(),
                         cert_info: cert_info.clone(),
                     }
@@ -97,7 +97,7 @@ impl AsLairStore for PrivMemStore {
                 Some(seed_info.ed25519_pub_key.clone()),
                 Some(seed_info.x25519_pub_key.clone()),
             ),
-            LairEntryInner::TlsCert { tag, .. } => (tag.clone(), None, None),
+            LairEntryInner::WkaTlsCert { tag, .. } => (tag.clone(), None, None),
         };
         let mut lock = self.0.write();
         if lock.entry_by_tag.contains_key(&tag) {
