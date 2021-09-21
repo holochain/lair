@@ -4,6 +4,10 @@ on:
     branches:
       - main
       - v0.1.x
+  pull_request:
+    branches:
+      - main
+      - v0.1.x
 jobs:
   static-analysis:
     runs-on: ${{ matrix.os }}
