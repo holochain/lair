@@ -236,6 +236,80 @@ impl AsLairResponse for LairApiResUnlock {
     type Request = LairApiReqUnlock;
 }
 
+/// Get entry_info for an entry by tag from lair.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LairApiReqGetEntry {
+    /// msg id to relate request / response.
+    pub msg_id: Arc<str>,
+    /// user-defined tag associated entry being requested.
+    pub tag: Arc<str>,
+}
+
+impl LairApiReqGetEntry {
+    /// Make a new list entries request
+    pub fn new(tag: Arc<str>) -> Self {
+        Self {
+            msg_id: new_msg_id(),
+            tag,
+        }
+    }
+}
+
+impl std::convert::TryFrom<LairApiEnum> for LairApiReqGetEntry {
+    type Error = one_err::OneErr;
+
+    fn try_from(e: LairApiEnum) -> Result<Self, Self::Error> {
+        if let LairApiEnum::ReqGetEntry(s) = e {
+            Ok(s)
+        } else {
+            Err(format!("Invalid response type: {:?}", e).into())
+        }
+    }
+}
+
+impl AsLairCodec for LairApiReqGetEntry {
+    fn into_api_enum(self) -> LairApiEnum {
+        LairApiEnum::ReqGetEntry(self)
+    }
+}
+
+/// Response to a GetEntry request.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LairApiResGetEntry {
+    /// msg id to relate request / response.
+    pub msg_id: Arc<str>,
+    /// entry info for the item requested.
+    pub entry_info: LairEntryInfo,
+}
+
+impl std::convert::TryFrom<LairApiEnum> for LairApiResGetEntry {
+    type Error = one_err::OneErr;
+
+    fn try_from(e: LairApiEnum) -> Result<Self, Self::Error> {
+        if let LairApiEnum::ResGetEntry(s) = e {
+            Ok(s)
+        } else {
+            Err(format!("Invalid response type: {:?}", e).into())
+        }
+    }
+}
+
+impl AsLairCodec for LairApiResGetEntry {
+    fn into_api_enum(self) -> LairApiEnum {
+        LairApiEnum::ResGetEntry(self)
+    }
+}
+
+impl AsLairRequest for LairApiReqGetEntry {
+    type Response = LairApiResGetEntry;
+}
+
+impl AsLairResponse for LairApiResGetEntry {
+    type Request = LairApiReqGetEntry;
+}
+
 /// Request a list of entries from lair.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -406,6 +480,92 @@ impl AsLairResponse for LairApiResNewSeed {
     type Request = LairApiReqNewSeed;
 }
 
+/// Request a signature.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LairApiReqSignByPubKey {
+    /// msg id to relate request / response.
+    pub msg_id: Arc<str>,
+    /// the pub key side of the private key to sign the data with.
+    pub pub_key: Ed25519PubKey,
+    /// if this new seed is to be deep_locked, the passphrase for that.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub deep_lock_passphrase: Option<DeepLockPassphrase>,
+    /// the data to sign
+    pub data: Arc<[u8]>,
+}
+
+impl LairApiReqSignByPubKey {
+    /// Make a new_seed request
+    pub fn new(
+        pub_key: Ed25519PubKey,
+        deep_lock_passphrase: Option<DeepLockPassphrase>,
+        data: Arc<[u8]>,
+    ) -> Self {
+        Self {
+            msg_id: new_msg_id(),
+            pub_key,
+            deep_lock_passphrase,
+            data,
+        }
+    }
+}
+
+impl std::convert::TryFrom<LairApiEnum> for LairApiReqSignByPubKey {
+    type Error = one_err::OneErr;
+
+    fn try_from(e: LairApiEnum) -> Result<Self, Self::Error> {
+        if let LairApiEnum::ReqSignByPubKey(s) = e {
+            Ok(s)
+        } else {
+            Err(format!("Invalid response type: {:?}", e).into())
+        }
+    }
+}
+
+impl AsLairCodec for LairApiReqSignByPubKey {
+    fn into_api_enum(self) -> LairApiEnum {
+        LairApiEnum::ReqSignByPubKey(self)
+    }
+}
+
+/// A signature response.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct LairApiResSignByPubKey {
+    /// msg id to relate request / response.
+    pub msg_id: Arc<str>,
+    /// the signature bytes
+    pub signature: Ed25519Signature,
+}
+
+impl std::convert::TryFrom<LairApiEnum> for LairApiResSignByPubKey {
+    type Error = one_err::OneErr;
+
+    fn try_from(e: LairApiEnum) -> Result<Self, Self::Error> {
+        if let LairApiEnum::ResSignByPubKey(s) = e {
+            Ok(s)
+        } else {
+            Err(format!("Invalid response type: {:?}", e).into())
+        }
+    }
+}
+
+impl AsLairCodec for LairApiResSignByPubKey {
+    fn into_api_enum(self) -> LairApiEnum {
+        LairApiEnum::ResSignByPubKey(self)
+    }
+}
+
+impl AsLairRequest for LairApiReqSignByPubKey {
+    type Response = LairApiResSignByPubKey;
+}
+
+impl AsLairResponse for LairApiResSignByPubKey {
+    type Request = LairApiReqSignByPubKey;
+}
+
 /// Instruct lair to generate a new wka tls certificate
 /// from cryptographically secure random data with given tag.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -485,6 +645,81 @@ impl AsLairResponse for LairApiResNewWkaTlsCert {
     type Request = LairApiReqNewWkaTlsCert;
 }
 
+/// Request the private key associated with a tagged wka tls cert.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LairApiReqGetWkaTlsCertPrivKey {
+    /// msg id to relate request / response.
+    pub msg_id: Arc<str>,
+    /// user-defined tag to associate with the new seed.
+    pub tag: Arc<str>,
+}
+
+impl LairApiReqGetWkaTlsCertPrivKey {
+    /// Make a new_seed request
+    pub fn new(tag: Arc<str>) -> Self {
+        Self {
+            msg_id: new_msg_id(),
+            tag,
+        }
+    }
+}
+
+impl std::convert::TryFrom<LairApiEnum> for LairApiReqGetWkaTlsCertPrivKey {
+    type Error = one_err::OneErr;
+
+    fn try_from(e: LairApiEnum) -> Result<Self, Self::Error> {
+        if let LairApiEnum::ReqGetWkaTlsCertPrivKey(s) = e {
+            Ok(s)
+        } else {
+            Err(format!("Invalid response type: {:?}", e).into())
+        }
+    }
+}
+
+impl AsLairCodec for LairApiReqGetWkaTlsCertPrivKey {
+    fn into_api_enum(self) -> LairApiEnum {
+        LairApiEnum::ReqGetWkaTlsCertPrivKey(self)
+    }
+}
+
+/// Returns the private key associated with a tagged wka tls cert.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub struct LairApiResGetWkaTlsCertPrivKey {
+    /// msg id to relate request / response.
+    pub msg_id: Arc<str>,
+    /// the certificate private key.
+    pub priv_key: SecretData,
+}
+
+impl std::convert::TryFrom<LairApiEnum> for LairApiResGetWkaTlsCertPrivKey {
+    type Error = one_err::OneErr;
+
+    fn try_from(e: LairApiEnum) -> Result<Self, Self::Error> {
+        if let LairApiEnum::ResGetWkaTlsCertPrivKey(s) = e {
+            Ok(s)
+        } else {
+            Err(format!("Invalid response type: {:?}", e).into())
+        }
+    }
+}
+
+impl AsLairCodec for LairApiResGetWkaTlsCertPrivKey {
+    fn into_api_enum(self) -> LairApiEnum {
+        LairApiEnum::ResGetWkaTlsCertPrivKey(self)
+    }
+}
+
+impl AsLairRequest for LairApiReqGetWkaTlsCertPrivKey {
+    type Response = LairApiResGetWkaTlsCertPrivKey;
+}
+
+impl AsLairResponse for LairApiResGetWkaTlsCertPrivKey {
+    type Request = LairApiReqGetWkaTlsCertPrivKey;
+}
+
 /// Lair Api enum
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -506,6 +741,12 @@ pub enum LairApiEnum {
     /// Sucess / Failure of the unlock request.
     ResUnlock(LairApiResUnlock),
 
+    /// Get entry_info for an entry by tag from lair.
+    ReqGetEntry(LairApiReqGetEntry),
+
+    /// Response to a GetEntry request.
+    ResGetEntry(LairApiResGetEntry),
+
     /// Request a list of entries from lair.
     ReqListEntries(LairApiReqListEntries),
 
@@ -520,6 +761,12 @@ pub enum LairApiEnum {
     /// that seed.
     ResNewSeed(LairApiResNewSeed),
 
+    /// Request a signature.
+    ReqSignByPubKey(LairApiReqSignByPubKey),
+
+    /// A signature response.
+    ResSignByPubKey(LairApiResSignByPubKey),
+
     /// Instruct lair to generate a new wka tls certificate
     /// from cryptographically secure random data with given tag.
     ReqNewWkaTlsCert(LairApiReqNewWkaTlsCert),
@@ -527,6 +774,12 @@ pub enum LairApiEnum {
     /// On new cert generation, lair will respond with info about
     /// that cert.
     ResNewWkaTlsCert(LairApiResNewWkaTlsCert),
+
+    /// Request the private key associated with a tagged wka tls cert.
+    ReqGetWkaTlsCertPrivKey(LairApiReqGetWkaTlsCertPrivKey),
+
+    /// Returns the private key associated with a tagged wka tls cert.
+    ResGetWkaTlsCertPrivKey(LairApiResGetWkaTlsCertPrivKey),
 }
 
 impl LairApiEnum {
@@ -538,6 +791,12 @@ impl LairApiEnum {
             Self::ResHello(LairApiResHello { msg_id, .. }) => msg_id.clone(),
             Self::ReqUnlock(LairApiReqUnlock { msg_id, .. }) => msg_id.clone(),
             Self::ResUnlock(LairApiResUnlock { msg_id, .. }) => msg_id.clone(),
+            Self::ReqGetEntry(LairApiReqGetEntry { msg_id, .. }) => {
+                msg_id.clone()
+            }
+            Self::ResGetEntry(LairApiResGetEntry { msg_id, .. }) => {
+                msg_id.clone()
+            }
             Self::ReqListEntries(LairApiReqListEntries { msg_id, .. }) => {
                 msg_id.clone()
             }
@@ -550,11 +809,25 @@ impl LairApiEnum {
             Self::ResNewSeed(LairApiResNewSeed { msg_id, .. }) => {
                 msg_id.clone()
             }
+            Self::ReqSignByPubKey(LairApiReqSignByPubKey {
+                msg_id, ..
+            }) => msg_id.clone(),
+            Self::ResSignByPubKey(LairApiResSignByPubKey {
+                msg_id, ..
+            }) => msg_id.clone(),
             Self::ReqNewWkaTlsCert(LairApiReqNewWkaTlsCert {
                 msg_id, ..
             }) => msg_id.clone(),
             Self::ResNewWkaTlsCert(LairApiResNewWkaTlsCert {
                 msg_id, ..
+            }) => msg_id.clone(),
+            Self::ReqGetWkaTlsCertPrivKey(LairApiReqGetWkaTlsCertPrivKey {
+                msg_id,
+                ..
+            }) => msg_id.clone(),
+            Self::ResGetWkaTlsCertPrivKey(LairApiResGetWkaTlsCertPrivKey {
+                msg_id,
+                ..
             }) => msg_id.clone(),
         }
     }

@@ -35,7 +35,7 @@ where
 }
 
 struct SqlPoolInner {
-    db_key: sodoken::BufReadSized<32>,
+    ctx_secret: sodoken::BufReadSized<32>,
     write_limit: Arc<Semaphore>,
     write_con: Option<rusqlite::Connection>,
     read_limit: Arc<Semaphore>,
@@ -146,7 +146,25 @@ impl SqlPool {
     ) -> LairResult<LairStore> {
         use rusqlite::OpenFlags;
 
-        let key_pragma = secure_write_key_pragma(db_key.clone())?;
+        let ctx_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        sodoken::kdf::derive_from_key(
+            ctx_secret.clone(),
+            42,
+            *b"CtxSecKy",
+            db_key.clone(),
+        )?;
+        let ctx_secret = ctx_secret.to_read_sized();
+
+        let dbk_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        sodoken::kdf::derive_from_key(
+            dbk_secret.clone(),
+            142,
+            *b"DbKSecKy",
+            db_key,
+        )?;
+        let dbk_secret = dbk_secret.to_read_sized();
+
+        let key_pragma = secure_write_key_pragma(dbk_secret)?;
 
         let write_con = rusqlite::Connection::open_with_flags(
             &path,
@@ -166,24 +184,23 @@ impl SqlPool {
             .map_err(one_err::OneErr::new)?;
 
         write_con.execute_optional(
-            r#"
-            CREATE TABLE IF NOT EXISTS lair_keystore (
-                id                INTEGER  PRIMARY KEY  NOT NULL,
-                tag               TEXT                  NOT NULL,
-                ed25519_pub_key   BLOB                  NULL,
-                x25519_pub_key    BLOB                  NULL,
+            r#"CREATE TABLE IF NOT EXISTS lair_keystore (
+                id                INTEGER  PRIMARY KEY  NOT NULL   UNIQUE,
+                tag               TEXT                  NOT NULL   UNIQUE,
+                ed25519_pub_key   BLOB                  NULL       UNIQUE,
+                x25519_pub_key    BLOB                  NULL       UNIQUE,
                 data              BLOB                  NOT NULL
             );
 
-            CREATE INDEX IF NOT EXISTS lair_keystore_tag_idx
+            CREATE UNIQUE INDEX IF NOT EXISTS lair_keystore_tag_idx
                 ON lair_keystore
                 ( tag );
 
-            CREATE INDEX IF NOT EXISTS lair_keystore_ed25519_pub_key_idx
+            CREATE UNIQUE INDEX IF NOT EXISTS lair_keystore_ed25519_pub_key_idx
                 ON lair_keystore
                 ( ed25519_pub_key );
 
-            CREATE INDEX IF NOT EXISTS lair_keystore_x25519_pub_key_idx
+            CREATE UNIQUE INDEX IF NOT EXISTS lair_keystore_x25519_pub_key_idx
                 ON lair_keystore
                 ( x25519_pub_key );
             "#,
@@ -208,7 +225,7 @@ impl SqlPool {
         }
 
         let inner = Self(Arc::new(Mutex::new(SqlPoolInner {
-            db_key,
+            ctx_secret,
             write_limit: Arc::new(Semaphore::new(1)),
             write_con: Some(write_con),
             read_limit: Arc::new(Semaphore::new(READ_CON_COUNT)),
@@ -277,7 +294,7 @@ impl SqlPool {
 
 impl AsLairStore for SqlPool {
     fn get_bidi_context_key(&self) -> sodoken::BufReadSized<32> {
-        self.0.lock().db_key.clone()
+        self.0.lock().ctx_secret.clone()
     }
 
     fn list_entries(
@@ -330,25 +347,59 @@ impl AsLairStore for SqlPool {
         &self,
         entry: LairEntry,
     ) -> BoxFuture<'static, LairResult<()>> {
-        let write = self.write();
+        let this = self.clone();
         async move {
-            let mut write = write.await;
+            let seed_info = match &*entry {
+                LairEntryInner::Seed { seed_info, .. } => {
+                    Some(seed_info.clone())
+                }
+                LairEntryInner::DeepLockedSeed { seed_info, .. } => {
+                    Some(seed_info.clone())
+                }
+                _ => None,
+            };
             let bytes = entry.encode()?;
-            write
-                .transaction(move |txn| {
-                    txn.execute_optional(
-                        r#"
-                    INSERT INTO lair_keystore (
-                        tag,
-                        data
-                    ) VALUES (
-                        ?1,
-                        ?2
-                    );"#,
-                        params![entry.tag(), bytes],
-                    )
-                })
-                .await
+            let mut write = this.write().await;
+            if let Some(seed_info) = seed_info {
+                write
+                    .transaction(move |txn| {
+                        txn.execute_optional(
+                            r#"INSERT INTO lair_keystore (
+                                tag,
+                                ed25519_pub_key,
+                                x25519_pub_key,
+                                data
+                            ) VALUES (
+                                ?1,
+                                ?2,
+                                ?3,
+                                ?4
+                            );"#,
+                            params![
+                                entry.tag(),
+                                &seed_info.ed25519_pub_key[..],
+                                &seed_info.x25519_pub_key[..],
+                                bytes,
+                            ],
+                        )
+                    })
+                    .await
+            } else {
+                write
+                    .transaction(move |txn| {
+                        txn.execute_optional(
+                            r#"INSERT INTO lair_keystore (
+                                tag,
+                                data
+                            ) VALUES (
+                                ?1,
+                                ?2
+                            );"#,
+                            params![entry.tag(), bytes],
+                        )
+                    })
+                    .await
+            }
         }
         .boxed()
     }
@@ -365,6 +416,29 @@ impl AsLairStore for SqlPool {
                     txn.query_row(
                         "SELECT data FROM lair_keystore WHERE tag = ?1;",
                         params![tag],
+                        |row| row.get::<_, Vec<u8>>(0),
+                    )
+                    .map_err(one_err::OneErr::new)
+                })
+                .await?;
+            let e = LairEntryInner::decode(&data)?;
+            Ok(Arc::new(e))
+        }
+        .boxed()
+    }
+
+    fn get_entry_by_ed25519_pub_key(
+        &self,
+        ed25519_pub_key: Ed25519PubKey,
+    ) -> BoxFuture<'static, LairResult<LairEntry>> {
+        let read = self.read();
+        async move {
+            let mut read = read.await;
+            let data = read
+                .transaction(move |txn| {
+                    txn.query_row(
+                        "SELECT data FROM lair_keystore WHERE ed25519_pub_key = ?1;",
+                        params![&ed25519_pub_key[..]],
                         |row| row.get::<_, Vec<u8>>(0),
                     )
                     .map_err(one_err::OneErr::new)
@@ -459,5 +533,7 @@ mod tests {
             }
             oth => panic!("unexpected: {:?}", oth),
         }
+
+        pool.new_wka_tls_cert("test-cert".into()).await.unwrap();
     }
 }

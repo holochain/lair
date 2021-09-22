@@ -146,17 +146,21 @@ impl<'de, const N: usize> serde::Deserialize<'de> for BinDataSized<N> {
 impl BinDataSized<32> {
     /// Treat this bin data as an ed25519 public key,
     /// and use it to verify a signature over a given message.
-    pub async fn verify_detached<Sig, M>(
+    pub async fn verify_detached<M>(
         &self,
-        signature: Sig,
+        signature: BinDataSized<64>,
         message: M,
     ) -> LairResult<bool>
     where
-        Sig: Into<sodoken::BufReadSized<64>> + 'static + Send,
         M: Into<sodoken::BufRead> + 'static + Send,
     {
         let pub_key = sodoken::BufReadSized::from(self.0.clone());
-        sodoken::sign::verify_detached(signature, message, pub_key).await
+        sodoken::sign::verify_detached(
+            signature.cloned_inner(),
+            message,
+            pub_key,
+        )
+        .await
     }
 }
 

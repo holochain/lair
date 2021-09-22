@@ -4,38 +4,9 @@ pub(crate) async fn exec(
     config: LairServerConfig,
     opt: OptServer,
 ) -> LairResult<()> {
-    // first make sure we can acquire a pid_file for the given location
-    {
-        let config = config.clone();
-        // TODO - make pid_check async friendly
-        tokio::task::spawn_blocking(move || {
-            lair_keystore_lib::pid_check::pid_check(&config)
-        })
-        .await
-        .map_err(one_err::OneErr::new)??;
-    }
-
-    // sanity check that store_file's parent is a directory
-    if !tokio::fs::metadata(
-        config.store_file.parent().expect("invalid store_file dir"),
-    )
-    .await?
-    .is_dir()
-    {
-        return Err("invalid store file directory".into());
-    }
-
-    // sanity check that store file either doesn't exist or is a file
-    match tokio::fs::metadata(&config.store_file).await {
-        // it's ok if the store file doesn't exist yet
-        Err(_) => (),
-        Ok(m) => {
-            // if it exists, it must be a file
-            if !m.is_file() {
-                return Err("store file is not a file".into());
-            }
-        }
-    }
+    // construct the server so that pid-check etc happens first
+    let server =
+        lair_keystore_lib::server::StandaloneServer::new(config).await?;
 
     // if we are interactive, get the passphrase before starting the server
     let passphrase = if opt.interactive {
@@ -67,29 +38,11 @@ pub(crate) async fn exec(
         None
     };
 
-    // construct our sqlite store factory
-    let store_factory =
-        lair_keystore_lib::store_sqlite::create_sql_pool_factory(
-            &config.store_file,
-        );
-
-    // spawn the server
-    let srv_hnd = lair_keystore_api::ipc_keystore::IpcKeystoreServer::new(
-        config,
-        store_factory,
-    )
-    .await?;
-
     if let Some(passphrase) = passphrase {
-        srv_hnd.unlock(passphrase).await?;
-        println!("# lair-keystore unlocked #");
+        server.run_unlocked(passphrase).await?;
+    } else {
+        server.run_locked().await?;
     }
-
-    println!(
-        "# lair-keystore connection_url # {} #",
-        srv_hnd.get_config().connection_url
-    );
-    println!("# lair-keystore running #");
 
     // if we made it this far, the server is running...
     // we want it to run forever, so this future never resolves:

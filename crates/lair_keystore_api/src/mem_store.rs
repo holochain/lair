@@ -127,6 +127,26 @@ impl AsLairStore for PrivMemStore {
             .ok_or_else(|| "tag not found".into());
         async move { res }.boxed()
     }
+
+    fn get_entry_by_ed25519_pub_key(
+        &self,
+        ed25519_pub_key: Ed25519PubKey,
+    ) -> BoxFuture<'static, LairResult<LairEntry>> {
+        let inner = self.0.clone();
+        async move {
+            let lock = inner.read();
+            let tag = lock
+                .ed_pk_to_tag
+                .get(&ed25519_pub_key)
+                .cloned()
+                .ok_or_else(|| one_err::OneErr::new("pub key not found"))?;
+            lock.entry_by_tag
+                .get(&tag)
+                .cloned()
+                .ok_or_else(|| "tag not found".into())
+        }
+        .boxed()
+    }
 }
 
 #[cfg(test)]

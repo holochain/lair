@@ -32,6 +32,12 @@ pub mod traits {
             &self,
             tag: Arc<str>,
         ) -> BoxFuture<'static, LairResult<LairEntry>>;
+
+        /// Get an entry from the lair store by ed25519 pub key.
+        fn get_entry_by_ed25519_pub_key(
+            &self,
+            ed25519_pub_key: Ed25519PubKey,
+        ) -> BoxFuture<'static, LairResult<LairEntry>>;
     }
 
     /// Defines a factory that produces lair storage mechanism instances.
@@ -208,13 +214,15 @@ impl LairStore {
 
             let ed_pk = sodoken::BufWriteSized::new_no_lock();
             let ed_sk = sodoken::BufWriteSized::new_mem_locked()?;
-            sodoken::sign::keypair(ed_pk.clone(), ed_sk).await?;
+            sodoken::sign::seed_keypair(ed_pk.clone(), ed_sk, seed.clone())
+                .await?;
 
             let x_pk = sodoken::BufWriteSized::new_no_lock();
             let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
-            sodoken::sealed_box::curve25519xchacha20poly1305::keypair(
+            sodoken::sealed_box::curve25519xchacha20poly1305::seed_keypair(
                 x_pk.clone(),
                 x_sk,
+                seed.clone(),
             )
             .await?;
 
@@ -258,13 +266,15 @@ impl LairStore {
 
             let ed_pk = sodoken::BufWriteSized::new_no_lock();
             let ed_sk = sodoken::BufWriteSized::new_mem_locked()?;
-            sodoken::sign::keypair(ed_pk.clone(), ed_sk).await?;
+            sodoken::sign::seed_keypair(ed_pk.clone(), ed_sk, seed.clone())
+                .await?;
 
             let x_pk = sodoken::BufWriteSized::new_no_lock();
             let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
-            sodoken::sealed_box::curve25519xchacha20poly1305::keypair(
+            sodoken::sealed_box::curve25519xchacha20poly1305::seed_keypair(
                 x_pk.clone(),
                 x_sk,
+                seed.clone(),
             )
             .await?;
 
@@ -360,6 +370,14 @@ impl LairStore {
         tag: Arc<str>,
     ) -> impl Future<Output = LairResult<LairEntry>> + 'static + Send {
         AsLairStore::get_entry_by_tag(&*self.0, tag)
+    }
+
+    /// Get an entry from the lair store by ed25519 pub key.
+    pub fn get_entry_by_ed25519_pub_key(
+        &self,
+        ed25519_pub_key: Ed25519PubKey,
+    ) -> impl Future<Output = LairResult<LairEntry>> + 'static + Send {
+        AsLairStore::get_entry_by_ed25519_pub_key(&*self.0, ed25519_pub_key)
     }
 }
 

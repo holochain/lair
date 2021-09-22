@@ -239,6 +239,30 @@ mod tests {
             oth => panic!("unexpected: {:?}", oth),
         }
 
+        let entry = client.get_entry("test-tag".into()).await.unwrap();
+
+        match entry {
+            LairEntryInfo::Seed { tag, seed_info } => {
+                assert_eq!("test-tag", &*tag);
+                assert_eq!(seed_info, seed_info_ref);
+            }
+            oth => panic!("unexpected: {:?}", oth),
+        }
+
+        let sig = client
+            .sign_by_pub_key(
+                seed_info_ref.ed25519_pub_key.clone(),
+                None,
+                b"hello".to_vec().into(),
+            )
+            .await
+            .unwrap();
+        assert!(seed_info_ref
+            .ed25519_pub_key
+            .verify_detached(sig, &b"hello"[..])
+            .await
+            .unwrap());
+
         // create a new deep-locked seed
         let _seed_info_ref_deep = hc_seed_bundle::PwHashLimits::Interactive
             .with_exec(|| {
@@ -249,6 +273,17 @@ mod tests {
             })
             .await
             .unwrap();
+
+        // create a new tls certificate
+        let cert_info =
+            client.new_wka_tls_cert("test-cert".into()).await.unwrap();
+        println!("{:#?}", cert_info);
+
+        let priv_key = client
+            .get_wka_tls_cert_priv_key("test-cert".into())
+            .await
+            .unwrap();
+        println!("got priv key: {} bytes", priv_key.len());
 
         println!("{:#?}", client.list_entries().await.unwrap());
     }

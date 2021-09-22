@@ -114,7 +114,7 @@ impl LairClient {
 
             if let Ok(true) = res
                 .server_pub_key
-                .verify_detached(res.hello_sig.cloned_inner(), nonce)
+                .verify_detached(res.hello_sig, nonce)
                 .await
             {
                 return Ok(res.version);
@@ -158,9 +158,14 @@ impl LairClient {
     /// Return the EntryInfo for a given tag, or error if no such tag.
     pub fn get_entry(
         &self,
-        _tag: Arc<str>,
+        tag: Arc<str>,
     ) -> impl Future<Output = LairResult<LairEntryInfo>> + 'static + Send {
-        async move { unimplemented!() }
+        let inner = self.0.clone();
+        async move {
+            let req = LairApiReqGetEntry::new(tag);
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok(res.entry_info)
+        }
     }
 
     /// Instruct lair to generate a new seed from cryptographically secure
@@ -212,14 +217,33 @@ impl LairClient {
 
     /// Generate a signature for given data, with the ed25519 keypair
     /// derived from seed identified by the given ed25519 pubkey.
+    /// Respects hc_seed_bundle::PwHashLimits.
     pub fn sign_by_pub_key(
         &self,
-        _pub_key: Ed25519PubKey,
-        _deep_lock_passphrase: Option<sodoken::BufRead>,
-        _data: Arc<[u8]>,
+        pub_key: Ed25519PubKey,
+        deep_lock_passphrase: Option<sodoken::BufRead>,
+        data: Arc<[u8]>,
     ) -> impl Future<Output = LairResult<Ed25519Signature>> + 'static + Send
     {
-        async move { unimplemented!() }
+        let limits = hc_seed_bundle::PwHashLimits::current();
+        let inner = self.0.clone();
+        async move {
+            let secret = match deep_lock_passphrase {
+                None => None,
+                Some(pass) => {
+                    let key = inner.get_enc_ctx_key();
+                    let secret = SecretData::encrypt(key, pass).await?;
+                    Some(DeepLockPassphrase {
+                        ops_limit: limits.as_ops_limit(),
+                        mem_limit: limits.as_mem_limit(),
+                        passphrase: secret,
+                    })
+                }
+            };
+            let req = LairApiReqSignByPubKey::new(pub_key, secret, data);
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok(res.signature)
+        }
     }
 
     /// Instruct lair to generate a new well-known-authority signed TLS cert.
@@ -228,19 +252,30 @@ impl LairClient {
     /// as a certificate authority which will respect multiple certs.
     pub fn new_wka_tls_cert(
         &self,
-        _tag: Arc<str>,
+        tag: Arc<str>,
     ) -> impl Future<Output = LairResult<CertInfo>> + 'static + Send {
-        async move { unimplemented!() }
+        let inner = self.0.clone();
+        async move {
+            let req = LairApiReqNewWkaTlsCert::new(tag);
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok(res.cert_info)
+        }
     }
 
     /// Fetch the private key associated with a wka_tls_cert entry.
     /// Will error if the entry specified by 'tag' is not a wka_tls_cert.
     pub fn get_wka_tls_cert_priv_key(
         &self,
-        _tag: Arc<str>,
+        tag: Arc<str>,
     ) -> impl Future<Output = LairResult<sodoken::BufRead>> + 'static + Send
     {
-        async move { unimplemented!() }
+        let inner = self.0.clone();
+        async move {
+            let req = LairApiReqGetWkaTlsCertPrivKey::new(tag);
+            let res = priv_lair_api_request(&*inner, req).await?;
+            let res = res.priv_key.decrypt(inner.get_dec_ctx_key()).await?;
+            Ok(res)
+        }
     }
 }
 
