@@ -5,10 +5,6 @@ pub(crate) async fn exec(
     lair_root: std::path::PathBuf,
     opt: OptInit,
 ) -> LairResult<()> {
-    if !opt.interactive {
-        return Err("lair-keystore init -i currently required for interactive passphrase entry".into());
-    }
-
     tokio::fs::DirBuilder::new()
         .recursive(true)
         .create(&lair_root)
@@ -25,29 +21,10 @@ pub(crate) async fn exec(
         .into());
     }
 
-    let mut pass_tmp = tokio::task::spawn_blocking(|| {
-        LairResult::Ok(
-            rpassword::read_password_from_tty(Some("\n# passphrase> "))
-                .map_err(one_err::OneErr::new)?
-                .into_bytes(),
-        )
-    })
-    .await
-    .map_err(one_err::OneErr::new)??;
-
-    let passphrase = match sodoken::BufWrite::new_mem_locked(pass_tmp.len()) {
-        Err(e) => {
-            pass_tmp.fill(0);
-            return Err(e);
-        }
-        Ok(p) => {
-            {
-                let mut lock = p.write_lock();
-                lock.copy_from_slice(&pass_tmp);
-                pass_tmp.fill(0);
-            }
-            p.to_read()
-        }
+    let passphrase = if opt.piped {
+        read_piped_passphrase().await?
+    } else {
+        read_interactive_passphrase().await?
     };
 
     println!("\n# lair-keystore init generating secure config...");

@@ -4,38 +4,22 @@ pub(crate) async fn exec(
     config: LairServerConfig,
     opt: OptServer,
 ) -> LairResult<()> {
+    if opt.piped && opt.locked {
+        return Err(
+            "-p / --piped and -l / --locked are mutually exclusive".into()
+        );
+    }
+
     // construct the server so that pid-check etc happens first
     let server =
         lair_keystore_lib::server::StandaloneServer::new(config).await?;
 
-    // if we are interactive, get the passphrase before starting the server
-    let passphrase = if opt.interactive {
-        let mut pass_tmp = tokio::task::spawn_blocking(|| {
-            LairResult::Ok(
-                rpassword::read_password_from_tty(Some("\n# passphrase> "))
-                    .map_err(one_err::OneErr::new)?
-                    .into_bytes(),
-            )
-        })
-        .await
-        .map_err(one_err::OneErr::new)??;
-
-        match sodoken::BufWrite::new_mem_locked(pass_tmp.len()) {
-            Err(e) => {
-                pass_tmp.fill(0);
-                return Err(e);
-            }
-            Ok(p) => {
-                {
-                    let mut lock = p.write_lock();
-                    lock.copy_from_slice(&pass_tmp);
-                    pass_tmp.fill(0);
-                }
-                Some(p.to_read())
-            }
-        }
-    } else {
+    let passphrase = if opt.piped {
+        Some(read_piped_passphrase().await?)
+    } else if opt.locked {
         None
+    } else {
+        Some(read_interactive_passphrase().await?)
     };
 
     if let Some(passphrase) = passphrase {

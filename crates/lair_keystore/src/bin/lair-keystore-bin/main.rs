@@ -18,18 +18,83 @@ mod cmd_init;
 mod cmd_server;
 mod cmd_url;
 
+fn vec_to_locked(mut pass_tmp: Vec<u8>) -> LairResult<sodoken::BufRead> {
+    match sodoken::BufWrite::new_mem_locked(pass_tmp.len()) {
+        Err(e) => {
+            pass_tmp.fill(0);
+            Err(e)
+        }
+        Ok(p) => {
+            {
+                let mut lock = p.write_lock();
+                lock.copy_from_slice(&pass_tmp);
+                pass_tmp.fill(0);
+            }
+            Ok(p.to_read())
+        }
+    }
+}
+
+pub(crate) async fn read_interactive_passphrase() -> LairResult<sodoken::BufRead>
+{
+    let pass_tmp = tokio::task::spawn_blocking(|| {
+        LairResult::Ok(
+            rpassword::read_password_from_tty(Some("\n# passphrase> "))
+                .map_err(one_err::OneErr::new)?
+                .into_bytes(),
+        )
+    })
+    .await
+    .map_err(one_err::OneErr::new)??;
+
+    vec_to_locked(pass_tmp)
+}
+
+// you're wrong clippy... it's clearer this way because
+// it matches the adjoining len() >= 2
+#[allow(clippy::len_zero)]
+pub(crate) async fn read_piped_passphrase() -> LairResult<sodoken::BufRead> {
+    let mut stdin = tokio::io::stdin();
+    let mut pass_tmp = Vec::new();
+
+    use tokio::io::AsyncReadExt;
+    stdin.read_to_end(&mut pass_tmp).await?;
+
+    if pass_tmp.len() >= 2
+        && pass_tmp[pass_tmp.len() - 1] == 10
+        && pass_tmp[pass_tmp.len() - 2] == 13
+    {
+        pass_tmp.pop();
+        pass_tmp.pop();
+    } else if pass_tmp.len() >= 1 && pass_tmp[pass_tmp.len() - 1] == 10 {
+        pass_tmp.pop();
+    }
+    vec_to_locked(pass_tmp)
+}
+
 #[derive(Debug, StructOpt)]
 pub(crate) struct OptInit {
-    /// Prompt for passphrase interactively.
-    #[structopt(short = "i", long)]
-    pub interactive: bool,
+    /// Instead of the normal "interactive" method of passphrase
+    /// retreival, read the passphrase from stdin. Be careful
+    /// how you make use of this, as it could be less secure.
+    #[structopt(short = "p", long, verbatim_doc_comment)]
+    pub piped: bool,
 }
 
 #[derive(Debug, StructOpt)]
 pub(crate) struct OptServer {
-    /// Prompt for passphrase interactively.
-    #[structopt(short = "i", long)]
-    pub interactive: bool,
+    /// Instead of the normal "interactive" method of passphrase
+    /// retreival, read the passphrase from stdin. Be careful
+    /// how you make use of this, as it could be less secure.
+    #[structopt(short = "p", long, verbatim_doc_comment)]
+    pub piped: bool,
+
+    /// Instead of the normal "interactive" method of passphrase
+    /// retreival, start the keystore in "locked" mode. The
+    /// keystore will need to be "unlocked" via some other method
+    /// before it can begin processing requests.
+    #[structopt(short = "l", long, verbatim_doc_comment)]
+    pub locked: bool,
 }
 
 #[derive(Debug, StructOpt)]
