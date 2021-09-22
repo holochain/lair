@@ -14,4 +14,3 @@ include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 pub type LairResult<T> = Result<T, one_err::OneErr>;
 
 pub mod internal;
-pub mod sodium_secretstream;
