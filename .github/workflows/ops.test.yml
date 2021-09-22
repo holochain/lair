@@ -1,5 +1,13 @@
-name: test
-on: [ push ]
+name: Test
+on:
+  push:
+    branches:
+      - main
+      - v0.1.x
+  pull_request:
+    branches:
+      - main
+      - v0.1.x
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -29,12 +37,6 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}
-
-      - name: Build Release
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release
 
       - name: Cargo Test
         uses: actions-rs/cargo@v1

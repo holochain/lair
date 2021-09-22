@@ -509,6 +509,7 @@ mod tests {
         sqlite.push("db.sqlite3");
 
         let db_key = sodoken::BufReadSized::new_no_lock([0; 32]);
+
         let pool = SqlPool::new(sqlite, db_key).await.unwrap();
 
         let pk = pool
