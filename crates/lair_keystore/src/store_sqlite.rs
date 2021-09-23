@@ -293,7 +293,7 @@ impl SqlPool {
 }
 
 impl AsLairStore for SqlPool {
-    fn get_bidi_context_key(&self) -> sodoken::BufReadSized<32> {
+    fn get_bidi_ctx_key(&self) -> sodoken::BufReadSized<32> {
         self.0.lock().ctx_secret.clone()
     }
 

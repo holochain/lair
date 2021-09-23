@@ -14,7 +14,7 @@ pub mod traits {
     pub trait AsLairStore: 'static + Send + Sync {
         /// Return the context key for both encryption and decryption
         /// of secret data within the store that is NOT deep_locked.
-        fn get_bidi_context_key(&self) -> sodoken::BufReadSized<32>;
+        fn get_bidi_ctx_key(&self) -> sodoken::BufReadSized<32>;
 
         /// List the entries tracked by the lair store.
         fn list_entries(
@@ -196,8 +196,8 @@ pub struct LairStore(pub Arc<dyn AsLairStore>);
 impl LairStore {
     /// Return the context key for both encryption and decryption
     /// of secret data within the store that is NOT deep_locked.
-    pub fn get_bidi_context_key(&self) -> sodoken::BufReadSized<32> {
-        AsLairStore::get_bidi_context_key(&*self.0)
+    pub fn get_bidi_ctx_key(&self) -> sodoken::BufReadSized<32> {
+        AsLairStore::get_bidi_ctx_key(&*self.0)
     }
 
     /// Generate a new cryptographically secure random seed,
@@ -209,14 +209,17 @@ impl LairStore {
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let inner = self.0.clone();
         async move {
+            // generate a new random seed
             let seed = sodoken::BufWriteSized::new_mem_locked()?;
             sodoken::random::bytes_buf(seed.clone()).await?;
 
+            // derive the ed25519 signature keypair from this seed
             let ed_pk = sodoken::BufWriteSized::new_no_lock();
             let ed_sk = sodoken::BufWriteSized::new_mem_locked()?;
             sodoken::sign::seed_keypair(ed_pk.clone(), ed_sk, seed.clone())
                 .await?;
 
+            // derive the x25519 encryption keypair from this seed
             let x_pk = sodoken::BufWriteSized::new_no_lock();
             let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
             sodoken::sealed_box::curve25519xchacha20poly1305::seed_keypair(
@@ -226,23 +229,28 @@ impl LairStore {
             )
             .await?;
 
-            let key = inner.get_bidi_context_key();
+            // encrypt the seed with our bidi context key
+            let key = inner.get_bidi_ctx_key();
             let seed =
                 SecretDataSized::encrypt(key, seed.to_read_sized()).await?;
 
+            // populate our seed info with the derived public keys
             let seed_info = SeedInfo {
                 ed25519_pub_key: ed_pk.try_unwrap_sized().unwrap().into(),
                 x25519_pub_key: x_pk.try_unwrap_sized().unwrap().into(),
             };
 
+            // construct the entry for the keystore
             let entry = LairEntryInner::Seed {
                 tag,
                 seed_info: seed_info.clone(),
                 seed,
             };
 
+            // write the entry to the store
             inner.write_entry(Arc::new(entry)).await?;
 
+            // return the seed info
             Ok(seed_info)
         }
     }
@@ -261,14 +269,17 @@ impl LairStore {
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let inner = self.0.clone();
         async move {
+            // generate a new random seed
             let seed = sodoken::BufWriteSized::new_mem_locked()?;
             sodoken::random::bytes_buf(seed.clone()).await?;
 
+            // derive the ed25519 signature keypair from this seed
             let ed_pk = sodoken::BufWriteSized::new_no_lock();
             let ed_sk = sodoken::BufWriteSized::new_mem_locked()?;
             sodoken::sign::seed_keypair(ed_pk.clone(), ed_sk, seed.clone())
                 .await?;
 
+            // derive the x25519 encryption keypair from this seed
             let x_pk = sodoken::BufWriteSized::new_no_lock();
             let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
             sodoken::sealed_box::curve25519xchacha20poly1305::seed_keypair(
@@ -278,9 +289,11 @@ impl LairStore {
             )
             .await?;
 
+            // generate the salt for the pwhash deep locking
             let salt = <sodoken::BufWriteSized<16>>::new_no_lock();
             sodoken::random::bytes_buf(salt.clone()).await?;
 
+            // generate the deep lock key from the passphrase
             let key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
             sodoken::hash::argon2id::hash(
                 key.clone(),
@@ -291,17 +304,20 @@ impl LairStore {
             )
             .await?;
 
+            // encrypt the seed with the deep lock key
             let seed = SecretDataSized::encrypt(
                 key.to_read_sized(),
                 seed.to_read_sized(),
             )
             .await?;
 
+            // populate our seed info with the derived public keys
             let seed_info = SeedInfo {
                 ed25519_pub_key: ed_pk.try_unwrap_sized().unwrap().into(),
                 x25519_pub_key: x_pk.try_unwrap_sized().unwrap().into(),
             };
 
+            // construct the entry for the keystore
             let entry = LairEntryInner::DeepLockedSeed {
                 tag,
                 seed_info: seed_info.clone(),
@@ -311,8 +327,10 @@ impl LairStore {
                 seed,
             };
 
+            // write the entry to the store
             inner.write_entry(Arc::new(entry)).await?;
 
+            // return the seed info
             Ok(seed_info)
         }
     }
@@ -328,6 +346,7 @@ impl LairStore {
         async move {
             use crate::internal::tls::*;
 
+            // generate the random well-known-authority signed certificate.
             let TlsCertGenResult {
                 sni,
                 priv_key,
@@ -335,23 +354,28 @@ impl LairStore {
                 digest,
             } = tls_cert_self_signed_new().await?;
 
-            let key = inner.get_bidi_context_key();
+            // encrypt the private key with our context secret
+            let key = inner.get_bidi_ctx_key();
             let priv_key = SecretData::encrypt(key, priv_key).await?;
 
+            // populate the certificate info
             let cert_info = CertInfo {
                 sni,
                 digest: digest.into(),
                 cert: cert.into(),
             };
 
+            // construct the entry for the keystore
             let entry = LairEntryInner::WkaTlsCert {
                 tag,
                 cert_info: cert_info.clone(),
                 priv_key,
             };
 
+            // write the entry to the store
             inner.write_entry(Arc::new(entry)).await?;
 
+            // return the cert info
             Ok(cert_info)
         }
     }

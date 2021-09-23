@@ -664,7 +664,7 @@ fn priv_gen_and_register_entry<'a>(
     async move {
         let (ed_pk, ed_sk, x_pk, x_sk) = match &*entry {
             LairEntryInner::Seed { seed, .. } => {
-                let seed = seed.decrypt(store.get_bidi_context_key()).await?;
+                let seed = seed.decrypt(store.get_bidi_ctx_key()).await?;
 
                 let ed_pk = sodoken::BufWriteSized::new_no_lock();
                 let ed_sk = sodoken::BufWriteSized::new_mem_locked()?;
@@ -797,7 +797,7 @@ fn priv_req_get_wka_tls_cert_priv_key<'a>(
         };
 
         // decrypt the priv_key using our DB CONTEXT KEY
-        let priv_key = priv_key.decrypt(store.get_bidi_context_key()).await?;
+        let priv_key = priv_key.decrypt(store.get_bidi_ctx_key()).await?;
 
         // encrypt the priv_key using our CONNECTION CONTEXT KEY
         let priv_key =
