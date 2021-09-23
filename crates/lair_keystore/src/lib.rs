@@ -13,3 +13,6 @@ include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 pub mod pid_check;
 pub mod server;
 pub mod store_sqlite;
+
+#[cfg(test)]
+mod server_test;

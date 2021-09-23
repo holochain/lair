@@ -516,6 +516,7 @@ dependencies = [
  "criterion",
  "dunce",
  "futures",
+ "hc_seed_bundle",
  "lair_keystore_api",
  "one_err",
  "parking_lot",

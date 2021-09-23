@@ -146,6 +146,7 @@ impl SqlPool {
     ) -> LairResult<LairStore> {
         use rusqlite::OpenFlags;
 
+        // derive a key for context encryption in and out of store file
         let ctx_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
         sodoken::kdf::derive_from_key(
             ctx_secret.clone(),
@@ -155,6 +156,7 @@ impl SqlPool {
         )?;
         let ctx_secret = ctx_secret.to_read_sized();
 
+        // derive a key to use for the sqlcipher encryption
         let dbk_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
         sodoken::kdf::derive_from_key(
             dbk_secret.clone(),
@@ -164,8 +166,10 @@ impl SqlPool {
         )?;
         let dbk_secret = dbk_secret.to_read_sized();
 
+        // initialize the sqlcipher key pragma
         let key_pragma = secure_write_key_pragma(dbk_secret)?;
 
+        // open a single write connection to the database
         let write_con = rusqlite::Connection::open_with_flags(
             &path,
             OpenFlags::SQLITE_OPEN_READ_WRITE
@@ -175,6 +179,7 @@ impl SqlPool {
         )
         .map_err(one_err::OneErr::new)?;
 
+        // set generic pragmas
         set_pragmas(&write_con, key_pragma.clone())?;
 
         // only set WAL mode on the first write connection
@@ -183,6 +188,7 @@ impl SqlPool {
             .pragma_update(None, "journal_mode", &"WAL".to_string())
             .map_err(one_err::OneErr::new)?;
 
+        // initialize tables if they don't already exist
         write_con.execute_optional(
             r#"CREATE TABLE IF NOT EXISTS lair_keystore (
                 id                INTEGER  PRIMARY KEY  NOT NULL   UNIQUE,
@@ -207,10 +213,12 @@ impl SqlPool {
             [],
         )?;
 
+        // initialize READ_CON_COUNT read connections to the database
         let mut read_cons: [Option<rusqlite::Connection>; READ_CON_COUNT] =
             Default::default();
 
         for rc_mut in read_cons.iter_mut() {
+            // open READ_ONLY connection to the database
             let read_con = rusqlite::Connection::open_with_flags(
                 &path,
                 OpenFlags::SQLITE_OPEN_READ_ONLY
@@ -219,11 +227,13 @@ impl SqlPool {
             )
             .map_err(one_err::OneErr::new)?;
 
+            // set generic pragmas
             set_pragmas(&read_con, key_pragma.clone())?;
 
             *rc_mut = Some(read_con);
         }
 
+        // build the pool state instance
         let inner = Self(Arc::new(Mutex::new(SqlPoolInner {
             ctx_secret,
             write_limit: Arc::new(Semaphore::new(1)),
@@ -248,6 +258,7 @@ impl SqlPool {
         }
     }
 
+    /// Get a read_only connection to the database from the pool
     fn read(&self) -> impl Future<Output = SqlCon> + 'static + Send {
         let inner = self.0.clone();
         async move {
@@ -274,6 +285,7 @@ impl SqlPool {
         }
     }
 
+    /// Get the single write connection to the database from the pool
     fn write(&self) -> impl Future<Output = SqlCon> + 'static + Send {
         let inner = self.0.clone();
         async move {
@@ -309,8 +321,8 @@ impl AsLairStore for SqlPool {
                     .map_err(one_err::OneErr::new)?;
                 let it = s
                     .query_map([], |row| {
-                        // go ahead and clone here, so we're not doing the decoding
-                        // while the database is connected...
+                        // go ahead and clone here, so we're not doing the
+                        // decoding while the database is connected...
                         let data: Vec<u8> = row.get(0)?;
                         Ok(data.into_boxed_slice())
                     })
@@ -363,6 +375,9 @@ impl AsLairStore for SqlPool {
             if let Some(seed_info) = seed_info {
                 write
                     .transaction(move |txn| {
+                        // if the entry type has seed info
+                        // add the extra columns so we can look up
+                        // the entry by public keys
                         txn.execute_optional(
                             r#"INSERT INTO lair_keystore (
                                 tag,
@@ -504,6 +519,9 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn sqlite_sanity() {
+        // this is just a sanity / smoke test
+        // this is excersized better in the full server_test.rs
+
         let tmpdir = tempdir::TempDir::new("lair-keystore-test").unwrap();
         let mut sqlite = tmpdir.path().to_path_buf();
         sqlite.push("db.sqlite3");
