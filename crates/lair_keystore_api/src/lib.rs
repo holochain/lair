@@ -17,6 +17,7 @@ pub mod config;
 pub mod encoding_types;
 pub mod internal;
 pub mod lair_api;
+pub mod lair_client;
 pub mod lair_store;
 pub mod mem_store;
 pub mod sodium_secretstream;
@@ -26,6 +27,7 @@ pub mod prelude {
     pub use crate::config::*;
     pub use crate::encoding_types::*;
     pub use crate::lair_api::*;
+    pub use crate::lair_client::*;
     pub use crate::lair_store::*;
     pub use crate::LairResult;
 }
