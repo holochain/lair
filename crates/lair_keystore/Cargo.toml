@@ -48,3 +48,7 @@ tempdir = "0.3.7"
 [lib]
 name = "lair_keystore_lib"
 path = "src/lib.rs"
+
+[[bin]]
+name = "lair-keystore"
+path = "src/bin/lair-keystore-bin/main.rs"
