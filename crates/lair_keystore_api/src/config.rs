@@ -62,18 +62,23 @@ impl LairServerConfigInner {
         let root_path = root_path.as_ref().to_owned();
         let limits = hc_seed_bundle::PwHashLimits::current();
         async move {
+            // default pid_file name is '[root_path]/pid_file'
             let mut pid_file = root_path.clone();
             pid_file.push("pid_file");
 
+            // default store_file name is '[root_path]/store_file'
             let mut store_file = root_path.clone();
             store_file.push("store_file");
 
+            // generate a random salt for the pwhash
             let salt = <sodoken::BufWriteSized<16>>::new_no_lock();
             sodoken::random::bytes_buf(salt.clone()).await?;
 
+            // pull the captured argon2id limits
             let ops_limit = limits.as_ops_limit();
             let mem_limit = limits.as_mem_limit();
 
+            // generate an argon2id pre_secret from the passphrase
             let pre_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
             sodoken::hash::argon2id::hash(
                 pre_secret.clone(),
@@ -84,6 +89,8 @@ impl LairServerConfigInner {
             )
             .await?;
 
+            // derive our context secret
+            // this will be used to encrypt the context_key
             let ctx_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
             sodoken::kdf::derive_from_key(
                 ctx_secret.clone(),
@@ -92,6 +99,8 @@ impl LairServerConfigInner {
                 pre_secret.clone(),
             )?;
 
+            // derive our signature secret
+            // this will be used to encrypt the signature seed
             let sig_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
             sodoken::kdf::derive_from_key(
                 sig_secret.clone(),
@@ -100,12 +109,16 @@ impl LairServerConfigInner {
                 pre_secret,
             )?;
 
+            // the context key is used to encrypt our store_file
             let context_key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
             sodoken::random::bytes_buf(context_key.clone()).await?;
 
+            // the sign seed derives our signature keypair
+            // which allows us to authenticate server identity
             let sign_seed = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
             sodoken::random::bytes_buf(sign_seed.clone()).await?;
 
+            // server identity verification signature keypair
             let sign_pk = <sodoken::BufWriteSized<32>>::new_no_lock();
             let sign_sk = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
             sodoken::sign::seed_keypair(
@@ -115,20 +128,25 @@ impl LairServerConfigInner {
             )
             .await?;
 
+            // lock the context key
             let context_key = SecretDataSized::encrypt(
                 ctx_secret.to_read_sized(),
                 context_key.to_read_sized(),
             )
             .await?;
+
+            // lock the signature seed
             let sign_seed = SecretDataSized::encrypt(
                 sig_secret.to_read_sized(),
                 sign_seed.to_read_sized(),
             )
             .await?;
 
+            // get the signature public key bytes for encoding in the url
             let sign_pk: BinDataSized<32> =
                 sign_pk.try_unwrap_sized().unwrap().into();
 
+            // on windows, we default to using "named pipes"
             #[cfg(windows)]
             let connection_url = {
                 let id = nanoid::nanoid!();
@@ -138,8 +156,8 @@ impl LairServerConfigInner {
                 ))
                 .unwrap()
             };
-            // for named pipe: println!("URL PART: {}", connection_url.path());
 
+            // on not-windows, we default to using unix domain sockets
             #[cfg(not(windows))]
             let connection_url = {
                 let mut con_path = root_path.clone();
@@ -152,6 +170,7 @@ impl LairServerConfigInner {
                 .unwrap()
             };
 
+            // put together the full server config struct
             let config = LairServerConfigInner {
                 connection_url,
                 pid_file,
@@ -208,7 +227,7 @@ pub fn get_server_pub_key_from_connection_url(
     Err("no server_pub_key on connection_url".into())
 }
 
-/// Additional config used by lair servers.
+/// Configuration for running a lair-keystore server instance.
 pub type LairServerConfig = Arc<LairServerConfigInner>;
 
 #[cfg(test)]
@@ -218,11 +237,18 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_config_yaml() {
         let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
-        let srv = LairServerConfigInner::new("/tmp/my/path", passphrase)
+        let srv = hc_seed_bundle::PwHashLimits::Interactive
+            .with_exec(|| {
+                LairServerConfigInner::new("/tmp/my/path", passphrase)
+            })
             .await
             .unwrap();
         println!("-- server config start --");
         println!("{}", serde_yaml::to_string(&srv).unwrap());
         println!("-- server config end --");
+        assert_eq!(
+            std::path::PathBuf::from("/tmp/my/path").as_path(),
+            srv.pid_file.parent().unwrap(),
+        );
     }
 }
