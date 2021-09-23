@@ -15,7 +15,9 @@ pub type LairResult<T> = Result<T, one_err::OneErr>;
 
 pub mod config;
 pub mod encoding_types;
+pub mod in_proc_keystore;
 pub mod internal;
+pub mod ipc_keystore;
 pub mod lair_api;
 pub mod lair_client;
 pub mod lair_server;
