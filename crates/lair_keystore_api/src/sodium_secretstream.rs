@@ -1,4 +1,3 @@
-#![allow(unused_imports)]
 //! libsodium secretstream Async reader / writer wrappers.
 
 use futures::future::{BoxFuture, FutureExt};
