@@ -1,20 +1,17 @@
 //! Utilities for dealing with pid files.
 
-use lair_keystore_api::LairResult;
+use lair_keystore_api::prelude::*;
 use std::{
     io::{Read, Write},
     str::FromStr,
 };
 use sysinfo::{ProcessExt, SystemExt};
 
-/// Result from invoking `pid_check()` function.
-pub struct PidCheckResult {}
-
 /// Execute lair pid_check verifying we are the one true Lair process
 /// with access to given store / pidfile.
 /// This is sync instead of async as it is intended to be used at
 /// lair process startup, before we agree to acquire access to the store file.
-pub fn pid_check(pid_file: std::path::PathBuf) -> LairResult<PidCheckResult> {
+pub fn pid_check(config: &LairServerConfig) -> LairResult<()> {
     let mut sys = sysinfo::System::new();
 
     let mut last_err = None;
@@ -24,7 +21,7 @@ pub fn pid_check(pid_file: std::path::PathBuf) -> LairResult<PidCheckResult> {
         if i != 0 {
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        match pid_check_write(pid_file.as_path(), &mut sys) {
+        match pid_check_write(config.pid_file.as_path(), &mut sys) {
             Ok(_) => {
                 last_err = None;
                 break;
@@ -39,7 +36,7 @@ pub fn pid_check(pid_file: std::path::PathBuf) -> LairResult<PidCheckResult> {
         return Err(e);
     }
 
-    Ok(PidCheckResult {})
+    Ok(())
 }
 
 /// only returns success if we were able to write pidfile with our pid
