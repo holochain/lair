@@ -129,7 +129,8 @@ pub fn ipc_keystore_connect_options(
         let (send, recv) =
             raw_ipc::ipc_connect(opts.connection_url.clone()).await?;
         let cli_hnd =
-            crate::lair_client::wrap_raw_lair_client(send, recv).await?;
+            crate::lair_client::async_io::new_async_io_lair_client(send, recv)
+                .await?;
         if opts.danger_unlock_without_server_validate {
             // even if they tell us to do this backwards,
             // let's at least try to do it correctly to start
