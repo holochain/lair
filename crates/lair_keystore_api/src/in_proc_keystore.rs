@@ -27,6 +27,7 @@ impl InProcKeystore {
         async move {
             let passphrase = passphrase.into();
 
+            // set up our server handler
             let srv_hnd = crate::lair_server::spawn_lair_server_task(
                 config.clone(),
                 "lair-keystore-in-proc".into(),

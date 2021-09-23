@@ -26,6 +26,7 @@ impl IpcKeystoreServer {
         async move {
             let con_recv = raw_ipc::ipc_bind(config.clone()).await?;
 
+            // set up our server handler
             let srv_hnd = crate::lair_server::spawn_lair_server_task(
                 config.clone(),
                 "lair-keystore-ipc".into(),
@@ -35,6 +36,7 @@ impl IpcKeystoreServer {
             .await?;
 
             {
+                // set up a tokio task for accepting incoming connections
                 let srv_hnd = srv_hnd.clone();
                 tokio::task::spawn(async move {
                     let srv_hnd = &srv_hnd;
@@ -50,6 +52,7 @@ impl IpcKeystoreServer {
                             tracing::error!("Error accepting incoming ipc connection: {:?}", e);
                         }
                     }).await;
+
                     tracing::error!(
                         "IpcKeystoreServer ipc_raw con recv loop ended!"
                     );
@@ -126,17 +129,23 @@ pub fn ipc_keystore_connect_options(
     async move {
         let server_pub_key =
             get_server_pub_key_from_connection_url(&opts.connection_url)?;
+
+        // establish the raw ipc connection
         let (send, recv) =
             raw_ipc::ipc_connect(opts.connection_url.clone()).await?;
+
+        // wrap this connection up as a LairClient
         let cli_hnd =
             crate::lair_client::async_io::new_async_io_lair_client(send, recv)
                 .await?;
+
         if opts.danger_unlock_without_server_validate {
             // even if they tell us to do this backwards,
             // let's at least try to do it correctly to start
             match cli_hnd.hello(server_pub_key.clone()).await {
                 Ok(ver) => {
                     priv_check_hello_ver(&opts, &ver)?;
+
                     // hey, it worked, unlock and proceed
                     cli_hnd.unlock(opts.passphrase.clone()).await?;
                 }
@@ -144,6 +153,7 @@ pub fn ipc_keystore_connect_options(
                     // lame, the server really is not unlocked...
                     // unlock, but some attacker may get our passphrase
                     cli_hnd.unlock(opts.passphrase.clone()).await?;
+
                     // now do the verification, and hope it was
                     // the correct server
                     let ver = cli_hnd.hello(server_pub_key).await?;
@@ -152,6 +162,7 @@ pub fn ipc_keystore_connect_options(
                 Err(e) => return Err(e),
             }
         } else {
+            // the normal way is much more straight forward
             let ver = cli_hnd.hello(server_pub_key).await?;
             priv_check_hello_ver(&opts, &ver)?;
             cli_hnd.unlock(opts.passphrase).await?;

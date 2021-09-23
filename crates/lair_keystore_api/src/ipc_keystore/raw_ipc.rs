@@ -21,11 +21,17 @@ pub(crate) fn ipc_connect(
                     .into(),
             );
         }
+
+        // connect the socket
         let path = connection_url.path();
         let socket = tokio::net::UnixStream::connect(path)
             .await
             .map_err(one_err::OneErr::new)?;
+
+        // split into send / recv halves
         let (recv, send) = socket.into_split();
+
+        // box and return
         let send: IpcSend = Box::new(send);
         let recv: IpcRecv = Box::new(recv);
         Ok((send, recv))
@@ -46,10 +52,15 @@ pub(crate) fn ipc_bind(
 
         let path = config.get_connection_path();
 
+        // we've already acquired our pid_file
+        // it's safe to say we own the domain socket
+        // and can remove any previous remnant
         let _ = tokio::fs::remove_file(path).await;
 
+        // bind to the domain socket
         let socket = tokio::net::UnixListener::bind(path)?;
 
+        // consecutively read incoming connections / forward them
         let recv: IpcConRecv =
             futures::stream::try_unfold(socket, |socket| async move {
                 let (con, _) = socket.accept().await?;
@@ -74,6 +85,8 @@ pub(crate) fn ipc_connect(
         if connection_url.scheme() != "named-pipe" {
             return Err("IpcKeystore connection on windows must be 'named-pipe:' scheme.".into());
         }
+
+        // this loop is verbatim from the tokio docs
         let path = connection_url.path();
         let pipe = loop {
             match tokio::net::windows::named_pipe::ClientOptions::new()
@@ -92,7 +105,11 @@ pub(crate) fn ipc_connect(
             }
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         };
+
+        // split into send / recv halves
         let (recv, send) = tokio::io::split(pipe);
+
+        // box and return
         let send: IpcSend = Box::new(send);
         let recv: IpcRecv = Box::new(recv);
         Ok((send, recv))
@@ -110,12 +127,14 @@ pub(crate) fn ipc_bind(
 
         let path = config.get_connection_path().to_owned();
 
-        let _ = tokio::fs::remove_file(&path).await;
-
+        // open the initial named pipe server-side acceptor
+        // note the special first_pipe_instance flag.
+        // windows named pipes are weird...
         let pipe = tokio::net::windows::named_pipe::ServerOptions::new()
             .first_pipe_instance(true)
             .create(&path)?;
 
+        // loop on accepting incoming connections
         let recv: IpcConRecv = futures::stream::try_unfold(
             (path, pipe),
             |(path, pipe)| async move {
