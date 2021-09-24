@@ -35,6 +35,10 @@ pub mod traits {
             send: RawSend,
             recv: RawRecv,
         ) -> BoxFuture<'static, LairResult<()>>;
+
+        /// get a handle to the LairStore instantiated by this server,
+        /// may error if a store has not yet been created.
+        fn store(&self) -> BoxFuture<'static, LairResult<LairStore>>;
     }
 }
 use traits::*;
@@ -64,6 +68,14 @@ impl LairServer {
         R: tokio::io::AsyncRead + 'static + Send + Unpin,
     {
         AsLairServer::accept(&*self.0, Box::new(send), Box::new(recv))
+    }
+
+    /// get a handle to the LairStore instantiated by this server,
+    /// may error if a store has not yet been created.
+    pub fn store(
+        &self,
+    ) -> impl Future<Output = LairResult<LairStore>> + 'static + Send {
+        AsLairServer::store(&*self.0)
     }
 }
 

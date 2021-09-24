@@ -51,6 +51,11 @@ impl UnlockedSeedBundle {
         crate::LockedSeedCipher::from_locked(bytes)
     }
 
+    /// Get the actual seed tracked by this seed bundle.
+    pub fn get_seed(&self) -> sodoken::BufReadSized<32> {
+        self.seed.clone()
+    }
+
     /// Derive a new sub SeedBundle by given index.
     pub fn derive(
         &self,

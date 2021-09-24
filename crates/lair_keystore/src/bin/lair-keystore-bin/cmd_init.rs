@@ -24,7 +24,7 @@ pub(crate) async fn exec(
     let passphrase = if opt.piped {
         read_piped_passphrase().await?
     } else {
-        read_interactive_passphrase().await?
+        read_interactive_passphrase("\n# passphrase> ").await?
     };
 
     println!("\n# lair-keystore init generating secure config...");
