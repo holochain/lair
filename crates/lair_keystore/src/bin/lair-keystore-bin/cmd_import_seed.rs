@@ -4,18 +4,11 @@ pub(crate) async fn exec(
     config: LairServerConfig,
     opt: OptImportSeed,
 ) -> LairResult<()> {
-    // we need to capture the pid_file to run a seed bundle import
-    // i.e. we cannot do this while a server is running.
-    {
-        let config = config.clone();
-        // TODO - make pid_check async friendly
-        tokio::task::spawn_blocking(move || {
-            lair_keystore_lib::pid_check::pid_check(&config)
-        })
-        .await
-        .map_err(one_err::OneErr::new)??;
-    }
+    // first start the server so the pid_file is acquired / etc
+    let mut server =
+        lair_keystore_lib::server::StandaloneServer::new(config).await?;
 
+    // then capture the needed passphrases
     let (store_pass, bundle_pass, deep_pass) = if opt.piped {
         let multi = read_piped_passphrase().await?;
         let multi = multi.read_lock();
@@ -73,12 +66,17 @@ pub(crate) async fn exec(
         )
     };
 
+    // unlock the server
+    server.run_unlocked(store_pass).await?;
+
+    // load the bundle
     let bundle_bytes =
         base64::decode_config(&opt.seed_bundle_base64, base64::URL_SAFE_NO_PAD)
             .map_err(one_err::OneErr::new)?;
     let cipher_list =
         hc_seed_bundle::UnlockedSeedBundle::from_locked(&bundle_bytes).await?;
 
+    // attempt to unlock the bundle
     let mut bundle = None;
     for cipher in cipher_list {
         use hc_seed_bundle::LockedSeedCipher::*;
@@ -99,6 +97,7 @@ pub(crate) async fn exec(
     let bundle = bundle
         .ok_or_else(|| one_err::OneErr::from("could not unlock seed bundle"))?;
 
+    // grab the seed from the unlocked bundle
     let seed = bundle.get_seed();
 
     // derive the ed25519 signature keypair from this seed
@@ -122,21 +121,10 @@ pub(crate) async fn exec(
         x25519_pub_key: x_pk.try_unwrap_sized().unwrap().into(),
     };
 
-    let store_factory =
-        lair_keystore_lib::store_sqlite::create_sql_pool_factory(
-            &config.store_file,
-        );
+    // get the store from the server
+    let store = server.store().await?;
 
-    let srv_hnd = lair_keystore_api::ipc_keystore::IpcKeystoreServer::new(
-        config,
-        store_factory,
-    )
-    .await?;
-
-    srv_hnd.unlock(store_pass).await?;
-
-    let store = srv_hnd.store().await?;
-
+    // build the seed entry depending on deep lock or not
     let entry = if let Some(deep_pass) = deep_pass {
         // generate the salt for the pwhash deep locking
         let salt = <sodoken::BufWriteSized<16>>::new_no_lock();
@@ -180,6 +168,7 @@ pub(crate) async fn exec(
         }
     };
 
+    // write the entry to the store
     store.0.write_entry(Arc::new(entry)).await?;
 
     println!("# imported seed {} {:?}", opt.tag, seed_info);

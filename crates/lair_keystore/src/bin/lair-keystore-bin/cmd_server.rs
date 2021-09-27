@@ -11,7 +11,7 @@ pub(crate) async fn exec(
     }
 
     // construct the server so that pid-check etc happens first
-    let server =
+    let mut server =
         lair_keystore_lib::server::StandaloneServer::new(config).await?;
 
     let passphrase = if opt.piped {
