@@ -33,12 +33,9 @@ impl InProcKeystore {
                 "lair-keystore-in-proc".into(),
                 crate::LAIR_VER.into(),
                 store_factory,
+                passphrase.clone(),
             )
             .await?;
-
-            // with an in-process store, there's no reason not to unlock
-            // it directly while creating the task
-            srv_hnd.unlock(passphrase.clone()).await?;
 
             Ok(Self {
                 config,
@@ -85,7 +82,9 @@ impl InProcKeystore {
             // get the client wrap future
             let cli_fut =
                 crate::lair_client::async_io::new_async_io_lair_client(
-                    cli_send, cli_recv,
+                    cli_send,
+                    cli_recv,
+                    srv_pub_key.cloned_inner().into(),
                 );
 
             // await both futures at the same time so they can

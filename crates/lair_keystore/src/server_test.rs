@@ -22,7 +22,7 @@ async fn server_test_happy_path() {
     crate::server::StandaloneServer::new(config.clone())
         .await
         .unwrap()
-        .run_unlocked(passphrase.clone())
+        .run(passphrase.clone())
         .await
         .unwrap();
 

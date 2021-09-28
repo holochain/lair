@@ -54,38 +54,25 @@ impl StandaloneServer {
         })
     }
 
-    /// Run the server unlocked "interactively" right away with supplied pw.
-    pub async fn run_unlocked<P>(&mut self, passphrase: P) -> LairResult<()>
+    /// Run the server.
+    pub async fn run<P>(&mut self, passphrase: P) -> LairResult<()>
     where
         P: Into<sodoken::BufRead> + 'static + Send,
     {
         let passphrase = passphrase.into();
-        self.priv_run(Some(passphrase)).await
-    }
 
-    /// Run the server in initially "locked" mode.
-    /// Note, this is not very secure.
-    pub async fn run_locked(&mut self) -> LairResult<()> {
-        self.priv_run(None).await
-    }
-
-    async fn priv_run(
-        &mut self,
-        passphrase: Option<sodoken::BufRead>,
-    ) -> LairResult<()> {
         // construct our sqlite store factory
         let store_factory = crate::store_sqlite::create_sql_pool_factory(
             &self.config.store_file,
         );
 
         // spawn the server
-        let srv_hnd =
-            IpcKeystoreServer::new(self.config.clone(), store_factory).await?;
-
-        if let Some(passphrase) = passphrase {
-            srv_hnd.unlock(passphrase).await?;
-            println!("# lair-keystore unlocked #");
-        }
+        let srv_hnd = IpcKeystoreServer::new(
+            self.config.clone(),
+            store_factory,
+            passphrase,
+        )
+        .await?;
 
         println!(
             "# lair-keystore connection_url # {} #",

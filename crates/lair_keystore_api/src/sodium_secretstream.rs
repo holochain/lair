@@ -104,11 +104,12 @@ where
     }
 }
 
-/// Create a new S3 send/receive pair.
-pub fn new_s3_pair<T, S, R>(
+/// Create a new S3 server side pair.
+pub fn new_s3_server<T, S, R>(
     send: S,
     recv: R,
-    is_srv: bool,
+    srv_id_pub_key: sodoken::BufReadSized<32>,
+    srv_id_sec_key: sodoken::BufReadSized<32>,
 ) -> impl Future<Output = LairResult<(S3Sender<T>, S3Receiver<T>)>> + 'static + Send
 where
     T: 'static + serde::Serialize + for<'de> serde::Deserialize<'de> + Send,
@@ -116,12 +117,147 @@ where
     R: 'static + tokio::io::AsyncRead + Send + Unpin,
 {
     async move {
+        use sodoken::crypto_box::curve25519xchacha20poly1305 as cbox;
+        use sodoken::kx;
+
         // box these up into trait objects so we can easily refer to their types.
         let mut send: PrivRawSend = Box::new(send);
         let mut recv: PrivRawRecv = Box::new(recv);
 
-        // perform a key exchange with the remote.
-        let (tx, rx) = priv_kx(&mut send, &mut recv, is_srv).await?;
+        // read the sealed initiator message
+        let mut cipher: [u8; 64 + cbox::SEALBYTES] = [0; 64 + cbox::SEALBYTES];
+        recv.read_exact(&mut cipher).await?;
+        let cipher = sodoken::BufReadSized::from(cipher);
+        let msg = <sodoken::BufWriteSized<64>>::new_no_lock();
+        cbox::seal_open(msg.clone(), cipher, srv_id_pub_key, srv_id_sec_key)
+            .await?;
+        let msg = msg.try_unwrap_sized().unwrap();
+
+        let oth_cbox_pub = sodoken::BufReadSized::from(&msg[..32]);
+        let oth_kx_pub = sodoken::BufReadSized::from(&msg[32..]);
+
+        // generate an ephemeral kx keypair
+        let eph_kx_pub = sodoken::BufWriteSized::new_no_lock();
+        let eph_kx_sec = sodoken::BufWriteSized::new_mem_locked()?;
+        kx::keypair(eph_kx_pub.clone(), eph_kx_sec.clone())?;
+
+        // seal our ephemeral kx pub key
+        let cipher =
+            <sodoken::BufWriteSized<{ 32 + cbox::SEALBYTES }>>::new_no_lock();
+        cbox::seal(cipher.clone(), eph_kx_pub.clone(), oth_cbox_pub).await?;
+        let cipher = cipher.try_unwrap_sized().unwrap();
+
+        // write the sealed response
+        send.write_all(&cipher).await?;
+
+        // prepare our transport secrets
+        let rx = sodoken::BufWriteSized::new_mem_locked()?;
+        let tx = sodoken::BufWriteSized::new_mem_locked()?;
+
+        // derive our secretstream keys
+        sodoken::kx::client_session_keys(
+            rx.clone(),
+            tx.clone(),
+            eph_kx_pub,
+            eph_kx_sec,
+            oth_kx_pub,
+        )?;
+
+        let rx = rx.to_read_sized();
+        let tx = tx.to_read_sized();
+
+        // perform a secretstream init handshake with the remote.
+        let (enc, dec) =
+            priv_init_ss(&mut send, tx.clone(), &mut recv, rx.clone()).await?;
+
+        // initialize framing so we know when we've got complete messages.
+        let (send, recv) = priv_framed(send, recv);
+
+        // wrap the streams with cryptography.
+        let (send, recv) = priv_crypt(send, enc, recv, dec);
+
+        // bundle up our output sender type.
+        let send: PrivSend<T> = PrivSend::new(send, tx, rx);
+        let send: S3Sender<T> = S3Sender(Arc::new(send));
+
+        // bundle up our output receiver type.
+        let recv: PrivRecv<T> = PrivRecv::new(recv);
+        let recv: S3Receiver<T> = S3Receiver(Box::new(recv));
+
+        Ok((send, recv))
+    }
+}
+
+/// Create a new S3 client side pair.
+pub fn new_s3_client<T, S, R>(
+    send: S,
+    recv: R,
+    srv_id_pub_key: sodoken::BufReadSized<32>,
+) -> impl Future<Output = LairResult<(S3Sender<T>, S3Receiver<T>)>> + 'static + Send
+where
+    T: 'static + serde::Serialize + for<'de> serde::Deserialize<'de> + Send,
+    S: 'static + tokio::io::AsyncWrite + Send + Unpin,
+    R: 'static + tokio::io::AsyncRead + Send + Unpin,
+{
+    async move {
+        use sodoken::crypto_box::curve25519xchacha20poly1305 as cbox;
+        use sodoken::kx;
+
+        // box these up into trait objects so we can easily refer to their types.
+        let mut send: PrivRawSend = Box::new(send);
+        let mut recv: PrivRawRecv = Box::new(recv);
+
+        // generate an ephemeral cbox keypair
+        let eph_cbox_pub = sodoken::BufWriteSized::new_no_lock();
+        let eph_cbox_sec = sodoken::BufWriteSized::new_mem_locked()?;
+        cbox::keypair(eph_cbox_pub.clone(), eph_cbox_sec.clone()).await?;
+
+        // generate an ephemeral kx keypair
+        let eph_kx_pub = sodoken::BufWriteSized::new_no_lock();
+        let eph_kx_sec = sodoken::BufWriteSized::new_mem_locked()?;
+        kx::keypair(eph_kx_pub.clone(), eph_kx_sec.clone())?;
+
+        // sealed initiator message
+        let mut message: [u8; 64] = [0; 64];
+        message[..32].copy_from_slice(&*eph_cbox_pub.read_lock());
+        message[32..].copy_from_slice(&*eph_kx_pub.read_lock());
+        let message = sodoken::BufReadSized::from(message);
+        let cipher =
+            <sodoken::BufWriteSized<{ 64 + cbox::SEALBYTES }>>::new_no_lock();
+        cbox::seal(cipher.clone(), message, srv_id_pub_key).await?;
+        let cipher = cipher.try_unwrap_sized().unwrap();
+
+        // write the sealed initiator
+        send.write_all(&cipher).await?;
+
+        // read the sealed response ephemeral kx pub key
+        let mut cipher: [u8; 32 + cbox::SEALBYTES] = [0; 32 + cbox::SEALBYTES];
+        recv.read_exact(&mut cipher).await?;
+        let cipher = sodoken::BufReadSized::from(cipher);
+        let oth_eph_kx_pub = sodoken::BufWriteSized::new_no_lock();
+        cbox::seal_open(
+            oth_eph_kx_pub.clone(),
+            cipher,
+            eph_cbox_pub,
+            eph_cbox_sec,
+        )
+        .await?;
+
+        // prepare our transport secrets
+        let rx = sodoken::BufWriteSized::new_mem_locked()?;
+        let tx = sodoken::BufWriteSized::new_mem_locked()?;
+
+        // derive our secretstream keys
+        sodoken::kx::server_session_keys(
+            rx.clone(),
+            tx.clone(),
+            eph_kx_pub,
+            eph_kx_sec,
+            oth_eph_kx_pub,
+        )?;
+
+        let rx = rx.to_read_sized();
+        let tx = tx.to_read_sized();
 
         // perform a secretstream init handshake with the remote.
         let (enc, dec) =
@@ -162,61 +298,6 @@ use crypt::*;
 mod inner;
 use inner::*;
 
-/// perform key exchange to generate secret rx key and secret tx key.
-fn priv_kx<'a>(
-    send: &'a mut PrivRawSend,
-    recv: &'a mut PrivRawRecv,
-    is_srv: bool,
-) -> impl Future<
-    Output = LairResult<(
-        sodoken::BufReadSized<{ sss::KEYBYTES }>,
-        sodoken::BufReadSized<{ sss::KEYBYTES }>,
-    )>,
->
-       + 'a
-       + Send {
-    async move {
-        // generate an ephemeral kx keypair
-        let eph_kx_pub = sodoken::BufWriteSized::new_no_lock();
-        let eph_kx_sec = sodoken::BufWriteSized::new_mem_locked()?;
-        sodoken::kx::keypair(eph_kx_pub.clone(), eph_kx_sec.clone())?;
-        // clone to keep this future 'Send'
-        let eph_kx_pub2 = eph_kx_pub.read_lock().to_vec();
-        send.write_all(&eph_kx_pub2).await?;
-
-        // read the remote kx pubkey.
-        let mut oth_eph_kx_pub = [0; 32];
-        recv.read_exact(&mut oth_eph_kx_pub).await?;
-        let oth_eph_kx_pub = sodoken::BufReadSized::from(oth_eph_kx_pub);
-
-        // prepare our transport secrets
-        let rx = sodoken::BufWriteSized::new_mem_locked()?;
-        let tx = sodoken::BufWriteSized::new_mem_locked()?;
-
-        // do the key exchange calculation
-        // depending on if we're the "server" or "client".
-        if is_srv {
-            sodoken::kx::server_session_keys(
-                rx.clone(),
-                tx.clone(),
-                eph_kx_pub,
-                eph_kx_sec,
-                oth_eph_kx_pub,
-            )?;
-        } else {
-            sodoken::kx::client_session_keys(
-                rx.clone(),
-                tx.clone(),
-                eph_kx_pub,
-                eph_kx_sec,
-                oth_eph_kx_pub,
-            )?;
-        }
-
-        Ok((tx.to_read_sized(), rx.to_read_sized()))
-    }
-}
-
 /// use secret keys to initialize secretstream encryption / decryption.
 fn priv_init_ss<'a>(
     send: &'a mut PrivRawSend,
@@ -250,17 +331,31 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_sodium_secretstream() {
+        use sodoken::crypto_box::curve25519xchacha20poly1305::*;
+        let srv_id_pub = sodoken::BufWriteSized::new_no_lock();
+        let srv_id_sec = sodoken::BufWriteSized::new_mem_locked().unwrap();
+        keypair(srv_id_pub.clone(), srv_id_sec.clone())
+            .await
+            .unwrap();
+        let srv_id_pub = srv_id_pub.to_read_sized();
+        let srv_id_sec = srv_id_sec.to_read_sized();
+
         // make a memory channel for testing.
         let (alice, bob) = tokio::io::duplex(4096);
 
         // split alice up and get a new s3 pair for her side.
         let (alice_recv, alice_send) = tokio::io::split(alice);
-        let alice_fut =
-            new_s3_pair::<usize, _, _>(alice_send, alice_recv, false);
+        let alice_fut = new_s3_client::<usize, _, _>(
+            alice_send,
+            alice_recv,
+            srv_id_pub.clone(),
+        );
 
         // split bob up and get a new s3 pair for his side.
         let (bob_recv, bob_send) = tokio::io::split(bob);
-        let bob_fut = new_s3_pair::<usize, _, _>(bob_send, bob_recv, true);
+        let bob_fut = new_s3_server::<usize, _, _>(
+            bob_send, bob_recv, srv_id_pub, srv_id_sec,
+        );
 
         // await initialization in parallel to handshake properly.
         let ((alice_send, mut alice_recv), (bob_send, mut bob_recv)) =

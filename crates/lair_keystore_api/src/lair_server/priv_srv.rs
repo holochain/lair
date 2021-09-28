@@ -1,12 +1,5 @@
 use super::*;
 
-pub(crate) struct SrvPendingInner {
-    pub(crate) config: LairServerConfig,
-    pub(crate) server_name: Arc<str>,
-    pub(crate) server_version: Arc<str>,
-    pub(crate) store_factory: LairStoreFactory,
-}
-
 #[derive(Clone)]
 pub(crate) struct FullLairEntry {
     pub(crate) entry: LairEntry,
@@ -14,134 +7,97 @@ pub(crate) struct FullLairEntry {
     pub(crate) x_sk: Option<sodoken::BufReadSized<32>>,
 }
 
-pub(crate) struct SrvRunningInner {
+pub(crate) struct SrvInner {
     pub(crate) config: LairServerConfig,
     pub(crate) server_name: Arc<str>,
     pub(crate) server_version: Arc<str>,
     pub(crate) store: LairStore,
-    pub(crate) sign_pk: Ed25519PubKey,
-    pub(crate) sign_sk: sodoken::BufReadSized<64>,
+    pub(crate) id_pk: sodoken::BufReadSized<32>,
+    pub(crate) id_sk: sodoken::BufReadSized<32>,
     pub(crate) entries_by_tag: lru::LruCache<Arc<str>, FullLairEntry>,
     pub(crate) entries_by_ed: lru::LruCache<Ed25519PubKey, FullLairEntry>,
     #[allow(dead_code)]
     pub(crate) entries_by_x: lru::LruCache<X25519PubKey, FullLairEntry>,
 }
 
-pub(crate) enum SrvInnerEnum {
-    Pending(Box<SrvPendingInner>),
-    Running(Box<SrvRunningInner>),
-}
+pub(crate) struct Srv(pub(crate) Arc<RwLock<SrvInner>>);
 
-pub(crate) struct Srv(pub(crate) Arc<RwLock<SrvInnerEnum>>);
+impl Srv {
+    pub(crate) fn new(
+        config: LairServerConfig,
+        server_name: Arc<str>,
+        server_version: Arc<str>,
+        store_factory: LairStoreFactory,
+        passphrase: sodoken::BufRead,
+    ) -> impl Future<Output = LairResult<Self>> + 'static + Send {
+        async move {
+            // read salt from config
+            let salt = sodoken::BufReadSized::from(
+                config.runtime_secrets_salt.cloned_inner(),
+            );
 
-pub(crate) fn priv_srv_unlock(
-    inner: Arc<RwLock<SrvInnerEnum>>,
-    passphrase: sodoken::BufRead,
-) -> BoxFuture<'static, LairResult<()>> {
-    let (config, server_name, server_version, store_factory) =
-        match &*inner.read() {
-            SrvInnerEnum::Running(p) => (
-                p.config.clone(),
-                p.server_name.clone(),
-                p.server_version.clone(),
-                None,
-            ),
-            SrvInnerEnum::Pending(p) => (
-                p.config.clone(),
-                p.server_name.clone(),
-                p.server_version.clone(),
-                Some(p.store_factory.clone()),
-            ),
-        };
+            // read limits from config
+            let ops_limit = config.runtime_secrets_ops_limit;
+            let mem_limit = config.runtime_secrets_mem_limit;
 
-    async move {
-        // read salt from config
-        let salt = sodoken::BufReadSized::from(
-            config.runtime_secrets_salt.cloned_inner(),
-        );
-
-        // read limits from config
-        let ops_limit = config.runtime_secrets_ops_limit;
-        let mem_limit = config.runtime_secrets_mem_limit;
-
-        // calculate pre_secret from argon2id passphrase hash
-        let pre_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-        sodoken::hash::argon2id::hash(
-            pre_secret.clone(),
-            passphrase,
-            salt,
-            ops_limit,
-            mem_limit,
-        )
-        .await?;
-
-        // derive ctx (db) decryption secret
-        let ctx_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-        sodoken::kdf::derive_from_key(
-            ctx_secret.clone(),
-            42,
-            *b"CtxSecKy",
-            pre_secret.clone(),
-        )?;
-
-        // derive signature decryption secret
-        let sig_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-        sodoken::kdf::derive_from_key(
-            sig_secret.clone(),
-            142,
-            *b"SigSecKy",
-            pre_secret,
-        )?;
-
-        // decrypt the context (database) key
-        let context_key = config
-            .runtime_secrets_context_key
-            .decrypt(ctx_secret.to_read_sized())
+            // calculate pre_secret from argon2id passphrase hash
+            let pre_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            sodoken::hash::argon2id::hash(
+                pre_secret.clone(),
+                passphrase,
+                salt,
+                ops_limit,
+                mem_limit,
+            )
             .await?;
 
-        // decrypt the signature seed
-        let sign_seed = config
-            .runtime_secrets_sign_seed
-            .decrypt(sig_secret.to_read_sized())
-            .await?;
+            // derive ctx (db) decryption secret
+            let ctx_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            sodoken::kdf::derive_from_key(
+                ctx_secret.clone(),
+                42,
+                *b"CtxSecKy",
+                pre_secret.clone(),
+            )?;
 
-        // derive the signature keypair from the signature seed
-        let sign_pk = <sodoken::BufWriteSized<32>>::new_no_lock();
-        let sign_sk = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-        sodoken::sign::seed_keypair(
-            sign_pk.clone(),
-            sign_sk.clone(),
-            sign_seed.clone(),
-        )
-        .await?;
+            // derive signature decryption secret
+            let id_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            sodoken::kdf::derive_from_key(
+                id_secret.clone(),
+                142,
+                *b"IdnSecKy",
+                pre_secret,
+            )?;
 
-        // TODO - double check the sign_pk matches the `?k=Yada` on conUrl
+            // decrypt the context (database) key
+            let context_key = config
+                .runtime_secrets_context_key
+                .decrypt(ctx_secret.to_read_sized())
+                .await?;
 
-        // check if another connection snuck in and unlocked us already
-        if let SrvInnerEnum::Running(_) = &*inner.read() {
-            return Ok(());
-        }
+            // decrypt the signature seed
+            let id_seed = config
+                .runtime_secrets_id_seed
+                .decrypt(id_secret.to_read_sized())
+                .await?;
 
-        if let Some(store_factory) = store_factory {
+            // derive the signature keypair from the signature seed
+            let id_pk = <sodoken::BufWriteSized<32>>::new_no_lock();
+            let id_sk = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            use sodoken::crypto_box::curve25519xchacha20poly1305::*;
+            seed_keypair(id_pk.clone(), id_sk.clone(), id_seed.clone()).await?;
+
             // generate a lair_store instance using the database key
             let store =
                 store_factory.connect_to_store(context_key.clone()).await?;
 
-            let mut lock = inner.write();
-
-            // check if another connection snuck in and unlocked us already
-            if let SrvInnerEnum::Running(_) = &*lock {
-                return Ok(());
-            }
-
-            // otherwise, we can initialize ourselves as running
-            *lock = SrvInnerEnum::Running(Box::new(SrvRunningInner {
+            Ok(Self(Arc::new(RwLock::new(SrvInner {
                 config,
                 server_name,
                 server_version,
                 store,
-                sign_pk: sign_pk.try_unwrap_sized().unwrap().into(),
-                sign_sk: sign_sk.to_read_sized(),
+                id_pk: id_pk.try_unwrap_sized().unwrap().into(),
+                id_sk: id_sk.to_read_sized(),
                 // worst case, if all these caches evict different entries
                 // we could end up storing 384 entries at once...
                 // the entries themselves are Arc<>'s so putting them
@@ -149,24 +105,26 @@ pub(crate) fn priv_srv_unlock(
                 entries_by_tag: lru::LruCache::new(128),
                 entries_by_ed: lru::LruCache::new(128),
                 entries_by_x: lru::LruCache::new(128),
-            }));
+            }))))
         }
-
-        Ok(())
     }
-    .boxed()
 }
 
 pub(crate) fn priv_srv_accept(
-    inner: Arc<RwLock<SrvInnerEnum>>,
+    inner: Arc<RwLock<SrvInner>>,
     send: RawSend,
     recv: RawRecv,
 ) -> BoxFuture<'static, LairResult<()>> {
     async move {
+        let (id_pk, id_sk) = {
+            let lock = inner.read();
+            (lock.id_pk.clone(), lock.id_sk.clone())
+        };
+
         // initialize encryption on the async io channel
         let (send, recv) =
-            crate::sodium_secretstream::new_s3_pair::<LairApiEnum, _, _>(
-                send, recv, true,
+            crate::sodium_secretstream::new_s3_server::<LairApiEnum, _, _>(
+                send, recv, id_pk, id_sk,
             )
             .await?;
 
@@ -252,7 +210,7 @@ pub(crate) fn priv_srv_accept(
 }
 
 pub(crate) fn priv_dispatch_incoming<'a>(
-    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
     enc_ctx_key: &'a sodoken::BufReadSized<32>,
     dec_ctx_key: &'a sodoken::BufReadSized<32>,
@@ -315,31 +273,17 @@ pub(crate) fn priv_dispatch_incoming<'a>(
 }
 
 pub(crate) fn priv_get_store(
-    inner: &Arc<RwLock<SrvInnerEnum>>,
+    inner: &Arc<RwLock<SrvInner>>,
     unlocked: &Arc<atomic::AtomicBool>,
 ) -> LairResult<LairStore> {
     if !unlocked.load(atomic::Ordering::Relaxed) {
         return Err("KeystoreLocked".into());
     }
 
-    let store = match &*inner.read() {
-        SrvInnerEnum::Running(p) => (p.store.clone()),
-        SrvInnerEnum::Pending(_) => {
-            return Err("KeystoreLocked".into());
-        }
-    };
-
-    Ok(store)
+    Ok(inner.read().store.clone())
 }
 
 impl AsLairServer for Srv {
-    fn unlock(
-        &self,
-        passphrase: sodoken::BufRead,
-    ) -> BoxFuture<'static, LairResult<()>> {
-        priv_srv_unlock(self.0.clone(), passphrase)
-    }
-
     fn accept(
         &self,
         send: RawSend,
@@ -349,13 +293,7 @@ impl AsLairServer for Srv {
     }
 
     fn store(&self) -> BoxFuture<'static, LairResult<LairStore>> {
-        let store = match &*self.0.read() {
-            SrvInnerEnum::Running(p) => p.store.clone(),
-            SrvInnerEnum::Pending(_) => {
-                return async move { Err("server locked, no store".into()) }
-                    .boxed();
-            }
-        };
+        let store = self.0.read().store.clone();
         async move { Ok(store) }.boxed()
     }
 }

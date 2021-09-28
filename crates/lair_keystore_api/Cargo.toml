@@ -24,7 +24,7 @@ rmp-serde = "0.15.5"
 serde = { version = "1", features = [ "rc" ] }
 serde_bytes = "0.11.5"
 serde_yaml = "0.8.21"
-sodoken = "=0.0.1-alpha.18"
+sodoken = "=0.0.1-alpha.20"
 tokio = { version = "1.12.0", features = [ "full" ] }
 toml = "0.5.8"
 tracing = "0.1.28"

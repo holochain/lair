@@ -34,7 +34,7 @@ pub struct LairServerConfigInner {
     pub runtime_secrets_context_key: SecretDataSized<32, 49>,
 
     /// the server identity signature keypair seed
-    pub runtime_secrets_sign_seed: SecretDataSized<32, 49>,
+    pub runtime_secrets_id_seed: SecretDataSized<32, 49>,
 }
 
 impl std::fmt::Display for LairServerConfigInner {
@@ -101,11 +101,11 @@ impl LairServerConfigInner {
 
             // derive our signature secret
             // this will be used to encrypt the signature seed
-            let sig_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            let id_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
             sodoken::kdf::derive_from_key(
-                sig_secret.clone(),
+                id_secret.clone(),
                 142,
-                *b"SigSecKy",
+                *b"IdnSecKy",
                 pre_secret,
             )?;
 
@@ -115,18 +115,14 @@ impl LairServerConfigInner {
 
             // the sign seed derives our signature keypair
             // which allows us to authenticate server identity
-            let sign_seed = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-            sodoken::random::bytes_buf(sign_seed.clone()).await?;
+            let id_seed = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            sodoken::random::bytes_buf(id_seed.clone()).await?;
 
-            // server identity verification signature keypair
-            let sign_pk = <sodoken::BufWriteSized<32>>::new_no_lock();
-            let sign_sk = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-            sodoken::sign::seed_keypair(
-                sign_pk.clone(),
-                sign_sk,
-                sign_seed.clone(),
-            )
-            .await?;
+            // server identity encryption keypair
+            let id_pk = <sodoken::BufWriteSized<32>>::new_no_lock();
+            let id_sk = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            use sodoken::crypto_box::curve25519xchacha20poly1305::*;
+            seed_keypair(id_pk.clone(), id_sk, id_seed.clone()).await?;
 
             // lock the context key
             let context_key = SecretDataSized::encrypt(
@@ -136,15 +132,15 @@ impl LairServerConfigInner {
             .await?;
 
             // lock the signature seed
-            let sign_seed = SecretDataSized::encrypt(
-                sig_secret.to_read_sized(),
-                sign_seed.to_read_sized(),
+            let id_seed = SecretDataSized::encrypt(
+                id_secret.to_read_sized(),
+                id_seed.to_read_sized(),
             )
             .await?;
 
             // get the signature public key bytes for encoding in the url
-            let sign_pk: BinDataSized<32> =
-                sign_pk.try_unwrap_sized().unwrap().into();
+            let id_pk: BinDataSized<32> =
+                id_pk.try_unwrap_sized().unwrap().into();
 
             // on windows, we default to using "named pipes"
             #[cfg(windows)]
@@ -152,7 +148,7 @@ impl LairServerConfigInner {
                 let id = nanoid::nanoid!();
                 url::Url::parse(&format!(
                     "named-pipe:\\\\.\\pipe\\{}?k={}",
-                    id, sign_pk
+                    id, id_pk
                 ))
                 .unwrap()
             };
@@ -165,7 +161,7 @@ impl LairServerConfigInner {
                 url::Url::parse(&format!(
                     "unix://{}?k={}",
                     con_path.to_str().unwrap(),
-                    sign_pk
+                    id_pk
                 ))
                 .unwrap()
             };
@@ -179,7 +175,7 @@ impl LairServerConfigInner {
                 runtime_secrets_mem_limit: mem_limit,
                 runtime_secrets_ops_limit: ops_limit,
                 runtime_secrets_context_key: context_key,
-                runtime_secrets_sign_seed: sign_seed,
+                runtime_secrets_id_seed: id_seed,
             };
 
             Ok(config)

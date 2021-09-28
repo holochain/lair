@@ -19,10 +19,14 @@ impl IpcKeystoreServer {
     /// Construct a new IpcKeystoreServer instance.
     /// The internal server will initially be LOCKED.
     /// You must call 'unlock' if you wish to "interactively" unlock.
-    pub fn new(
+    pub fn new<P>(
         config: LairServerConfig,
         store_factory: LairStoreFactory,
-    ) -> impl Future<Output = LairResult<Self>> + 'static + Send {
+        passphrase: P,
+    ) -> impl Future<Output = LairResult<Self>> + 'static + Send
+    where
+        P: Into<sodoken::BufRead> + 'static + Send,
+    {
         async move {
             let con_recv = raw_ipc::ipc_bind(config.clone()).await?;
 
@@ -32,6 +36,7 @@ impl IpcKeystoreServer {
                 "lair-keystore-ipc".into(),
                 crate::LAIR_VER.into(),
                 store_factory,
+                passphrase.into(),
             )
             .await?;
 
@@ -61,21 +66,6 @@ impl IpcKeystoreServer {
 
             Ok(Self { config, srv_hnd })
         }
-    }
-
-    /// "interactively" unlock this keystore from the server side.
-    /// This is the preferred way to unlock a keystore... if unlocked
-    /// through the client api, the client has no way to know if this
-    /// server is authentic before potentially passing the passphrase
-    /// to a third party attacker (MitM).
-    pub fn unlock<P>(
-        &self,
-        passphrase: P,
-    ) -> impl Future<Output = LairResult<()>> + 'static + Send
-    where
-        P: Into<sodoken::BufRead> + 'static + Send,
-    {
-        self.srv_hnd.unlock(passphrase.into())
     }
 
     /// get a handle to the LairStore instantiated by this server,
@@ -143,9 +133,12 @@ pub fn ipc_keystore_connect_options(
             raw_ipc::ipc_connect(opts.connection_url.clone()).await?;
 
         // wrap this connection up as a LairClient
-        let cli_hnd =
-            crate::lair_client::async_io::new_async_io_lair_client(send, recv)
-                .await?;
+        let cli_hnd = crate::lair_client::async_io::new_async_io_lair_client(
+            send,
+            recv,
+            server_pub_key.cloned_inner().into(),
+        )
+        .await?;
 
         if opts.danger_unlock_without_server_validate {
             // even if they tell us to do this backwards,
@@ -226,15 +219,13 @@ mod tests {
         let keystore = IpcKeystoreServer::new(
             config,
             crate::mem_store::create_mem_store_factory(),
+            passphrase.clone(),
         )
         .await
         .unwrap();
 
         let config = keystore.get_config();
         println!("{}", config);
-
-        // unlock the keystore "interactively" from the server side
-        keystore.unlock(passphrase.clone()).await.unwrap();
 
         // create a client connection
         let client =

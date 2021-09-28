@@ -1259,9 +1259,9 @@ checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
 
 [[package]]
 name = "sodoken"
-version = "0.0.1-alpha.18"
+version = "0.0.1-alpha.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba31515b2b4b4f05179ccb1bca9bec791e115b33fe8b08af2c576941b312c0f5"
+checksum = "40a1e3ce2d027f17fe3f4b688b293e519d884ae9ef6c698bdc4d6dacf4ebb245"
 dependencies = [
  "libc",
  "libsodium-sys",
