@@ -52,9 +52,7 @@ jobs:
           RUST_BACKTRACE: 1
         with:
           command: test
-          args:
-            - --all-targets
-            - --no-run
+          args: --all-targets --no-run
 
       - name: Cargo Test
         uses: actions-rs/cargo@v1
