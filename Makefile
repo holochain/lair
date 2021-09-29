@@ -38,6 +38,7 @@ test: tools
 	if [ "${CI}x" != "x" ]; then \
 		$(ENV) cargo install --debug -f --path crates/lair_keystore; \
 	fi
+	$(ENV) RUST_BACKTRACE=1 cargo build
 	$(ENV) RUST_BACKTRACE=1 cargo test --all-targets --no-run
 	$(ENV) RUST_BACKTRACE=1 cargo test
 	$(ENV) cargo readme -r crates/hc_seed_bundle -o README.md

@@ -18,6 +18,7 @@ pub(crate) struct SrvInner {
     pub(crate) entries_by_ed: lru::LruCache<Ed25519PubKey, FullLairEntry>,
     #[allow(dead_code)]
     pub(crate) entries_by_x: lru::LruCache<X25519PubKey, FullLairEntry>,
+    pub(crate) fallback_cmd: Option<FallbackCmd>,
 }
 
 pub(crate) struct Srv(pub(crate) Arc<RwLock<SrvInner>>);
@@ -91,6 +92,14 @@ impl Srv {
             let store =
                 store_factory.connect_to_store(context_key.clone()).await?;
 
+            // if a fallback signer is specified, launch it
+            let fallback_cmd = match &config.signature_fallback {
+                LairServerSignatureFallback::Command { .. } => {
+                    Some(FallbackCmd::new(&config).await?)
+                }
+                _ => None,
+            };
+
             Ok(Self(Arc::new(RwLock::new(SrvInner {
                 config,
                 server_name,
@@ -105,6 +114,7 @@ impl Srv {
                 entries_by_tag: lru::LruCache::new(128),
                 entries_by_ed: lru::LruCache::new(128),
                 entries_by_x: lru::LruCache::new(128),
+                fallback_cmd,
             }))))
         }
     }
