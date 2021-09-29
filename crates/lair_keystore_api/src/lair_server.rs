@@ -96,6 +96,7 @@ use priv_srv::*;
 mod priv_api;
 use priv_api::*;
 
+/// Helper for managing a signature_fallback sub-process
 #[derive(Clone)]
 pub(crate) struct FallbackCmd {
     req: tokio::sync::mpsc::Sender<(
@@ -106,6 +107,7 @@ pub(crate) struct FallbackCmd {
 }
 
 impl FallbackCmd {
+    /// spawn a new sub-process for fallback signature requests
     pub(crate) async fn new(config: &LairServerConfig) -> LairResult<Self> {
         let (program, args) = match &config.signature_fallback {
             LairServerSignatureFallback::Command { program, args } => {
@@ -123,6 +125,7 @@ impl FallbackCmd {
         let program = dunce::canonicalize(program)?;
         let args = args.unwrap_or_else(Vec::new);
 
+        // spawn the actual sub-process
         let mut child = tokio::process::Command::new(program)
             .args(args)
             .kill_on_drop(true)
@@ -131,6 +134,7 @@ impl FallbackCmd {
             .stderr(std::process::Stdio::null())
             .spawn()?;
 
+        // get our pipe handles
         let mut stdin = child.stdin.take().unwrap();
         let stdout = child.stdout.take().unwrap();
 
@@ -152,11 +156,15 @@ impl FallbackCmd {
         use parking_lot::Mutex;
         let inner = Arc::new(Mutex::new(Inner { p: HashMap::new() }));
 
+        // spawn a tokio task to manage sending requests into the sub-process
         let inner2 = inner.clone();
         tokio::task::spawn(async move {
             while let Some((req, res)) = recv.recv().await {
                 inner2.lock().p.insert(req.msg_id.clone(), res);
-                let pub_key = base64::encode(&*req.pub_key.0);
+                let pub_key = base64::encode_config(
+                    &*req.pub_key.0,
+                    base64::URL_SAFE_NO_PAD,
+                );
                 let data = base64::encode(req.data);
                 let output = format!(
                     "{}\n",
@@ -175,11 +183,13 @@ impl FallbackCmd {
             }
         });
 
+        // spawn a tokio task to manage receiving responses from the sub-process
         tokio::task::spawn(async move {
             use tokio::io::AsyncBufReadExt;
             let stdout = tokio::io::BufReader::new(stdout);
             let mut lines = stdout.lines();
             while let Ok(Some(line)) = lines.next_line().await {
+                // parse the response
                 #[derive(Debug, serde::Deserialize)]
                 #[serde(rename_all = "camelCase")]
                 struct Res {
@@ -197,6 +207,8 @@ impl FallbackCmd {
                     }
                     Ok(r) => r,
                 };
+
+                // send the response back to the requesting logic
                 let respond = inner.lock().p.remove(&res.msg_id);
                 if let Some(respond) = respond {
                     if let Some(error) = res.error {
@@ -233,6 +245,7 @@ impl FallbackCmd {
         })
     }
 
+    /// make a request of the sub-process to sign some data
     pub(crate) fn sign_by_pub_key(
         &self,
         req: LairApiReqSignByPubKey,

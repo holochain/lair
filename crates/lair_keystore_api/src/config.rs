@@ -67,6 +67,8 @@ pub struct LairServerConfigInner {
 impl std::fmt::Display for LairServerConfigInner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = serde_yaml::to_string(&self).map_err(|_| std::fmt::Error)?;
+
+        // inject some helpful comments
         let mut lines = Vec::new();
         for (id, line) in s.split('\n').enumerate() {
             if id > 0 {
