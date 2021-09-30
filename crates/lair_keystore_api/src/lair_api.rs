@@ -73,6 +73,12 @@ pub use new_seed::*;
 mod sign_by_pub_key;
 pub use sign_by_pub_key::*;
 
+mod crypto_box_xsalsa_by_pub_key;
+pub use crypto_box_xsalsa_by_pub_key::*;
+
+mod crypto_box_xsalsa_open_by_pub_key;
+pub use crypto_box_xsalsa_open_by_pub_key::*;
+
 mod new_wka_tls_cert;
 pub use new_wka_tls_cert::*;
 
@@ -126,6 +132,18 @@ pub enum LairApiEnum {
     /// A signature response.
     ResSignByPubKey(LairApiResSignByPubKey),
 
+    /// Request "crypto_box" encryption.
+    ReqCryptoBoxXSalsaByPubKey(LairApiReqCryptoBoxXSalsaByPubKey),
+
+    /// A "crypto_box" encryption response.
+    ResCryptoBoxXSalsaByPubKey(LairApiResCryptoBoxXSalsaByPubKey),
+
+    /// Request "crypto_box_open" decryption.
+    ReqCryptoBoxXSalsaOpenByPubKey(LairApiReqCryptoBoxXSalsaOpenByPubKey),
+
+    /// A "crypto_box_open" decryption response.
+    ResCryptoBoxXSalsaOpenByPubKey(LairApiResCryptoBoxXSalsaOpenByPubKey),
+
     /// Instruct lair to generate a new wka tls certificate
     /// from cryptographically secure random data with given tag.
     ReqNewWkaTlsCert(LairApiReqNewWkaTlsCert),
@@ -174,6 +192,18 @@ impl LairApiEnum {
             Self::ResSignByPubKey(LairApiResSignByPubKey {
                 msg_id, ..
             }) => msg_id.clone(),
+            Self::ReqCryptoBoxXSalsaByPubKey(
+                LairApiReqCryptoBoxXSalsaByPubKey { msg_id, .. },
+            ) => msg_id.clone(),
+            Self::ResCryptoBoxXSalsaByPubKey(
+                LairApiResCryptoBoxXSalsaByPubKey { msg_id, .. },
+            ) => msg_id.clone(),
+            Self::ReqCryptoBoxXSalsaOpenByPubKey(
+                LairApiReqCryptoBoxXSalsaOpenByPubKey { msg_id, .. },
+            ) => msg_id.clone(),
+            Self::ResCryptoBoxXSalsaOpenByPubKey(
+                LairApiResCryptoBoxXSalsaOpenByPubKey { msg_id, .. },
+            ) => msg_id.clone(),
             Self::ReqNewWkaTlsCert(LairApiReqNewWkaTlsCert {
                 msg_id, ..
             }) => msg_id.clone(),

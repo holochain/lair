@@ -245,12 +245,17 @@ pub(crate) fn priv_dispatch_incoming<'a>(
                 priv_req_new_seed(inner, send, dec_ctx_key, unlocked, req).await
             }
             LairApiEnum::ReqSignByPubKey(req) => {
-                priv_req_sign_by_pub_key(
-                    inner,
-                    send,
-                    dec_ctx_key,
-                    unlocked,
-                    req,
+                priv_req_sign_by_pub_key(inner, send, unlocked, req).await
+            }
+            LairApiEnum::ReqCryptoBoxXSalsaByPubKey(req) => {
+                priv_req_crypto_box_xsalsa_by_pub_key(
+                    inner, send, unlocked, req,
+                )
+                .await
+            }
+            LairApiEnum::ReqCryptoBoxXSalsaOpenByPubKey(req) => {
+                priv_req_crypto_box_xsalsa_open_by_pub_key(
+                    inner, send, unlocked, req,
                 )
                 .await
             }
@@ -274,6 +279,8 @@ pub(crate) fn priv_dispatch_incoming<'a>(
             | LairApiEnum::ResListEntries(_)
             | LairApiEnum::ResNewSeed(_)
             | LairApiEnum::ResSignByPubKey(_)
+            | LairApiEnum::ResCryptoBoxXSalsaByPubKey(_)
+            | LairApiEnum::ResCryptoBoxXSalsaOpenByPubKey(_)
             | LairApiEnum::ResNewWkaTlsCert(_)
             | LairApiEnum::ResGetWkaTlsCertPrivKey(_) => {
                 Err(format!("invalid request: {:?}", incoming).into())

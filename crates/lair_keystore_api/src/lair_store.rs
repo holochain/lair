@@ -38,6 +38,12 @@ pub mod traits {
             &self,
             ed25519_pub_key: Ed25519PubKey,
         ) -> BoxFuture<'static, LairResult<LairEntry>>;
+
+        /// Get an entry from the lair store by x25519 pub key.
+        fn get_entry_by_x25519_pub_key(
+            &self,
+            x25519_pub_key: X25519PubKey,
+        ) -> BoxFuture<'static, LairResult<LairEntry>>;
     }
 
     /// Defines a factory that produces lair storage mechanism instances.
@@ -402,6 +408,14 @@ impl LairStore {
         ed25519_pub_key: Ed25519PubKey,
     ) -> impl Future<Output = LairResult<LairEntry>> + 'static + Send {
         AsLairStore::get_entry_by_ed25519_pub_key(&*self.0, ed25519_pub_key)
+    }
+
+    /// Get an entry from the lair store by x25519 pub key.
+    pub fn get_entry_by_x25519_pub_key(
+        &self,
+        x25519_pub_key: X25519PubKey,
+    ) -> impl Future<Output = LairResult<LairEntry>> + 'static + Send {
+        AsLairStore::get_entry_by_x25519_pub_key(&*self.0, x25519_pub_key)
     }
 }
 

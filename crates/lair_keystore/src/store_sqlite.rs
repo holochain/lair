@@ -464,6 +464,29 @@ impl AsLairStore for SqlPool {
         }
         .boxed()
     }
+
+    fn get_entry_by_x25519_pub_key(
+        &self,
+        x25519_pub_key: X25519PubKey,
+    ) -> BoxFuture<'static, LairResult<LairEntry>> {
+        let read = self.read();
+        async move {
+            let mut read = read.await;
+            let data = read
+                .transaction(move |txn| {
+                    txn.query_row(
+                        "SELECT data FROM lair_keystore WHERE x25519_pub_key = ?1;",
+                        params![&x25519_pub_key[..]],
+                        |row| row.get::<_, Vec<u8>>(0),
+                    )
+                    .map_err(one_err::OneErr::new)
+                })
+                .await?;
+            let e = LairEntryInner::decode(&data)?;
+            Ok(Arc::new(e))
+        }
+        .boxed()
+    }
 }
 
 const KEY_PRAGMA_LEN: usize = 83;

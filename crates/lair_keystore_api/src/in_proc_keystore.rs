@@ -207,5 +207,31 @@ mod tests {
             .unwrap();
 
         println!("{:#?}", client.list_entries().await.unwrap());
+
+        let seed_info_ref2 =
+            client.new_seed("test-tag-2".into(), None).await.unwrap();
+
+        let (nonce, cipher) = client
+            .crypto_box_xsalsa_by_pub_key(
+                seed_info_ref.x25519_pub_key.clone(),
+                seed_info_ref2.x25519_pub_key.clone(),
+                None,
+                b"hello"[..].into(),
+            )
+            .await
+            .unwrap();
+
+        let msg = client
+            .crypto_box_xsalsa_open_by_pub_key(
+                seed_info_ref.x25519_pub_key,
+                seed_info_ref2.x25519_pub_key,
+                None,
+                nonce,
+                cipher,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(b"hello", &*msg);
     }
 }

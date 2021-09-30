@@ -234,7 +234,6 @@ pub(crate) fn priv_req_new_seed<'a>(
 pub(crate) fn priv_req_sign_by_pub_key<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
-    _dec_ctx_key: &'a sodoken::BufReadSized<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqSignByPubKey,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
@@ -284,6 +283,101 @@ pub(crate) fn priv_req_sign_by_pub_key<'a>(
 
         // send the response
         send.send(res.into_api_enum()).await?;
+
+        Ok(())
+    }
+}
+
+pub(crate) fn priv_req_crypto_box_xsalsa_by_pub_key<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqCryptoBoxXSalsaByPubKey,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("KeystoreLocked".into());
+        }
+
+        // get cached full entry
+        let (full_entry, _) =
+            priv_get_full_entry_by_x_pub_key(inner, req.sender_pub_key.clone())
+                .await?;
+
+        let nonce = sodoken::BufWriteSized::new_no_lock();
+        sodoken::random::bytes_buf(nonce.clone()).await?;
+
+        use sodoken::crypto_box::curve25519xsalsa20poly1305::*;
+        let cipher = if let Some(x_sk) = full_entry.x_sk {
+            easy(
+                nonce.clone(),
+                req.data,
+                req.recipient_pub_key.cloned_inner(),
+                x_sk,
+            )
+            .await?
+        } else {
+            return Err("deep_seed crypto_box not yet implemented".into());
+        };
+
+        send.send(
+            LairApiResCryptoBoxXSalsaByPubKey {
+                msg_id: req.msg_id,
+                nonce: nonce.try_unwrap_sized().unwrap(),
+                cipher: cipher.try_unwrap().unwrap().into(),
+            }
+            .into_api_enum(),
+        )
+        .await?;
+
+        Ok(())
+    }
+}
+
+pub(crate) fn priv_req_crypto_box_xsalsa_open_by_pub_key<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqCryptoBoxXSalsaOpenByPubKey,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("KeystoreLocked".into());
+        }
+
+        // get cached full entry
+        let (full_entry, _) = priv_get_full_entry_by_x_pub_key(
+            inner,
+            req.recipient_pub_key.clone(),
+        )
+        .await?;
+
+        use sodoken::crypto_box::curve25519xsalsa20poly1305::*;
+
+        let message =
+            sodoken::BufWrite::new_no_lock(open_easy_msg_len(req.cipher.len()));
+
+        if let Some(x_sk) = full_entry.x_sk {
+            open_easy(
+                req.nonce,
+                message.clone(),
+                req.cipher,
+                req.sender_pub_key.cloned_inner(),
+                x_sk,
+            )
+            .await?;
+        } else {
+            return Err("deep_seed crypto_box not yet implemented".into());
+        }
+
+        send.send(
+            LairApiResCryptoBoxXSalsaOpenByPubKey {
+                msg_id: req.msg_id,
+                message: message.try_unwrap().unwrap().into(),
+            }
+            .into_api_enum(),
+        )
+        .await?;
 
         Ok(())
     }
@@ -417,6 +511,31 @@ pub(crate) fn priv_get_full_entry_by_ed_pub_key<'a>(
 
         // get the entry
         let entry = store.get_entry_by_ed25519_pub_key(ed_pub_key).await?;
+
+        let full_entry =
+            priv_gen_and_register_entry(inner, &store, entry).await?;
+
+        Ok((full_entry, store))
+    }
+}
+
+#[allow(clippy::needless_lifetimes)] // this helps me define the future bounds
+pub(crate) fn priv_get_full_entry_by_x_pub_key<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    x_pub_key: X25519PubKey,
+) -> impl Future<Output = LairResult<(FullLairEntry, LairStore)>> + 'a + Send {
+    async move {
+        let store = {
+            let mut lock = inner.write();
+            let store = lock.store.clone();
+            if let Some(full_entry) = lock.entries_by_x.get(&x_pub_key) {
+                return Ok((full_entry.clone(), store));
+            }
+            store
+        };
+
+        // get the entry
+        let entry = store.get_entry_by_x25519_pub_key(x_pub_key).await?;
 
         let full_entry =
             priv_gen_and_register_entry(inner, &store, entry).await?;
