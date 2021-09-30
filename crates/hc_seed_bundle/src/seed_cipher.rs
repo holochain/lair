@@ -149,8 +149,8 @@ impl SeedCipherBuilder {
 /// This locked cipher is a simple pwHash type.
 pub struct LockedSeedCipherPwHash {
     salt: sodoken::BufReadSized<16>,
-    mem_limit: usize,
-    ops_limit: u64,
+    mem_limit: u32,
+    ops_limit: u32,
     seed_cipher_header: sodoken::BufReadSized<24>,
     seed_cipher: sodoken::BufReadSized<49>,
     app_data: Arc<[u8]>,
@@ -207,8 +207,8 @@ impl LockedSeedCipherPwHash {
 /// This locked cipher is based on security questions.
 pub struct LockedSeedCipherSecurityQuestions {
     salt: sodoken::BufReadSized<16>,
-    mem_limit: usize,
-    ops_limit: u64,
+    mem_limit: u32,
+    ops_limit: u32,
     question_list: (String, String, String),
     seed_cipher_header: sodoken::BufReadSized<24>,
     seed_cipher: sodoken::BufReadSized<49>,
@@ -319,8 +319,8 @@ impl LockedSeedCipher {
                     out.push(LockedSeedCipher::PwHash(
                         LockedSeedCipherPwHash {
                             salt: salt.into(),
-                            mem_limit: mem_limit as usize,
-                            ops_limit: ops_limit as u64,
+                            mem_limit,
+                            ops_limit,
                             seed_cipher_header: header.into(),
                             seed_cipher: cipher.into(),
                             app_data: app_data.clone(),
@@ -339,8 +339,8 @@ impl LockedSeedCipher {
                     out.push(LockedSeedCipher::SecurityQuestions(
                         LockedSeedCipherSecurityQuestions {
                             salt: salt.into(),
-                            mem_limit: mem_limit as usize,
-                            ops_limit: ops_limit as u64,
+                            mem_limit,
+                            ops_limit,
                             question_list,
                             seed_cipher_header: header.into(),
                             seed_cipher: cipher.into(),

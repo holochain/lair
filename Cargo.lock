@@ -734,7 +734,7 @@ dependencies = [
 
 [[package]]
 name = "hc_seed_bundle"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "base64",
  "futures",
@@ -860,7 +860,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "base64",
  "criterion",
@@ -883,7 +883,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_api"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "arbitrary",
  "blake2b_simd",
@@ -915,7 +915,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_client"
-version = "0.0.5"
+version = "0.0.6"
 dependencies = [
  "futures",
  "ghost_actor",
@@ -1130,9 +1130,9 @@ checksum = "692fcb63b64b1758029e0a96ee63e049ce8c5948587f2f7208df04625e5f6b56"
 
 [[package]]
 name = "one_err"
-version = "0.0.3"
+version = "0.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b55eaea6875b5ff51b82291b20d17e49e9f68c723204d26016e938bbdb76452"
+checksum = "42901c1956c1ef1de5bce4428695aa03505a8e27bd2262173395c804834f44ec"
 dependencies = [
  "indexmap",
  "libc",
@@ -1905,9 +1905,9 @@ checksum = "fe0f37c9e8f3c5a4a66ad655a93c74daac4ad00c441533bf5c6e7990bb42604e"
 
 [[package]]
 name = "sodoken"
-version = "0.0.1-alpha.13"
+version = "0.0.1-alpha.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c4efe570f6f7ed43b77e6c80a912f70994cb1a492f3a12bd8f79a23a9127aca"
+checksum = "4289c6852b505c8b6b8c6ec7de150de002694e5bb021e9a9b769e20427d1d0de"
 dependencies = [
  "libc",
  "libsodium-sys",
