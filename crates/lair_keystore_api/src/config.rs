@@ -4,6 +4,9 @@ use crate::prelude::*;
 use std::future::Future;
 use std::sync::Arc;
 
+const PID_FILE_NAME: &str = "pid_file";
+const STORE_FILE_NAME: &str = "store_file";
+
 /// Config used by lair servers.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -64,11 +67,11 @@ impl LairServerConfigInner {
         async move {
             // default pid_file name is '[root_path]/pid_file'
             let mut pid_file = root_path.clone();
-            pid_file.push("pid_file");
+            pid_file.push(PID_FILE_NAME);
 
             // default store_file name is '[root_path]/store_file'
             let mut store_file = root_path.clone();
-            store_file.push("store_file");
+            store_file.push(STORE_FILE_NAME);
 
             // generate a random salt for the pwhash
             let salt = <sodoken::BufWriteSized<16>>::new_no_lock();
@@ -209,19 +212,7 @@ pub fn get_server_pub_key_from_connection_url(
 ) -> LairResult<BinDataSized<32>> {
     for (k, v) in url.query_pairs() {
         if k == "k" {
-            let tmp =
-                base64::decode_config(v.as_bytes(), base64::URL_SAFE_NO_PAD)
-                    .map_err(one_err::OneErr::new)?;
-            if tmp.len() != 32 {
-                return Err(format!(
-                    "invalid server_pub_key len, expected 32, got {}",
-                    tmp.len()
-                )
-                .into());
-            }
-            let mut out = [0; 32];
-            out.copy_from_slice(&tmp);
-            return Ok(out.into());
+            return v.parse();
         }
     }
     Err("no server_pub_key on connection_url".into())
