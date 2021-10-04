@@ -14,6 +14,7 @@ edition = "2018"
 [dependencies]
 dunce = "1.0.2"
 futures = "0.3.17"
+hc_seed_bundle = { version = "=0.1.0-alpha.1", path = "../hc_seed_bundle" }
 lair_keystore_api = { version = "=0.1.0-alpha.1", path = "../lair_keystore_api" }
 one_err = "0.0.4"
 parking_lot = "0.11.2"
@@ -39,6 +40,8 @@ rusqlite = { version = "0.25.3", features = [ "sqlcipher" ] }
 
 [build-dependencies]
 lair_keystore_api = { version = "=0.1.0-alpha.1", path = "../lair_keystore_api" }
+pretty_assertions = "0.7.2"
+sqlformat = "0.1.6"
 
 [dev-dependencies]
 criterion = "0.3.5"
