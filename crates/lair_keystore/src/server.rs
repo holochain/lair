@@ -1,12 +1,15 @@
 //! standalone binary server
 //! - you probably only want to use this directly if you're writing tests
 
+use lair_keystore_api::ipc_keystore::IpcKeystoreServer;
 use lair_keystore_api::prelude::*;
+use std::future::Future;
 
 /// standalone binary server
 /// - you probably only want to use this directly if you're writing tests
 pub struct StandaloneServer {
     config: LairServerConfig,
+    srv_hnd: Option<IpcKeystoreServer>,
 }
 
 impl StandaloneServer {
@@ -45,11 +48,14 @@ impl StandaloneServer {
             }
         }
 
-        Ok(Self { config })
+        Ok(Self {
+            config,
+            srv_hnd: None,
+        })
     }
 
     /// Run the server unlocked "interactively" right away with supplied pw.
-    pub async fn run_unlocked<P>(self, passphrase: P) -> LairResult<()>
+    pub async fn run_unlocked<P>(&mut self, passphrase: P) -> LairResult<()>
     where
         P: Into<sodoken::BufRead> + 'static + Send,
     {
@@ -59,12 +65,12 @@ impl StandaloneServer {
 
     /// Run the server in initially "locked" mode.
     /// Note, this is not very secure.
-    pub async fn run_locked(self) -> LairResult<()> {
+    pub async fn run_locked(&mut self) -> LairResult<()> {
         self.priv_run(None).await
     }
 
     async fn priv_run(
-        self,
+        &mut self,
         passphrase: Option<sodoken::BufRead>,
     ) -> LairResult<()> {
         // construct our sqlite store factory
@@ -73,11 +79,8 @@ impl StandaloneServer {
         );
 
         // spawn the server
-        let srv_hnd = lair_keystore_api::ipc_keystore::IpcKeystoreServer::new(
-            self.config.clone(),
-            store_factory,
-        )
-        .await?;
+        let srv_hnd =
+            IpcKeystoreServer::new(self.config.clone(), store_factory).await?;
 
         if let Some(passphrase) = passphrase {
             srv_hnd.unlock(passphrase).await?;
@@ -90,6 +93,22 @@ impl StandaloneServer {
         );
         println!("# lair-keystore running #");
 
+        self.srv_hnd = Some(srv_hnd);
+
         Ok(())
+    }
+
+    /// get a handle to the LairStore instantiated by this server,
+    /// may error if a store has not yet been created.
+    pub fn store(
+        &self,
+    ) -> impl Future<Output = LairResult<LairStore>> + 'static + Send {
+        let srv_hnd = self.srv_hnd.clone();
+        async move {
+            let srv_hnd = srv_hnd.ok_or_else(|| {
+                one_err::OneErr::new("server not yet running")
+            })?;
+            srv_hnd.store().await
+        }
     }
 }

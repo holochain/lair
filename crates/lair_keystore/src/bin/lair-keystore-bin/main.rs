@@ -14,6 +14,7 @@ use structopt::StructOpt;
 
 pub(crate) const CONFIG_N: &str = "lair-keystore-config.yaml";
 
+mod cmd_import_seed;
 mod cmd_init;
 mod cmd_server;
 mod cmd_url;
@@ -35,11 +36,13 @@ fn vec_to_locked(mut pass_tmp: Vec<u8>) -> LairResult<sodoken::BufRead> {
     }
 }
 
-pub(crate) async fn read_interactive_passphrase() -> LairResult<sodoken::BufRead>
-{
-    let pass_tmp = tokio::task::spawn_blocking(|| {
+pub(crate) async fn read_interactive_passphrase(
+    prompt: &str,
+) -> LairResult<sodoken::BufRead> {
+    let prompt = prompt.to_owned();
+    let pass_tmp = tokio::task::spawn_blocking(move || {
         LairResult::Ok(
-            rpassword::read_password_from_tty(Some("\n# passphrase> "))
+            rpassword::read_password_from_tty(Some(&prompt))
                 .map_err(one_err::OneErr::new)?
                 .into_bytes(),
         )
@@ -102,9 +105,37 @@ pub(crate) struct OptServer {
 }
 
 #[derive(Debug, StructOpt)]
+pub(crate) struct OptImportSeed {
+    /// Instead of the normal "interactive" method of passphrase
+    /// retreival, read the passphrase from stdin. Be careful
+    /// how you make use of this, as it could be less secure.
+    /// Passphrases are newline delimited in this order:
+    /// - 1 - keystore unlock passphrase
+    /// - 2 - bundle unlock passphrase
+    /// - 3 - deep lock passphrase
+    ///       (if -d / --deep-lock is specified)
+    #[structopt(short = "p", long, verbatim_doc_comment)]
+    pub piped: bool,
+
+    /// Specify that this seed should be loaded as a
+    /// "deep-locked" seed. This seed will require an
+    /// additional passphrase specified at access time
+    /// (signature / box / key derivation) to decrypt the seed.
+    #[structopt(short = "d", long, verbatim_doc_comment)]
+    pub deep_lock: bool,
+
+    /// The identification tag for this seed.
+    #[structopt(verbatim_doc_comment)]
+    pub tag: String,
+
+    /// The base64url encoded hc_seed_bundle.
+    #[structopt(verbatim_doc_comment)]
+    pub seed_bundle_base64: String,
+}
+
+#[derive(Debug, StructOpt)]
 enum Cmd {
-    /// Set up a new lair private keystore. Currently '-i'
-    /// is required to specify the passphrase interactively.
+    /// Set up a new lair private keystore.
     #[structopt(verbatim_doc_comment)]
     Init(OptInit),
 
@@ -118,6 +149,15 @@ enum Cmd {
     /// 'lair-keystore init'.
     #[structopt(verbatim_doc_comment)]
     Server(OptServer),
+
+    /// Load a seed bundle into this lair-keystore instance.
+    /// Note, this operation requires capturing the pid_file,
+    /// make sure you do not have a lair-server running.
+    /// Note, we currently only support importing seed bundles
+    /// with a pwhash cipher. We'll try the passphrase you
+    /// supply with all ciphers used to lock the bundle.
+    #[structopt(verbatim_doc_comment)]
+    ImportSeed(OptImportSeed),
 }
 
 #[derive(Debug, StructOpt)]
@@ -167,6 +207,10 @@ async fn exec() -> LairResult<()> {
         Cmd::Server(opt) => {
             let config = get_config(lair_root.as_path()).await?;
             cmd_server::exec(config, opt).await
+        }
+        Cmd::ImportSeed(opt) => {
+            let config = get_config(lair_root.as_path()).await?;
+            cmd_import_seed::exec(config, opt).await
         }
     }
 }

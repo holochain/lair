@@ -529,6 +529,7 @@ dependencies = [
 name = "lair_keystore"
 version = "0.1.0-alpha.1"
 dependencies = [
+ "base64",
  "criterion",
  "dunce",
  "futures",

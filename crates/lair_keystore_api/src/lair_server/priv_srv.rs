@@ -345,4 +345,15 @@ impl AsLairServer for Srv {
     ) -> BoxFuture<'static, LairResult<()>> {
         priv_srv_accept(self.0.clone(), send, recv)
     }
+
+    fn store(&self) -> BoxFuture<'static, LairResult<LairStore>> {
+        let store = match &*self.0.read() {
+            SrvInnerEnum::Running(p) => p.store.clone(),
+            SrvInnerEnum::Pending(_) => {
+                return async move { Err("server locked, no store".into()) }
+                    .boxed();
+            }
+        };
+        async move { Ok(store) }.boxed()
+    }
 }
