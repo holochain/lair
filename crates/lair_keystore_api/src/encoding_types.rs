@@ -286,3 +286,12 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
         Ok(out.to_read_sized())
     }
 }
+
+/// ed25519 signature public key derived from this seed.
+pub type Ed25519PubKey = BinDataSized<32>;
+
+/// ed25519 signature bytes.
+pub type Ed25519Signature = BinDataSized<64>;
+
+/// x25519 encryption public key derived from this seed.
+pub type X25519PubKey = BinDataSized<32>;
