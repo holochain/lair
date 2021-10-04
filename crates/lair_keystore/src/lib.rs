@@ -10,6 +10,8 @@
 
 include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 
+pub(crate) mod sql;
+
 pub mod pid_check;
 pub mod server;
 pub mod store_sqlite;
