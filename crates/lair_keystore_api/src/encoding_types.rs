@@ -4,21 +4,39 @@ use crate::prelude::*;
 use sodoken::secretstream::xchacha20poly1305 as sss;
 use std::sync::Arc;
 
+fn to_base64_url<B: AsRef<[u8]>>(b: B) -> String {
+    base64::encode_config(b.as_ref(), base64::URL_SAFE_NO_PAD)
+}
+
+fn from_base64_url<S: AsRef<str>>(s: S) -> LairResult<Arc<[u8]>> {
+    base64::decode_config(s.as_ref(), base64::URL_SAFE_NO_PAD)
+        .map_err(one_err::OneErr::new)
+        .map(|b| b.into())
+}
+
 /// Wrapper newtype for serde encoding / decoding binary data
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BinData(pub Arc<[u8]>);
 
 impl std::fmt::Debug for BinData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = base64::encode_config(&*self.0, base64::URL_SAFE_NO_PAD);
+        let s = to_base64_url(&*self.0);
         f.debug_tuple("BinData").field(&s).finish()
     }
 }
 
 impl std::fmt::Display for BinData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = base64::encode_config(&*self.0, base64::URL_SAFE_NO_PAD);
+        let s = to_base64_url(&*self.0);
         f.write_str(&s)
+    }
+}
+
+impl std::str::FromStr for BinData {
+    type Err = one_err::OneErr;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        from_base64_url(s).map(Self)
     }
 }
 
@@ -54,7 +72,7 @@ impl serde::Serialize for BinData {
     where
         S: serde::Serializer,
     {
-        let s = base64::encode_config(&*self.0, base64::URL_SAFE_NO_PAD);
+        let s = to_base64_url(&*self.0);
         serializer.serialize_str(&s)
     }
 }
@@ -65,9 +83,9 @@ impl<'de> serde::Deserialize<'de> for BinData {
         D: serde::Deserializer<'de>,
     {
         let tmp: String = serde::Deserialize::deserialize(deserializer)?;
-        base64::decode_config(&tmp, base64::URL_SAFE_NO_PAD)
+        from_base64_url(&tmp)
             .map_err(serde::de::Error::custom)
-            .map(|b| Self(b.into()))
+            .map(Self)
     }
 }
 
@@ -77,15 +95,29 @@ pub struct BinDataSized<const N: usize>(pub Arc<[u8; N]>);
 
 impl<const N: usize> std::fmt::Debug for BinDataSized<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = base64::encode_config(&*self.0, base64::URL_SAFE_NO_PAD);
+        let s = to_base64_url(&*self.0);
         write!(f, "BinDataSized<{}>({})", N, s)
     }
 }
 
 impl<const N: usize> std::fmt::Display for BinDataSized<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = base64::encode_config(&*self.0, base64::URL_SAFE_NO_PAD);
+        let s = to_base64_url(&*self.0);
         f.write_str(&s)
+    }
+}
+
+impl<const N: usize> std::str::FromStr for BinDataSized<N> {
+    type Err = one_err::OneErr;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let tmp = from_base64_url(s)?;
+        if tmp.len() != N {
+            return Err(one_err::OneErr::new("invalid buffer length"));
+        }
+        let mut out = [0; N];
+        out.copy_from_slice(&tmp);
+        Ok(Self(Arc::new(out)))
     }
 }
 
@@ -121,7 +153,7 @@ impl<const N: usize> serde::Serialize for BinDataSized<N> {
     where
         S: serde::Serializer,
     {
-        let s = base64::encode_config(&*self.0, base64::URL_SAFE_NO_PAD);
+        let s = to_base64_url(&*self.0);
         serializer.serialize_str(&s)
     }
 }
@@ -132,8 +164,7 @@ impl<'de, const N: usize> serde::Deserialize<'de> for BinDataSized<N> {
         D: serde::Deserializer<'de>,
     {
         let tmp: String = serde::Deserialize::deserialize(deserializer)?;
-        let tmp = base64::decode_config(&tmp, base64::URL_SAFE_NO_PAD)
-            .map_err(serde::de::Error::custom)?;
+        let tmp = from_base64_url(&tmp).map_err(serde::de::Error::custom)?;
         if tmp.len() != N {
             return Err(serde::de::Error::custom("invalid buffer length"));
         }
