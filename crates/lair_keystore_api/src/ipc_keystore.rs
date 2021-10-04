@@ -157,7 +157,7 @@ pub fn ipc_keystore_connect_options(
                     // hey, it worked, unlock and proceed
                     cli_hnd.unlock(opts.passphrase.clone()).await?;
                 }
-                Err(e) if e.str_kind() == "KestoreLocked" => {
+                Err(e) if e.str_kind() == "KeystoreLocked" => {
                     // lame, the server really is not unlocked...
                     // unlock, but some attacker may get our passphrase
                     cli_hnd.unlock(opts.passphrase.clone()).await?;
