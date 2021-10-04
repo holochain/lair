@@ -16,6 +16,7 @@ pub type LairResult<T> = Result<T, one_err::OneErr>;
 pub mod config;
 pub mod encoding_types;
 pub mod internal;
+pub mod lair_api;
 pub mod lair_store;
 pub mod mem_store;
 pub mod sodium_secretstream;
@@ -24,6 +25,7 @@ pub mod sodium_secretstream;
 pub mod prelude {
     pub use crate::config::*;
     pub use crate::encoding_types::*;
+    pub use crate::lair_api::*;
     pub use crate::lair_store::*;
     pub use crate::LairResult;
 }
