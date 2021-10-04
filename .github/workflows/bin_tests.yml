@@ -17,14 +17,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
-      - name: Install Sqlcipher Linux
-        if: ${{ runner.os == 'Linux' }}
-        run: sudo apt-get install libsqlcipher-dev
-
-      - name: Install Sqlcipher MacOs
-        if: ${{ runner.os == 'macOs' }}
-        run: brew install sqlcipher
-
       - name: Toolchain
         uses: actions-rs/toolchain@v1
         with:
