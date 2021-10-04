@@ -734,7 +734,7 @@ dependencies = [
 
 [[package]]
 name = "hc_seed_bundle"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "base64",
  "futures",
@@ -860,7 +860,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "base64",
  "criterion",
@@ -883,7 +883,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_api"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "arbitrary",
  "blake2b_simd",
@@ -915,7 +915,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_client"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "futures",
  "ghost_actor",
@@ -953,11 +953,12 @@ dependencies = [
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.22.2"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "290b64917f8b0cb885d9de0f9959fe1f775d7fa12f1da2db9001c1c8ab60f89d"
+checksum = "c4ecc4273169aeb654a26ba8c7e087947caad92c9d121886eafa6446d4ebe138"
 dependencies = [
  "cc",
+ "openssl-sys",
  "pkg-config",
  "vcpkg",
 ]
@@ -1145,6 +1146,29 @@ name = "oorandom"
 version = "11.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
+
+[[package]]
+name = "openssl-src"
+version = "111.16.0+1.1.1l"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ab2173f69416cf3ec12debb5823d244127d23a9b127d5a5189aa97c5fa2859f"
+dependencies = [
+ "cc",
+]
+
+[[package]]
+name = "openssl-sys"
+version = "0.9.67"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69df2d8dfc6ce3aaf44b40dec6f487d5a886516cf6879c49e98e0710f310a058"
+dependencies = [
+ "autocfg 1.0.1",
+ "cc",
+ "libc",
+ "openssl-src",
+ "pkg-config",
+ "vcpkg",
+]
 
 [[package]]
 name = "opentelemetry"
@@ -1727,9 +1751,9 @@ dependencies = [
 
 [[package]]
 name = "rusqlite"
-version = "0.25.3"
+version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57adcf67c8faaf96f3248c2a7b419a0dbc52ebe36ba83dd57fe83827c1ea4eb3"
+checksum = "6e2aebd07fccf5c0d3f1458219965b0861d45f5db9f9b2617277fa7f85179213"
 dependencies = [
  "bitflags",
  "fallible-iterator",
