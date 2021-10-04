@@ -32,8 +32,14 @@ fn find_sql(path: &std::path::Path) -> Vec<std::path::PathBuf> {
 
 const FIX_MSG: &str = "-- `FIX_SQL_FMT=1 cargo build` to fix --";
 fn panic_on_diff(path: &std::path::Path, s1: &str, s2: &str) {
-    let s1 = s1.split('\n').map(|s| s.trim()).collect::<Vec<_>>();
-    let s2 = s2.split('\n').map(|s| s.trim()).collect::<Vec<_>>();
+    let s1 = s1
+        .split('\n')
+        .map(|s| s.trim_end_matches('\r'))
+        .collect::<Vec<_>>();
+    let s2 = s2
+        .split('\n')
+        .map(|s| s.trim_end_matches('\r'))
+        .collect::<Vec<_>>();
     pretty_assertions::assert_eq!((s1, path, FIX_MSG), (s2, path, FIX_MSG));
 }
 
