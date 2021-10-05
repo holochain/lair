@@ -59,8 +59,6 @@ where
                 let send = &send;
 
                 recv.for_each_concurrent(4096, move |incoming| async move {
-                    //println!("CLI_RECV: {:?}", incoming);
-
                     let incoming = match incoming {
                         Err(e) => {
                             tracing::warn!("incoming channel error: {:?}", e);
@@ -144,8 +142,6 @@ impl AsLairClient for Cli {
             // keep the raii clean instance here
             // it will clean up our pending entry when this future is dropped.
             let _clean = clean;
-
-            //println!("CLI_SEND: {:?}", request);
 
             // send our request on the channel
             send.send(request).await?;
