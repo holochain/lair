@@ -287,7 +287,7 @@ pub(crate) fn priv_gen_and_register_entry<'a>(
                 // get the encryption keypair
                 let x_pk = sodoken::BufWriteSized::new_no_lock();
                 let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
-                sodoken::sealed_box::curve25519xchacha20poly1305::seed_keypair(
+                sodoken::crypto_box::curve25519xchacha20poly1305::seed_keypair(
                     x_pk.clone(),
                     x_sk.clone(),
                     seed,

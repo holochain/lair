@@ -108,7 +108,7 @@ pub(crate) async fn exec(
     // derive the x25519 encryption keypair from this seed
     let x_pk = sodoken::BufWriteSized::new_no_lock();
     let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
-    sodoken::sealed_box::curve25519xchacha20poly1305::seed_keypair(
+    sodoken::crypto_box::curve25519xchacha20poly1305::seed_keypair(
         x_pk.clone(),
         x_sk,
         seed.clone(),

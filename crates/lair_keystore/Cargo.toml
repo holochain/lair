@@ -17,27 +17,25 @@ dunce = "1.0.2"
 futures = "0.3.17"
 hc_seed_bundle = { version = "=0.1.0-alpha.1", path = "../hc_seed_bundle" }
 lair_keystore_api = { version = "=0.1.0-alpha.1", path = "../lair_keystore_api" }
-one_err = "0.0.4"
+one_err = "0.0.5"
 parking_lot = "0.11.2"
 rpassword = "5.0.1"
-sodoken = "=0.0.1-alpha.18"
+sodoken = "=0.0.1-alpha.21"
 structopt = "0.3.23"
 sysinfo = "0.20.3"
 tokio = { version = "1.12.0", features = [ "full" ] }
 tracing = "0.1.28"
 tracing-subscriber = "0.2.24"
 
-# switch to bundled-sqlcipher once this is released:
+# switch to bundled-sqlcipher-vendored-openssl once this is released:
 # https://github.com/rusqlite/rusqlite/issues/966
 # also can remove `resolver = "2"` when this is no longer different by os
 [target.'cfg(windows)'.dependencies]
-rusqlite = { version = "0.25.3", features = [ "bundled" ] }
+rusqlite = { version = "0.26", features = [ "bundled" ] }
 
-# switch to bundled-sqlcipher once this is released:
-# https://github.com/rusqlite/rusqlite/issues/966
-# also can remove `resolver = "2"` when this is no longer different by os
+# remove `resolver = "2"` when this is no longer different by os
 [target.'cfg(not(windows))'.dependencies]
-rusqlite = { version = "0.25.3", features = [ "sqlcipher" ] }
+rusqlite = { version = "0.26", features = [ "bundled-sqlcipher-vendored-openssl" ] }
 
 [build-dependencies]
 lair_keystore_api = { version = "=0.1.0-alpha.1", path = "../lair_keystore_api" }
