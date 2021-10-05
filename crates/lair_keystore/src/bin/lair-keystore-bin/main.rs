@@ -78,8 +78,10 @@ pub(crate) async fn read_piped_passphrase() -> LairResult<sodoken::BufRead> {
 #[derive(Debug, StructOpt)]
 pub(crate) struct OptInit {
     /// Instead of the normal "interactive" method of passphrase
-    /// retreival, read the passphrase from stdin. Be careful
-    /// how you make use of this, as it could be less secure.
+    /// retrieval, read the passphrase from stdin. Be careful
+    /// how you make use of this, as it could be less secure,
+    /// for example, make sure it is not saved in your
+    /// `~/.bash_history`.
     #[structopt(short = "p", long, verbatim_doc_comment)]
     pub piped: bool,
 }
@@ -88,7 +90,9 @@ pub(crate) struct OptInit {
 pub(crate) struct OptServer {
     /// Instead of the normal "interactive" method of passphrase
     /// retreival, read the passphrase from stdin. Be careful
-    /// how you make use of this, as it could be less secure.
+    /// how you make use of this, as it could be less secure,
+    /// for example, make sure it is not saved in your
+    /// `~/.bash_history`.
     #[structopt(short = "p", long, verbatim_doc_comment)]
     pub piped: bool,
 }

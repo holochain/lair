@@ -1,5 +1,6 @@
 //! lair store backed by a sqlite / sqlcipher database file
 
+use crate::sql;
 use futures::future::{BoxFuture, FutureExt};
 use lair_keystore_api::lair_store::traits::*;
 use lair_keystore_api::prelude::*;
@@ -70,12 +71,6 @@ impl Drop for SqlCon {
 }
 
 impl SqlCon {
-    /*
-    fn last_insert_rowid(&self) -> i64 {
-        self.con.as_ref().unwrap().last_insert_rowid()
-    }
-    */
-
     async fn transaction<R, F>(&mut self, f: F) -> LairResult<R>
     where
         R: 'static + Send,
@@ -189,29 +184,7 @@ impl SqlPool {
             .map_err(one_err::OneErr::new)?;
 
         // initialize tables if they don't already exist
-        write_con.execute_optional(
-            r#"CREATE TABLE IF NOT EXISTS lair_keystore (
-                id                INTEGER  PRIMARY KEY  NOT NULL   UNIQUE,
-                tag               TEXT                  NOT NULL   UNIQUE,
-                ed25519_pub_key   BLOB                  NULL       UNIQUE,
-                x25519_pub_key    BLOB                  NULL       UNIQUE,
-                data              BLOB                  NOT NULL
-            );
-
-            CREATE UNIQUE INDEX IF NOT EXISTS lair_keystore_tag_idx
-                ON lair_keystore
-                ( tag );
-
-            CREATE UNIQUE INDEX IF NOT EXISTS lair_keystore_ed25519_pub_key_idx
-                ON lair_keystore
-                ( ed25519_pub_key );
-
-            CREATE UNIQUE INDEX IF NOT EXISTS lair_keystore_x25519_pub_key_idx
-                ON lair_keystore
-                ( x25519_pub_key );
-            "#,
-            [],
-        )?;
+        write_con.execute_optional(sql::SCHEMA, [])?;
 
         // initialize READ_CON_COUNT read connections to the database
         let mut read_cons: [Option<rusqlite::Connection>; READ_CON_COUNT] =
@@ -317,7 +290,7 @@ impl AsLairStore for SqlPool {
             let mut read = read.await;
             read.transaction(|txn| {
                 let mut s = txn
-                    .prepare("SELECT data FROM lair_keystore;")
+                    .prepare(sql::SELECT_ALL)
                     .map_err(one_err::OneErr::new)?;
                 let it = s
                     .query_map([], |row| {
@@ -379,17 +352,7 @@ impl AsLairStore for SqlPool {
                         // add the extra columns so we can look up
                         // the entry by public keys
                         txn.execute_optional(
-                            r#"INSERT INTO lair_keystore (
-                                tag,
-                                ed25519_pub_key,
-                                x25519_pub_key,
-                                data
-                            ) VALUES (
-                                ?1,
-                                ?2,
-                                ?3,
-                                ?4
-                            );"#,
+                            sql::INSERT_SEED,
                             params![
                                 entry.tag(),
                                 &seed_info.ed25519_pub_key[..],
@@ -403,13 +366,7 @@ impl AsLairStore for SqlPool {
                 write
                     .transaction(move |txn| {
                         txn.execute_optional(
-                            r#"INSERT INTO lair_keystore (
-                                tag,
-                                data
-                            ) VALUES (
-                                ?1,
-                                ?2
-                            );"#,
+                            sql::INSERT,
                             params![entry.tag(), bytes],
                         )
                     })
@@ -428,11 +385,9 @@ impl AsLairStore for SqlPool {
             let mut read = read.await;
             let data = read
                 .transaction(move |txn| {
-                    txn.query_row(
-                        "SELECT data FROM lair_keystore WHERE tag = ?1;",
-                        params![tag],
-                        |row| row.get::<_, Vec<u8>>(0),
-                    )
+                    txn.query_row(sql::SELECT_BY_TAG, params![tag], |row| {
+                        row.get::<_, Vec<u8>>(0)
+                    })
                     .map_err(one_err::OneErr::new)
                 })
                 .await?;
@@ -452,7 +407,7 @@ impl AsLairStore for SqlPool {
             let data = read
                 .transaction(move |txn| {
                     txn.query_row(
-                        "SELECT data FROM lair_keystore WHERE ed25519_pub_key = ?1;",
+                        sql::SELECT_BY_SIGN_PK,
                         params![&ed25519_pub_key[..]],
                         |row| row.get::<_, Vec<u8>>(0),
                     )
@@ -520,7 +475,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn sqlite_sanity() {
         // this is just a sanity / smoke test
-        // this is excersized better in the full server_test.rs
+        // this is exercised better in the full server_test.rs
 
         let tmpdir = tempdir::TempDir::new("lair-keystore-test").unwrap();
         let mut sqlite = tmpdir.path().to_path_buf();
