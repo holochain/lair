@@ -40,13 +40,13 @@ impl AsLairStoreFactory for PrivMemStoreFactory {
 }
 
 struct PrivMemStoreInner {
-    // key for encryption / decryption of secrets
+    /// key for encryption / decryption of secrets
     bidi_key: sodoken::BufReadSized<32>,
-    // the actual entry store, keyed by tag
+    /// the actual entry store, keyed by tag
     entry_by_tag: HashMap<Arc<str>, LairEntry>,
-    // index for signature pub key to tag
+    /// index for signature pub key to tag
     ed_pk_to_tag: HashMap<Ed25519PubKey, Arc<str>>,
-    // index for encryption pub key to tag
+    /// index for encryption pub key to tag
     x_pk_to_tag: HashMap<X25519PubKey, Arc<str>>,
 }
 
