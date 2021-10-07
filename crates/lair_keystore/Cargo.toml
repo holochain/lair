@@ -1,6 +1,6 @@
 [package]
 name = "lair_keystore"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 resolver = "2"
 description = "secret lair private keystore"
 license = "Apache-2.0"
@@ -15,8 +15,8 @@ edition = "2018"
 base64 = "0.13.0"
 dunce = "1.0.2"
 futures = "0.3.17"
-hc_seed_bundle = { version = "=0.1.0-alpha.1", path = "../hc_seed_bundle" }
-lair_keystore_api = { version = "=0.1.0-alpha.1", path = "../lair_keystore_api" }
+hc_seed_bundle = { version = "=0.1.0-alpha.2", path = "../hc_seed_bundle" }
+lair_keystore_api = { version = "=0.1.0-alpha.2", path = "../lair_keystore_api" }
 one_err = "0.0.5"
 parking_lot = "0.11.2"
 rpassword = "5.0.1"
@@ -38,7 +38,7 @@ rusqlite = { version = "0.26", features = [ "bundled" ] }
 rusqlite = { version = "0.26", features = [ "bundled-sqlcipher-vendored-openssl" ] }
 
 [build-dependencies]
-lair_keystore_api = { version = "=0.1.0-alpha.1", path = "../lair_keystore_api" }
+lair_keystore_api = { version = "=0.1.0-alpha.2", path = "../lair_keystore_api" }
 pretty_assertions = "0.7.2"
 sqlformat = "0.1.6"
 
