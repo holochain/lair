@@ -1,6 +1,6 @@
 [package]
 name = "lair_keystore_api"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 description = "secret lair private keystore types"
 license = "Apache-2.0"
 repository = "https://github.com/holochain/lair"
@@ -14,7 +14,7 @@ edition = "2018"
 base64 = "0.13.0"
 dunce = "1.0.2"
 futures = "0.3.17"
-hc_seed_bundle = { version = "=0.1.0-alpha.1", path = "../hc_seed_bundle" }
+hc_seed_bundle = { version = "=0.1.0-alpha.2", path = "../hc_seed_bundle" }
 lru = "0.6.6"
 nanoid = "0.4.0"
 one_err = "0.0.5"
