@@ -131,7 +131,7 @@ impl FallbackCmd {
             .kill_on_drop(true)
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::null())
+            .stderr(std::process::Stdio::inherit())
             .spawn()?;
 
         // get our pipe handles
