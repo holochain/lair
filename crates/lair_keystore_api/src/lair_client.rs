@@ -245,6 +245,73 @@ impl LairClient {
         }
     }
 
+    /// Encrypt data for a target recipient using the
+    /// x25519xsalsa20poly1305 "crypto_box" algorithm.
+    /// Respects hc_seed_bundle::PwHashLimits.
+    pub fn crypto_box_xsalsa_by_pub_key(
+        &self,
+        sender_pub_key: X25519PubKey,
+        recipient_pub_key: X25519PubKey,
+        deep_lock_passphrase: Option<sodoken::BufRead>,
+        data: Arc<[u8]>,
+    ) -> impl Future<Output = LairResult<([u8; 24], Arc<[u8]>)>> + 'static + Send
+    {
+        let inner = self.0.clone();
+        async move {
+            // if this is a deep locked seed, we need to encrypt the passphrase
+            let secret = match deep_lock_passphrase {
+                None => None,
+                Some(pass) => {
+                    let key = inner.get_enc_ctx_key();
+                    let secret = SecretData::encrypt(key, pass).await?;
+                    Some(secret)
+                }
+            };
+            let req = LairApiReqCryptoBoxXSalsaByPubKey::new(
+                sender_pub_key,
+                recipient_pub_key,
+                secret,
+                data,
+            );
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok((res.nonce, res.cipher))
+        }
+    }
+
+    /// Decrypt data from a target sender using the
+    /// x25519xsalsa20poly1305 "crypto_box_open" algorithm.
+    /// Respects hc_seed_bundle::PwHashLimits.
+    pub fn crypto_box_xsalsa_open_by_pub_key(
+        &self,
+        sender_pub_key: X25519PubKey,
+        recipient_pub_key: X25519PubKey,
+        deep_lock_passphrase: Option<sodoken::BufRead>,
+        nonce: [u8; 24],
+        cipher: Arc<[u8]>,
+    ) -> impl Future<Output = LairResult<Arc<[u8]>>> + 'static + Send {
+        let inner = self.0.clone();
+        async move {
+            // if this is a deep locked seed, we need to encrypt the passphrase
+            let secret = match deep_lock_passphrase {
+                None => None,
+                Some(pass) => {
+                    let key = inner.get_enc_ctx_key();
+                    let secret = SecretData::encrypt(key, pass).await?;
+                    Some(secret)
+                }
+            };
+            let req = LairApiReqCryptoBoxXSalsaOpenByPubKey::new(
+                sender_pub_key,
+                recipient_pub_key,
+                secret,
+                nonce,
+                cipher,
+            );
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok(res.message)
+        }
+    }
+
     /// Instruct lair to generate a new well-known-authority signed TLS cert.
     /// This is a lot like a self-signed certificate, but slightly easier to
     /// work with in that it allows registering a single well-known-authority
