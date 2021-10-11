@@ -10,6 +10,20 @@
 
 include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 
+/// re-exported dependencies
+pub mod dependencies {
+    pub use hc_seed_bundle::dependencies::*;
+    pub use lair_keystore_api;
+    pub use lair_keystore_api::dependencies::*;
+    pub use rpassword;
+    pub use structopt;
+    pub use sysinfo;
+    pub use tracing_subscriber;
+}
+
+use dependencies::*;
+use lair_keystore_api::prelude::*;
+
 pub(crate) mod sql;
 
 pub mod pid_check;

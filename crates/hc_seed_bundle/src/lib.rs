@@ -110,6 +110,17 @@
 //! - `secretstream_xchacha20poly1305`
 //!   - single `push_final/pull_final` with entire contents
 
+/// re-exported dependencies
+pub mod dependencies {
+    pub use futures;
+    pub use one_err;
+    pub use rmp_serde;
+    pub use rmpv;
+    pub use serde;
+    pub use serde_bytes;
+    pub use sodoken;
+}
+
 mod seed_cipher;
 pub use seed_cipher::*;
 

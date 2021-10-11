@@ -1,6 +1,6 @@
 //! Helper types for dealing with serialization.
 
-use crate::prelude::*;
+use crate::*;
 use sodoken::secretstream::xchacha20poly1305 as sss;
 use std::sync::Arc;
 

@@ -43,7 +43,7 @@
     },
     {
       "desc": "two-pass-generated-by-rust",
-      "cipher": "k6VoY3NiMJKWonB3xBDvitO9hgaawrOELYklltZTzgQAAAACxBh3AQ92Ex9xhyznO8YRrRoSC_Sf51qX-9vEMUz6qA95RKgTSiMKkozBZBRUaOxQwfs0buNd6G_EfBKdTETmgZmPxmh99c5m5RbBlxmWonB3xBAChvlVAyrUTffj0Q8zEfaEzgQAAAACxBhWneCx9eUb40tRZNFxHVrBPZlB-ABNhCDEMeEB6Vxnw1sddmwrocq8kfluP5eT2Ur9IUXjQZIyfmDkv1PYU5EXVOCTADKKqq2ZqgjEAA",
+      "cipher": "k6VoY3NiMJKWonB3xBD5iNreH9sYZmDZkACcnxIRzSAAAcQYEf1FK0VuOu9NU2zaaw4UHTp4bHYTWRJDxDEBFdULGPFJEcrCzCW8lZD-betOQKuSIS9qJVIPPm-QFJe2KeC2QAPXNSmn2jg25QV2lqJwd8QQ9Cj7tru1V2ayhwC6rcA1as0gAAHEGGPSQlpNSnNrv0-mQk4PmdruN0vMQdTpQMQxUk8m4l0RLXZJaBD_bquWv1hcExuxyQ-iGLEUomhnORgXZL-gG2XgiJoFh5QKflxFMcQA",
       "unlock": [
         {
           "type": "pwHash",
@@ -54,14 +54,14 @@
           "passphrase": "second-pass"
         }
       ],
-      "signPubKey": "6a4EYRssQjP9tPMZzXfowzxVeevR3ow61fuAyQTKFVU",
+      "signPubKey": "QyBLe_jvWoYFa08S0cronZuQO2sYMLlm6k-y5yGoBBA",
       "derivations": {
-        "m/68/0/65/0": "tJvU7AuDLBK3Aytmu5XWorMjYTTOpmrpbttvStVIoIU"
+        "m/68/0/65/0": "yeBQ4RK-ccjzgKtNOFEyVc5hTTT0dU6_vIdoDJFCjw8"
       }
     },
     {
       "desc": "pass-and-qa-generated-by-rust",
-      "cipher": "k6VoY3NiMJKWonB3xBAGIKkVeLcUARqvvkLnmbtVzgQAAAACxBjMEISIUf4ioqIpkumT0pCM_zhbZYJrJ1TEMdPLC2oEJD_IyLtuMl0vHidD0Zd_0Lv2YkWhw43rzO0a6AuhCpfeRDq-mq51z8xiEZWZonFhxBDN3Pdi36-ZWRcX4lEbR3T_zgQAAAACr0Zhdm9yaXRlIENvbG9yP6pGaXJzdCBQZXQ_pUhhaXI_xBh3fIjNVwiQuWwoH2GRIXxPfnFF2DeEHcXEMSJpFhAyt3d5slfJkNpES13T7YraNPw2QDDtDop3oXdo26ZQmvB_KmU02mOF4bkd5fzEAA",
+      "cipher": "k6VoY3NiMJKWonB3xBDiuoHTSAqiFV42A3xfj8kAzSAAAcQYh7lAjdcwiP2Vpro9FtgO-NBwkWDaa2wYxDG2EcFPQHXvW3T2u8tO2kktZDLl2B5o-8zzg2iKU8DjR91KWVB7JD5QTcPq1Z_ABbxqmaJxYcQQdI1b9ORE4kdikJQowCfueM0gAAGvRmF2b3JpdGUgQ29sb3I_qkZpcnN0IFBldD-lSGFpcj_EGHDNCwJ4RF7WjoF2cTkLycToI-4Ljt6dmsQx-ilJ3qPndwhH_gtN5qjLAzEsPvLeekN1AM6BCK3P6NyzQRQRKdxMlQPdK9udjHCaDsQA",
       "unlock": [
         {
           "type": "pwHash",
@@ -73,9 +73,9 @@
           "answerList": ["\t  BLuE", "ZoMbOrG\t ", " nope "]
         }
       ],
-      "signPubKey": "6BZCrcX_sL1uoPR_HXv0uTfbTg2eMiyyQMnAp713uP4",
+      "signPubKey": "nRjtm52WYELeu1g44b61r0gpF04RO6FnaA0So5-rbf0",
       "derivations": {
-        "m/68/0/65/0": "DJR1AzDDMIUHwZOEc8G2tXcdIFye7KV91uTmHhvuV7A"
+        "m/68/0/65/0": "qiVba5AyekSwoK4p6N6DT8IMJ5_2AwTUJCAe9BKPb0M"
       }
     }
   ]

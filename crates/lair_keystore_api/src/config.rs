@@ -1,6 +1,6 @@
 //! Lair Configuration Types
 
-use crate::prelude::*;
+use crate::*;
 use std::future::Future;
 use std::sync::Arc;
 
@@ -299,7 +299,7 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_config_yaml() {
         let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
-        let mut srv = hc_seed_bundle::PwHashLimits::Interactive
+        let mut srv = hc_seed_bundle::PwHashLimits::Minimum
             .with_exec(|| {
                 LairServerConfigInner::new("/tmp/my/path", passphrase)
             })

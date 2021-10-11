@@ -154,7 +154,7 @@ mod tests {
 
         let passphrase = sodoken::BufRead::from(b"test-passphrase".to_vec());
 
-        let cipher = PwHashLimits::Interactive
+        let cipher = PwHashLimits::Minimum
             .with_exec(|| seed.lock().add_pwhash_cipher(passphrase.clone()));
 
         let encoded = cipher.lock().await.unwrap();
@@ -190,7 +190,7 @@ mod tests {
         let a2 = sodoken::BufRead::from(b"spicy ".to_vec());
         let a3 = sodoken::BufRead::from(b" big".to_vec());
 
-        let cipher = PwHashLimits::Interactive.with_exec(|| {
+        let cipher = PwHashLimits::Minimum.with_exec(|| {
             let q_list = (q1.to_string(), q2.to_string(), q3.to_string());
             let a_list = (a1, a2, a3);
             seed.lock().add_security_question_cipher(q_list, a_list)

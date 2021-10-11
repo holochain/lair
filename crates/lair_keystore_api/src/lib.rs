@@ -10,6 +10,24 @@
 
 include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 
+/// re-exported dependencies
+pub mod dependencies {
+    pub use base64;
+    pub use dunce;
+    pub use hc_seed_bundle;
+    pub use hc_seed_bundle::dependencies::*;
+    pub use nanoid;
+    pub use once_cell;
+    pub use parking_lot;
+    pub use serde_json;
+    pub use serde_yaml;
+    pub use tokio;
+    pub use tracing;
+    pub use url;
+}
+
+use dependencies::*;
+
 /// Lair Result Type
 pub type LairResult<T> = Result<T, one_err::OneErr>;
 
@@ -34,4 +52,7 @@ pub mod prelude {
     pub use crate::lair_server::*;
     pub use crate::lair_store::*;
     pub use crate::LairResult;
+    pub use hc_seed_bundle::PwHashLimits;
 }
+
+use prelude::*;

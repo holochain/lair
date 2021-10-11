@@ -36,7 +36,7 @@ impl Test {
                 let passphrase = unlock.passphrase.as_ref().unwrap();
                 let passphrase =
                     sodoken::BufRead::from(passphrase.as_bytes().to_vec());
-                cipher = PwHashLimits::Interactive
+                cipher = PwHashLimits::Minimum
                     .with_exec(move || cipher.add_pwhash_cipher(passphrase));
             } else if &unlock.r#type == "securityQuestions" {
                 let q_list = unlock.question_list.as_ref().unwrap();
@@ -51,7 +51,7 @@ impl Test {
                 let a1 = sodoken::BufRead::from(a_list[0].as_bytes().to_vec());
                 let a2 = sodoken::BufRead::from(a_list[1].as_bytes().to_vec());
                 let a3 = sodoken::BufRead::from(a_list[2].as_bytes().to_vec());
-                cipher = PwHashLimits::Interactive.with_exec(move || {
+                cipher = PwHashLimits::Minimum.with_exec(move || {
                     cipher.add_security_question_cipher(q_list, (a1, a2, a3))
                 });
             } else {

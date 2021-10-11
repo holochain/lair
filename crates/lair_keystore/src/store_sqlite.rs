@@ -1,9 +1,8 @@
 //! lair store backed by a sqlite / sqlcipher database file
 
-use crate::sql;
+use crate::*;
 use futures::future::{BoxFuture, FutureExt};
 use lair_keystore_api::lair_store::traits::*;
-use lair_keystore_api::prelude::*;
 use parking_lot::Mutex;
 use rusqlite::params;
 use sodoken::*;
