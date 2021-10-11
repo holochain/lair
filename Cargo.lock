@@ -465,7 +465,7 @@ dependencies = [
 
 [[package]]
 name = "hc_seed_bundle"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "base64",
  "futures",
@@ -553,50 +553,36 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
- "base64",
  "criterion",
- "dunce",
- "futures",
- "hc_seed_bundle",
  "lair_keystore_api",
- "one_err",
- "parking_lot",
  "pretty_assertions",
  "rpassword",
  "rusqlite",
- "sodoken",
  "sqlformat",
  "structopt",
  "sysinfo",
  "tempdir",
- "tokio",
- "tracing",
  "tracing-subscriber",
 ]
 
 [[package]]
 name = "lair_keystore_api"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 dependencies = [
  "assert_cmd",
  "base64",
  "dunce",
- "futures",
  "hc_seed_bundle",
  "lru",
  "nanoid",
  "once_cell",
- "one_err",
  "parking_lot",
  "rcgen",
- "rmp-serde",
  "serde",
- "serde_bytes",
  "serde_json",
  "serde_yaml",
- "sodoken",
  "tempdir",
  "tokio",
  "toml",

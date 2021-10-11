@@ -1,7 +1,7 @@
 //! client / server keystore items for dealing with ipc keystores,
 //! both unix domain sockets and windows named pipes.
 
-use crate::prelude::*;
+use crate::*;
 use futures::stream::StreamExt;
 use std::future::Future;
 
@@ -204,7 +204,7 @@ mod tests {
 
         // create the config for the test server
         let config = Arc::new(
-            hc_seed_bundle::PwHashLimits::Interactive
+            hc_seed_bundle::PwHashLimits::Minimum
                 .with_exec(|| {
                     LairServerConfigInner::new(
                         tmp_dir.path(),
@@ -274,7 +274,7 @@ mod tests {
             .unwrap());
 
         // create a new deep-locked seed
-        let _seed_info_ref_deep = hc_seed_bundle::PwHashLimits::Interactive
+        let _seed_info_ref_deep = hc_seed_bundle::PwHashLimits::Minimum
             .with_exec(|| {
                 client.new_seed(
                     "test-tag-deep".into(),

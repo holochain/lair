@@ -1,8 +1,8 @@
 //! standalone binary server
 //! - you probably only want to use this directly if you're writing tests
 
+use crate::*;
 use lair_keystore_api::ipc_keystore::IpcKeystoreServer;
-use lair_keystore_api::prelude::*;
 use std::future::Future;
 
 /// standalone binary server

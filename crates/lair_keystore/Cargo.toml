@@ -12,19 +12,10 @@ categories = [ "cryptography" ]
 edition = "2018"
 
 [dependencies]
-base64 = "0.13.0"
-dunce = "1.0.2"
-futures = "0.3.17"
-hc_seed_bundle = { version = "=0.1.0-alpha.2", path = "../hc_seed_bundle" }
 lair_keystore_api = { version = "=0.1.0-alpha.2", path = "../lair_keystore_api" }
-one_err = "0.0.5"
-parking_lot = "0.11.2"
 rpassword = "5.0.1"
-sodoken = "=0.0.1-alpha.21"
 structopt = "0.3.23"
 sysinfo = "0.20.3"
-tokio = { version = "1.12.0", features = [ "full" ] }
-tracing = "0.1.28"
 tracing-subscriber = "0.2.24"
 
 # switch to bundled-sqlcipher-vendored-openssl once this is released:

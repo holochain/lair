@@ -1,4 +1,4 @@
-use lair_keystore_api::prelude::*;
+use crate::*;
 use std::sync::Arc;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -10,7 +10,7 @@ async fn server_test_happy_path() {
 
     // create the config for the test server
     let config = Arc::new(
-        hc_seed_bundle::PwHashLimits::Interactive
+        hc_seed_bundle::PwHashLimits::Minimum
             .with_exec(|| {
                 LairServerConfigInner::new(tmpdir.path(), passphrase.clone())
             })
@@ -74,7 +74,7 @@ async fn server_test_happy_path() {
         .unwrap());
 
     // create a new deep-locked seed
-    let _seed_info_ref_deep = hc_seed_bundle::PwHashLimits::Interactive
+    let _seed_info_ref_deep = hc_seed_bundle::PwHashLimits::Minimum
         .with_exec(|| {
             client.new_seed(
                 "test-tag-deep".into(),

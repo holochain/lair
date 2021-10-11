@@ -7,12 +7,15 @@
 ///
 /// ```rust
 /// # use hc_seed_bundle::*;
-/// let _my_result = PwHashLimits::Interactive.with_exec(|| {
+/// let _my_result = PwHashLimits::Sensitive.with_exec(|| {
 ///   // execute my function that needs "interactive" limits
 /// });
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PwHashLimits {
+    /// minimum limits (UNIT TESTING ONLY)
+    Minimum,
+
     /// low cpu/mem limits
     Interactive,
 
@@ -50,6 +53,7 @@ impl PwHashLimits {
     /// translate into mem limit
     pub fn as_mem_limit(&self) -> u32 {
         match self {
+            Self::Minimum => sodoken::hash::argon2id::MEMLIMIT_MIN,
             Self::Interactive => sodoken::hash::argon2id::MEMLIMIT_INTERACTIVE,
             Self::Moderate => sodoken::hash::argon2id::MEMLIMIT_MODERATE,
             Self::Sensitive => sodoken::hash::argon2id::MEMLIMIT_SENSITIVE,
@@ -59,6 +63,7 @@ impl PwHashLimits {
     /// translate into cpu limit
     pub fn as_ops_limit(&self) -> u32 {
         match self {
+            Self::Minimum => sodoken::hash::argon2id::OPSLIMIT_MIN,
             Self::Interactive => sodoken::hash::argon2id::OPSLIMIT_INTERACTIVE,
             Self::Moderate => sodoken::hash::argon2id::OPSLIMIT_MODERATE,
             Self::Sensitive => sodoken::hash::argon2id::OPSLIMIT_SENSITIVE,

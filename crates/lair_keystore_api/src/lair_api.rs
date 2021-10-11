@@ -1,6 +1,6 @@
 //! Lair api serialization types
 
-use crate::prelude::*;
+use crate::*;
 use std::sync::Arc;
 
 /// Helper traits for core types - you probably don't need these unless

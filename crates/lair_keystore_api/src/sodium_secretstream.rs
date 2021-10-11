@@ -1,5 +1,6 @@
 //! libsodium secretstream Async reader / writer wrappers.
 
+use crate::*;
 use futures::future::{BoxFuture, FutureExt};
 use futures::stream::{BoxStream, Stream, StreamExt};
 use one_err::*;
@@ -8,7 +9,6 @@ use sodoken::secretstream::xchacha20poly1305 as sss;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
-use crate::LairResult;
 use std::future::Future;
 use std::sync::Arc;
 

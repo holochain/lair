@@ -1,7 +1,7 @@
 //! an in-process keystore that manages the entire lair server life-cycle
 //! without needing to call out to an external process.
 
-use crate::prelude::*;
+use crate::*;
 use std::future::Future;
 
 /// an in-process keystore that manages the entire lair server life-cycle
@@ -112,7 +112,7 @@ mod tests {
     async fn in_proc_sign_fallback() {
         let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
 
-        let mut config = hc_seed_bundle::PwHashLimits::Interactive
+        let mut config = hc_seed_bundle::PwHashLimits::Minimum
             .with_exec(|| LairServerConfigInner::new("/", passphrase.clone()))
             .await
             .unwrap();
