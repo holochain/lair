@@ -7,6 +7,29 @@ use std::sync::Arc;
 const PID_FILE_NAME: &str = "pid_file";
 const STORE_FILE_NAME: &str = "store_file";
 
+/// Enum for configuring signature fallback handling
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[non_exhaustive]
+pub enum LairServerSignatureFallback {
+    /// No fallback handling. If a pub key does not exist
+    /// in the lair store, a sign_by_pub_key request will error.
+    None,
+
+    /// Specify a command to execute on lair server start.
+    /// This command will be fed framed json signature requests on stdin,
+    /// and is expected to respond to those requests with framed
+    /// json responses on stdout.
+    #[serde(rename_all = "camelCase")]
+    Command {
+        /// The program command to execute.
+        program: std::path::PathBuf,
+
+        /// Optional arguments to be passed to command on execute.
+        args: Option<Vec<String>>,
+    },
+}
+
 /// Config used by lair servers.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -23,6 +46,10 @@ pub struct LairServerConfigInner {
 
     /// The sqlcipher store file for persisting secrets
     pub store_file: std::path::PathBuf,
+
+    /// Configuration for managing sign_by_pub_key fallback
+    /// in case the pub key does not exist in the lair store.
+    pub signature_fallback: LairServerSignatureFallback,
 
     /// salt for decrypting runtime data
     pub runtime_secrets_salt: BinDataSized<16>,
@@ -43,7 +70,54 @@ pub struct LairServerConfigInner {
 impl std::fmt::Display for LairServerConfigInner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = serde_yaml::to_string(&self).map_err(|_| std::fmt::Error)?;
-        f.write_str(&s)
+
+        // inject some helpful comments
+        let mut lines = Vec::new();
+        for (id, line) in s.split('\n').enumerate() {
+            if id > 0 {
+                if line.starts_with("connectionUrl:") {
+                    lines.push("");
+                    lines.push("# The connection url for communications between server / client.");
+                    lines.push("# - `unix:///path/to/unix/socket?k=Yada`");
+                    lines.push(
+                        "# - `named_pipe:\\\\.\\pipe\\my_pipe_name?k=Yada`",
+                    );
+                    lines.push("# - (not yet supported) `tcp://127.0.0.1:12345?k=Yada`");
+                } else if line.starts_with("pidFile:") {
+                    lines.push("");
+                    lines.push("# The pid file for managing a running lair-keystore process");
+                } else if line.starts_with("storeFile:") {
+                    lines.push("");
+                    lines.push(
+                        "# The sqlcipher store file for persisting secrets",
+                    );
+                } else if line.starts_with("signatureFallback:") {
+                    lines.push("");
+                    lines.push(
+                        "# Configuration for managing sign_by_pub_key fallback",
+                    );
+                    lines.push("# in case the pub key does not exist in the lair store.");
+                    lines.push("# - `signatureFallback: none`");
+                    lines.push("# - ```");
+                    lines.push("#   signatureFallback:");
+                    lines.push("#     command:");
+                    lines.push("#       # 'program' will resolve to a path, specifying 'echo'");
+                    lines.push("#       # will try to run './echo', probably not what you want.");
+                    lines.push("#       program: \"./my-executable\"");
+                    lines.push("#       # args are optional");
+                    lines.push("#       args:");
+                    lines.push("#         - test-arg1");
+                    lines.push("#         - test-arg2");
+                    lines.push("#   ```");
+                } else if line.starts_with("runtimeSecretsSalt:") {
+                    lines.push("");
+                    lines.push("# -- cryptographic secrets --");
+                    lines.push("# If you modify the data below, you risk loosing access to your keys.");
+                }
+            }
+            lines.push(line);
+        }
+        f.write_str(&lines.join("\n"))
     }
 }
 
@@ -174,6 +248,7 @@ impl LairServerConfigInner {
                 connection_url,
                 pid_file,
                 store_file,
+                signature_fallback: LairServerSignatureFallback::None,
                 runtime_secrets_salt: salt.try_unwrap_sized().unwrap().into(),
                 runtime_secrets_mem_limit: mem_limit,
                 runtime_secrets_ops_limit: ops_limit,
@@ -224,18 +299,28 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_config_yaml() {
         let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
-        let srv = hc_seed_bundle::PwHashLimits::Interactive
+        let mut srv = hc_seed_bundle::PwHashLimits::Interactive
             .with_exec(|| {
                 LairServerConfigInner::new("/tmp/my/path", passphrase)
             })
             .await
             .unwrap();
+
         println!("-- server config start --");
-        println!("{}", serde_yaml::to_string(&srv).unwrap());
+        println!("{}", &srv);
         println!("-- server config end --");
         assert_eq!(
             std::path::PathBuf::from("/tmp/my/path").as_path(),
             srv.pid_file.parent().unwrap(),
         );
+
+        srv.signature_fallback = LairServerSignatureFallback::Command {
+            program: std::path::Path::new("./my-executable").into(),
+            args: Some(vec!["test-arg1".into(), "test-arg2".into()]),
+        };
+
+        println!("-- server config start --");
+        println!("{}", &srv);
+        println!("-- server config end --");
     }
 }

@@ -109,6 +109,46 @@ mod tests {
     use std::sync::Arc;
 
     #[tokio::test(flavor = "multi_thread")]
+    async fn in_proc_sign_fallback() {
+        let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
+
+        let mut config = hc_seed_bundle::PwHashLimits::Interactive
+            .with_exec(|| LairServerConfigInner::new("/", passphrase.clone()))
+            .await
+            .unwrap();
+
+        let fix_cmd = assert_cmd::cargo::cargo_bin("fixture-sig-fallback");
+
+        config.signature_fallback = LairServerSignatureFallback::Command {
+            program: fix_cmd,
+            args: None,
+        };
+
+        let keystore = InProcKeystore::new(
+            Arc::new(config),
+            crate::mem_store::create_mem_store_factory(),
+            passphrase.clone(),
+        )
+        .await
+        .unwrap();
+
+        let client = keystore.new_client().await.unwrap();
+
+        // our fixture bin alternates between "good" sigs and errors
+        let sig_good = client
+            .sign_by_pub_key([0; 32].into(), None, b"hello".to_vec().into())
+            .await
+            .unwrap();
+        assert_eq!([0; 64], *sig_good.0);
+
+        // our fixture bin alternates between "good" sigs and errors
+        assert!(client
+            .sign_by_pub_key([0; 32].into(), None, b"hello".to_vec().into(),)
+            .await
+            .is_err());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     async fn in_proc_happy_path() {
         // set up a passphrase
         let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);

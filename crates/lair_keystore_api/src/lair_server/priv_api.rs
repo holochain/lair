@@ -244,27 +244,46 @@ pub(crate) fn priv_req_sign_by_pub_key<'a>(
         }
 
         // get cached full entry
-        let (full_entry, _) =
-            priv_get_full_entry_by_ed_pub_key(inner, req.pub_key).await?;
+        let res =
+            match priv_get_full_entry_by_ed_pub_key(inner, req.pub_key.clone())
+                .await
+            {
+                Ok((full_entry, _)) => {
+                    // sign the data
+                    let signature = if let Some(ed_sk) = full_entry.ed_sk {
+                        let signature = sodoken::BufWriteSized::new_no_lock();
+                        sodoken::sign::detached(
+                            signature.clone(),
+                            req.data,
+                            ed_sk,
+                        )
+                        .await?;
+                        signature.try_unwrap_sized().unwrap().into()
+                    } else {
+                        return Err(
+                            "deep_seed signing not yet implemented".into()
+                        );
+                    };
 
-        // sign the data
-        let signature = if let Some(ed_sk) = full_entry.ed_sk {
-            let signature = sodoken::BufWriteSized::new_no_lock();
-            sodoken::sign::detached(signature.clone(), req.data, ed_sk).await?;
-            signature.try_unwrap_sized().unwrap().into()
-        } else {
-            return Err("deep_seed signing not yet implemented".into());
-        };
+                    LairApiResSignByPubKey {
+                        msg_id: req.msg_id,
+                        signature,
+                    }
+                }
+                Err(e) => {
+                    // we don't have this key, let's see if we should invoke
+                    // a signature fallback command
+                    let fallback_cmd = inner.read().fallback_cmd.clone();
+                    if let Some(fallback_cmd) = fallback_cmd {
+                        fallback_cmd.sign_by_pub_key(req).await?
+                    } else {
+                        return Err(e);
+                    }
+                }
+            };
 
         // send the response
-        send.send(
-            LairApiResSignByPubKey {
-                msg_id: req.msg_id,
-                signature,
-            }
-            .into_api_enum(),
-        )
-        .await?;
+        send.send(res.into_api_enum()).await?;
 
         Ok(())
     }
