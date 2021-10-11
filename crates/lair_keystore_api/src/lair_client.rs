@@ -107,13 +107,8 @@ impl LairClient {
     ) -> impl Future<Output = LairResult<Arc<str>>> + 'static + Send {
         let inner = self.0.clone();
         async move {
-            // generate nonce to validate signature
-            let nonce = sodoken::BufWrite::new_no_lock(24);
-            sodoken::random::bytes_buf(nonce.clone()).await.unwrap();
-            let nonce = nonce.try_unwrap().unwrap();
-
             // build / send the message
-            let req = LairApiReqHello::new(nonce.clone().into());
+            let req = LairApiReqHello::new();
             let res = priv_lair_api_request(&*inner, req).await?;
 
             // expect the expected server pub key
@@ -127,16 +122,7 @@ impl LairClient {
                 ));
             }
 
-            // validate the server signature
-            if let Ok(true) = res
-                .server_pub_key
-                .verify_detached(res.hello_sig, nonce)
-                .await
-            {
-                return Ok(res.version);
-            }
-
-            Err("ServerValidationFailed".into())
+            Ok(res.version)
         }
     }
 

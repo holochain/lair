@@ -6,6 +6,7 @@ use super::*;
 pub fn new_async_io_lair_client<S, R>(
     send: S,
     recv: R,
+    srv_id_pub_key: sodoken::BufReadSized<32>,
 ) -> impl Future<Output = LairResult<LairClient>> + 'static + Send
 where
     S: tokio::io::AsyncWrite + 'static + Send + Unpin,
@@ -13,11 +14,12 @@ where
 {
     async move {
         // wrap the channels in sodium_secretstream
-        let (send, recv) =
-            crate::sodium_secretstream::new_s3_pair::<LairApiEnum, _, _>(
-                send, recv, false,
-            )
-            .await?;
+        let (send, recv) = crate::sodium_secretstream::new_s3_client::<
+            LairApiEnum,
+            _,
+            _,
+        >(send, recv, srv_id_pub_key)
+        .await?;
 
         // derive our encryption (to server) secret context key
         let enc_ctx_key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;

@@ -67,7 +67,7 @@ pub(crate) async fn exec(
     };
 
     // unlock the server
-    server.run_unlocked(store_pass).await?;
+    server.run(store_pass).await?;
 
     // load the bundle
     let bundle_bytes =

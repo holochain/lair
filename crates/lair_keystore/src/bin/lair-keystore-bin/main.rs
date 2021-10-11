@@ -95,13 +95,6 @@ pub(crate) struct OptServer {
     /// `~/.bash_history`.
     #[structopt(short = "p", long, verbatim_doc_comment)]
     pub piped: bool,
-
-    /// Instead of the normal "interactive" method of passphrase
-    /// retreival, start the keystore in "locked" mode. The
-    /// keystore will need to be "unlocked" via some other method
-    /// before it can begin processing requests.
-    #[structopt(short = "l", long, verbatim_doc_comment)]
-    pub locked: bool,
 }
 
 #[derive(Debug, StructOpt)]

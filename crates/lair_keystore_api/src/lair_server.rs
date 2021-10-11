@@ -22,13 +22,6 @@ pub mod traits {
 
     /// host a lair keystore
     pub trait AsLairServer: 'static + Send + Sync {
-        /// It is much more secure to unlock a lair keystore server
-        /// interactively, to mitigate a MitM capturing the passphrase.
-        fn unlock(
-            &self,
-            passphrase: sodoken::BufRead,
-        ) -> BoxFuture<'static, LairResult<()>>;
-
         /// accept an incoming connection, servicing the lair protocol.
         fn accept(
             &self,
@@ -48,15 +41,6 @@ use traits::*;
 pub struct LairServer(pub Arc<dyn AsLairServer>);
 
 impl LairServer {
-    /// It is much more secure to unlock a lair keystore server
-    /// interactively, to mitigate a MitM capturing the passphrase.
-    pub fn unlock(
-        &self,
-        passphrase: sodoken::BufRead,
-    ) -> impl Future<Output = LairResult<()>> + 'static + Send {
-        AsLairServer::unlock(&*self.0, passphrase)
-    }
-
     /// accept an incoming connection, servicing the lair protocol.
     pub fn accept<S, R>(
         &self,
@@ -85,22 +69,22 @@ pub fn spawn_lair_server_task<C>(
     server_name: Arc<str>,
     server_version: Arc<str>,
     store_factory: LairStoreFactory,
+    passphrase: sodoken::BufRead,
 ) -> impl Future<Output = LairResult<LairServer>> + 'static + Send
 where
     C: Into<LairServerConfig> + 'static + Send,
 {
     async move {
-        let inner = SrvPendingInner {
-            config: config.into(),
+        let srv = Srv::new(
+            config.into(),
             server_name,
             server_version,
             store_factory,
-        };
+            passphrase,
+        )
+        .await?;
 
-        let inner = SrvInnerEnum::Pending(Box::new(inner));
-        let inner = Arc::new(RwLock::new(inner));
-
-        Ok(LairServer(Arc::new(Srv(inner))))
+        Ok(LairServer(Arc::new(srv)))
     }
 }
 

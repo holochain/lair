@@ -1,7 +1,7 @@
 use super::*;
 
 pub(crate) fn priv_req_hello<'a>(
-    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
     req: LairApiReqHello,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
@@ -10,28 +10,16 @@ pub(crate) fn priv_req_hello<'a>(
         // we want to be able to verify the server,
         // before we unlock the individual connection.
 
-        let (sign_pk, sign_sk, server_name, server_version) =
-            match &*inner.read() {
-                SrvInnerEnum::Running(p) => (
-                    p.sign_pk.clone(),
-                    p.sign_sk.clone(),
-                    p.server_name.clone(),
-                    p.server_version.clone(),
-                ),
-                SrvInnerEnum::Pending(_) => {
-                    return Err("KeystoreLocked".into());
-                }
-            };
+        let (id_pk, server_name, server_version) = {
+            let lock = inner.read();
+            (
+                lock.id_pk.clone(),
+                lock.server_name.clone(),
+                lock.server_version.clone(),
+            )
+        };
 
-        // sign the incoming nonce
-        let hello_sig = sodoken::BufWriteSized::new_no_lock();
-        sodoken::sign::detached(
-            hello_sig.clone(),
-            req.nonce.cloned_inner(),
-            sign_sk,
-        )
-        .await?;
-        let hello_sig = hello_sig.try_unwrap_sized().unwrap().into();
+        let server_pub_key = (*id_pk.read_lock_sized()).into();
 
         // send our hello response
         send.send(
@@ -39,8 +27,7 @@ pub(crate) fn priv_req_hello<'a>(
                 msg_id: req.msg_id,
                 name: server_name,
                 version: server_version,
-                server_pub_key: sign_pk,
-                hello_sig,
+                server_pub_key,
             }
             .into_api_enum(),
         )
@@ -51,7 +38,7 @@ pub(crate) fn priv_req_hello<'a>(
 }
 
 pub(crate) fn priv_req_unlock<'a>(
-    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
     dec_ctx_key: &'a sodoken::BufReadSized<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
@@ -60,8 +47,55 @@ pub(crate) fn priv_req_unlock<'a>(
     async move {
         let passphrase = req.passphrase.decrypt(dec_ctx_key.clone()).await?;
 
-        // performe the internal state-level unlock process
-        priv_srv_unlock(inner.clone(), passphrase).await?;
+        let (config, id_pk) = {
+            let lock = inner.read();
+            (lock.config.clone(), lock.id_pk.clone())
+        };
+
+        // read salt from config
+        let salt = sodoken::BufReadSized::from(
+            config.runtime_secrets_salt.cloned_inner(),
+        );
+
+        // read limits from config
+        let ops_limit = config.runtime_secrets_ops_limit;
+        let mem_limit = config.runtime_secrets_mem_limit;
+
+        // calculate pre_secret from argon2id passphrase hash
+        let pre_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        sodoken::hash::argon2id::hash(
+            pre_secret.clone(),
+            passphrase,
+            salt,
+            ops_limit,
+            mem_limit,
+        )
+        .await?;
+
+        // derive signature decryption secret
+        let id_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        sodoken::kdf::derive_from_key(
+            id_secret.clone(),
+            142,
+            *b"IdnSecKy",
+            pre_secret,
+        )?;
+
+        // decrypt the signature seed
+        let id_seed = config
+            .runtime_secrets_id_seed
+            .decrypt(id_secret.to_read_sized())
+            .await?;
+
+        // derive the signature keypair from the signature seed
+        let d_id_pk = <sodoken::BufWriteSized<32>>::new_no_lock();
+        let d_id_sk = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        use sodoken::crypto_box::curve25519xchacha20poly1305::*;
+        seed_keypair(d_id_pk.clone(), d_id_sk, id_seed).await?;
+
+        if *id_pk.read_lock() != *d_id_pk.read_lock() {
+            return Err("InvalidPassphrase".into());
+        }
 
         // if that was successfull, we can also set the connection level
         // unlock state to unlocked
@@ -76,7 +110,7 @@ pub(crate) fn priv_req_unlock<'a>(
 }
 
 pub(crate) fn priv_req_get_entry<'a>(
-    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqGetEntry,
@@ -127,7 +161,7 @@ pub(crate) fn priv_req_get_entry<'a>(
 }
 
 pub(crate) fn priv_req_list_entries<'a>(
-    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqListEntries,
@@ -153,7 +187,7 @@ pub(crate) fn priv_req_list_entries<'a>(
 }
 
 pub(crate) fn priv_req_new_seed<'a>(
-    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
     dec_ctx_key: &'a sodoken::BufReadSized<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
@@ -198,7 +232,7 @@ pub(crate) fn priv_req_new_seed<'a>(
 }
 
 pub(crate) fn priv_req_sign_by_pub_key<'a>(
-    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
     _dec_ctx_key: &'a sodoken::BufReadSized<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
@@ -237,7 +271,7 @@ pub(crate) fn priv_req_sign_by_pub_key<'a>(
 }
 
 pub(crate) fn priv_req_new_wka_tls_cert<'a>(
-    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqNewWkaTlsCert,
@@ -263,7 +297,7 @@ pub(crate) fn priv_req_new_wka_tls_cert<'a>(
 }
 
 pub(crate) fn priv_gen_and_register_entry<'a>(
-    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    inner: &'a Arc<RwLock<SrvInner>>,
     store: &'a LairStore,
     entry: LairEntry,
 ) -> impl Future<Output = LairResult<FullLairEntry>> + 'a + Send {
@@ -306,21 +340,16 @@ pub(crate) fn priv_gen_and_register_entry<'a>(
 
         let full_entry = FullLairEntry { entry, ed_sk, x_sk };
 
-        match &mut *inner.write() {
-            SrvInnerEnum::Running(p) => {
-                // add full entry to our LRU caches
-                p.entries_by_tag
-                    .put(full_entry.entry.tag(), full_entry.clone());
-                if let Some(ed_pk) = ed_pk {
-                    p.entries_by_ed.put(ed_pk, full_entry.clone());
-                }
-                if let Some(x_pk) = x_pk {
-                    p.entries_by_x.put(x_pk, full_entry.clone());
-                }
-            }
-            SrvInnerEnum::Pending(_) => {
-                return Err("KeystoreLocked".into());
-            }
+        let mut lock = inner.write();
+
+        // add full entry to our LRU caches
+        lock.entries_by_tag
+            .put(full_entry.entry.tag(), full_entry.clone());
+        if let Some(ed_pk) = ed_pk {
+            lock.entries_by_ed.put(ed_pk, full_entry.clone());
+        }
+        if let Some(x_pk) = x_pk {
+            lock.entries_by_x.put(x_pk, full_entry.clone());
         }
 
         Ok(full_entry)
@@ -329,21 +358,17 @@ pub(crate) fn priv_gen_and_register_entry<'a>(
 
 #[allow(clippy::needless_lifetimes)] // this helps me define the future bounds
 pub(crate) fn priv_get_full_entry_by_tag<'a>(
-    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    inner: &'a Arc<RwLock<SrvInner>>,
     tag: Arc<str>,
 ) -> impl Future<Output = LairResult<(FullLairEntry, LairStore)>> + 'a + Send {
     async move {
-        let store = match &mut *inner.write() {
-            SrvInnerEnum::Running(p) => {
-                let store = p.store.clone();
-                if let Some(full_entry) = p.entries_by_tag.get(&tag) {
-                    return Ok((full_entry.clone(), store));
-                }
-                store
+        let store = {
+            let mut lock = inner.write();
+            let store = lock.store.clone();
+            if let Some(full_entry) = lock.entries_by_tag.get(&tag) {
+                return Ok((full_entry.clone(), store));
             }
-            SrvInnerEnum::Pending(_) => {
-                return Err("KeystoreLocked".into());
-            }
+            store
         };
 
         // get the entry
@@ -358,21 +383,17 @@ pub(crate) fn priv_get_full_entry_by_tag<'a>(
 
 #[allow(clippy::needless_lifetimes)] // this helps me define the future bounds
 pub(crate) fn priv_get_full_entry_by_ed_pub_key<'a>(
-    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    inner: &'a Arc<RwLock<SrvInner>>,
     ed_pub_key: Ed25519PubKey,
 ) -> impl Future<Output = LairResult<(FullLairEntry, LairStore)>> + 'a + Send {
     async move {
-        let store = match &mut *inner.write() {
-            SrvInnerEnum::Running(p) => {
-                let store = p.store.clone();
-                if let Some(full_entry) = p.entries_by_ed.get(&ed_pub_key) {
-                    return Ok((full_entry.clone(), store));
-                }
-                store
+        let store = {
+            let mut lock = inner.write();
+            let store = lock.store.clone();
+            if let Some(full_entry) = lock.entries_by_ed.get(&ed_pub_key) {
+                return Ok((full_entry.clone(), store));
             }
-            SrvInnerEnum::Pending(_) => {
-                return Err("KeystoreLocked".into());
-            }
+            store
         };
 
         // get the entry
@@ -386,7 +407,7 @@ pub(crate) fn priv_get_full_entry_by_ed_pub_key<'a>(
 }
 
 pub(crate) fn priv_req_get_wka_tls_cert_priv_key<'a>(
-    inner: &'a Arc<RwLock<SrvInnerEnum>>,
+    inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
     enc_ctx_key: &'a sodoken::BufReadSized<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
