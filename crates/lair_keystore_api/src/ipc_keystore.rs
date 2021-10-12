@@ -17,8 +17,6 @@ pub struct IpcKeystoreServer {
 
 impl IpcKeystoreServer {
     /// Construct a new IpcKeystoreServer instance.
-    /// The internal server will initially be LOCKED.
-    /// You must call 'unlock' if you wish to "interactively" unlock.
     pub fn new<P>(
         config: LairServerConfig,
         store_factory: LairStoreFactory,
@@ -91,12 +89,6 @@ pub struct IpcKeystoreClientOptions {
     /// Require the client and server to have exactly matching
     /// client / server versions.
     pub exact_client_server_version_match: bool,
-    /// If it is not possible to unlock the server "interactively" on
-    /// the server side... we can unlock it from the client side without
-    /// validating the server's authenticity...
-    /// If the server is NOT authentic, we will get an error, but we
-    /// also will have supplied our passphrase to an attacker.
-    pub danger_unlock_without_server_validate: bool,
 }
 
 /// Connect to an IpcKeystoreServer instance via
@@ -115,7 +107,6 @@ where
         connection_url,
         passphrase,
         exact_client_server_version_match: false,
-        danger_unlock_without_server_validate: false,
     })
 }
 
@@ -140,34 +131,10 @@ pub fn ipc_keystore_connect_options(
         )
         .await?;
 
-        if opts.danger_unlock_without_server_validate {
-            // even if they tell us to do this backwards,
-            // let's at least try to do it correctly to start
-            match cli_hnd.hello(server_pub_key.clone()).await {
-                Ok(ver) => {
-                    priv_check_hello_ver(&opts, &ver)?;
-
-                    // hey, it worked, unlock and proceed
-                    cli_hnd.unlock(opts.passphrase.clone()).await?;
-                }
-                Err(e) if e.str_kind() == "KeystoreLocked" => {
-                    // lame, the server really is not unlocked...
-                    // unlock, but some attacker may get our passphrase
-                    cli_hnd.unlock(opts.passphrase.clone()).await?;
-
-                    // now do the verification, and hope it was
-                    // the correct server
-                    let ver = cli_hnd.hello(server_pub_key).await?;
-                    priv_check_hello_ver(&opts, &ver)?;
-                }
-                Err(e) => return Err(e),
-            }
-        } else {
-            // the normal way is much more straight forward
-            let ver = cli_hnd.hello(server_pub_key).await?;
-            priv_check_hello_ver(&opts, &ver)?;
-            cli_hnd.unlock(opts.passphrase).await?;
-        }
+        // verify the server and unlock the connection
+        let ver = cli_hnd.hello(server_pub_key).await?;
+        priv_check_hello_ver(&opts, &ver)?;
+        cli_hnd.unlock(opts.passphrase).await?;
 
         Ok(cli_hnd)
     }
