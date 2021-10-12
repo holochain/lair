@@ -45,6 +45,13 @@ impl InProcKeystore {
         }
     }
 
+    /// get a handle to the LairStore instantiated by this server,
+    /// may error if a store has not yet been created.
+    pub fn store(
+        &self,
+    ) -> impl Future<Output = LairResult<LairStore>> + 'static + Send {
+        self.srv_hnd.store()
+    }
     /// Get the config used by the LairServer held by this InProcKeystore.
     pub fn get_config(&self) -> LairServerConfig {
         self.config.clone()
