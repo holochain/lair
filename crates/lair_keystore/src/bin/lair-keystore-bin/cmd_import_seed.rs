@@ -100,76 +100,27 @@ pub(crate) async fn exec(
     // grab the seed from the unlocked bundle
     let seed = bundle.get_seed();
 
-    // derive the ed25519 signature keypair from this seed
-    let ed_pk = sodoken::BufWriteSized::new_no_lock();
-    let ed_sk = sodoken::BufWriteSized::new_mem_locked()?;
-    sodoken::sign::seed_keypair(ed_pk.clone(), ed_sk, seed.clone()).await?;
-
-    // derive the x25519 encryption keypair from this seed
-    let x_pk = sodoken::BufWriteSized::new_no_lock();
-    let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
-    sodoken::crypto_box::curve25519xchacha20poly1305::seed_keypair(
-        x_pk.clone(),
-        x_sk,
-        seed.clone(),
-    )
-    .await?;
-
-    // populate our seed info with the derived public keys
-    let seed_info = SeedInfo {
-        ed25519_pub_key: ed_pk.try_unwrap_sized().unwrap().into(),
-        x25519_pub_key: x_pk.try_unwrap_sized().unwrap().into(),
-    };
-
     // get the store from the server
     let store = server.store().await?;
 
-    // build the seed entry depending on deep lock or not
-    let entry = if let Some(deep_pass) = deep_pass {
-        // generate the salt for the pwhash deep locking
-        let salt = <sodoken::BufWriteSized<16>>::new_no_lock();
-        sodoken::random::bytes_buf(salt.clone()).await?;
-
+    // insert the seed depending on deep lock or not
+    let seed_info = if let Some(deep_pass) = deep_pass {
         let limits = hc_seed_bundle::PwHashLimits::Moderate;
         let ops_limit = limits.as_ops_limit();
         let mem_limit = limits.as_mem_limit();
 
-        // generate the deep lock key from the passphrase
-        let key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-        sodoken::hash::argon2id::hash(
-            key.clone(),
-            deep_pass,
-            salt.clone(),
-            ops_limit,
-            mem_limit,
-        )
-        .await?;
-
-        // encrypt the seed with the deep lock key
-        let seed = SecretDataSized::encrypt(key.to_read_sized(), seed).await?;
-
-        // construct the entry for the keystore
-        LairEntryInner::DeepLockedSeed {
-            tag: opt.tag.as_str().into(),
-            seed_info: seed_info.clone(),
-            salt: salt.try_unwrap_sized().unwrap().into(),
-            ops_limit,
-            mem_limit,
-            seed,
-        }
+        store
+            .insert_deep_locked_seed(
+                seed,
+                opt.tag.as_str().into(),
+                ops_limit,
+                mem_limit,
+                deep_pass,
+            )
+            .await?
     } else {
-        let key = store.get_bidi_ctx_key();
-        let seed = SecretDataSized::encrypt(key, seed).await?;
-
-        LairEntryInner::Seed {
-            tag: opt.tag.as_str().into(),
-            seed_info: seed_info.clone(),
-            seed,
-        }
+        store.insert_seed(seed, opt.tag.as_str().into()).await?
     };
-
-    // write the entry to the store
-    store.0.write_entry(Arc::new(entry)).await?;
 
     println!("# imported seed {} {:?}", opt.tag, seed_info);
 
