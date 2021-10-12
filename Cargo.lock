@@ -465,7 +465,7 @@ dependencies = [
 
 [[package]]
 name = "hc_seed_bundle"
-version = "0.1.0-alpha.4"
+version = "0.1.0-alpha.5"
 dependencies = [
  "base64",
  "futures",
@@ -553,7 +553,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore"
-version = "0.1.0-alpha.4"
+version = "0.1.0-alpha.5"
 dependencies = [
  "criterion",
  "lair_keystore_api",
@@ -569,7 +569,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_api"
-version = "0.1.0-alpha.4"
+version = "0.1.0-alpha.5"
 dependencies = [
  "assert_cmd",
  "base64",
