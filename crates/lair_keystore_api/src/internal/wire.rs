@@ -24,6 +24,7 @@ macro_rules! wire_type_meta_macro {
             }
             |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
+                eprintln!("WIRE_ERROR: {}", message);
                 writer.write_str(&message, 128)?;
                 Ok(writer.into_vec())
             } |reader| {
