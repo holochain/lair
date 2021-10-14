@@ -1013,7 +1013,7 @@ impl WriterExt for codec::CodecWriter {
     fn write_str(&mut self, s: &str, max: usize) -> LairResult<()> {
         let mut s = s.as_bytes();
         if s.len() > max {
-            s = "Message too long to display".as_bytes();
+            s = s[..max];
         }
         self.write_u64(s.len() as u64)?;
         self.write_bytes(s)?;
