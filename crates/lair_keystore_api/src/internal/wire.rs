@@ -24,6 +24,7 @@ macro_rules! wire_type_meta_macro {
             }
             |msg_id, wire_type| {
                 let mut writer = default_encode_setup!(msg_id, wire_type);
+                eprintln!("WIRE_ERROR: {}", message);
                 writer.write_str(&message, 128)?;
                 Ok(writer.into_vec())
             } |reader| {
@@ -1010,9 +1011,9 @@ trait WriterExt {
 
 impl WriterExt for codec::CodecWriter {
     fn write_str(&mut self, s: &str, max: usize) -> LairResult<()> {
-        let s = s.as_bytes();
+        let mut s = s.as_bytes();
         if s.len() > max {
-            return Err(format!("exceeded {} byte maximum", max).into());
+            s = &s[..max];
         }
         self.write_u64(s.len() as u64)?;
         self.write_bytes(s)?;
@@ -1062,6 +1063,20 @@ impl ReaderExt for codec::CodecReader<'_> {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+
+    #[test]
+    fn too_long_error_truncate() {
+        let item = LairWire::ErrorResponse {
+            msg_id: 0,
+            message: "this error message is too long, it will get truncated when we encode it so the end of this message will no longer exist but that will be a good thing because at least it will no longer crash the lair server : )".to_string(),
+        };
+        let encoded = item.encode().unwrap();
+        let decoded = LairWire::decode(&encoded).unwrap();
+        assert_eq!(LairWire::ErrorResponse {
+            msg_id: 0,
+            message: "this error message is too long, it will get truncated when we encode it so the end of this message will no longer exist but that".to_string(),
+        }, decoded);
+    }
 
     pub(crate) trait TestVal: Sized {
         fn test_val() -> Self;
