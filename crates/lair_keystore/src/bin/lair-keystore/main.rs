@@ -24,6 +24,13 @@ struct Opt {
     #[structopt(short, long)]
     version: bool,
 
+    /// DANGER! - SECRETS EXPOSED!
+    /// - Dump the keystore to stdout.
+    /// - Requires --load-db-passphrase
+    /// - and don't forget --lair-dir if needed.
+    #[structopt(long, verbatim_doc_comment)]
+    danger_dump_keystore: bool,
+
     /// generates a keystore with a provided key.
     #[structopt(
         long,
@@ -81,6 +88,15 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
     let passphrase = opt
         .load_db_passphrase
         .map(|p| sodoken::BufRead::new_no_lock(p.as_bytes()));
+
+    if opt.danger_dump_keystore {
+        if passphrase.is_none() {
+            panic!(
+                "'--load-db-passphrase' required for '--danger-dump-keystore'"
+            );
+        }
+        return lair_keystore::danger_dump_keystore(passphrase.unwrap()).await;
+    }
 
     if let Some(load_ed25519_keypair_from_file) =
         opt.load_ed25519_keypair_from_file

@@ -45,6 +45,37 @@ pub async fn execute_lair() -> LairResult<()> {
     Ok(())
 }
 
+/// DANGER! - this isn't a super secure thing to be doing!
+/// Dump the keystore to stdout.
+pub async fn danger_dump_keystore(
+    passphrase: sodoken::BufRead,
+) -> LairResult<()> {
+    let mut config = Config::builder();
+
+    if let Some(lair_dir) = std::env::var_os("LAIR_DIR") {
+        config = config.set_root_path(lair_dir);
+    }
+
+    let config = config.build();
+
+    println!("#lair-keystore-dir:{:?}#", config.get_root_path());
+
+    let internal::pid_check::PidCheckResult {} =
+        internal::pid_check::pid_check(&config)?;
+
+    let db_key = read_or_generate_db_key(config.clone(), passphrase).await?;
+
+    let store_actor = store::spawn_entry_store_actor(config, db_key).await?;
+
+    let last_entry: u32 = store_actor.get_last_entry_index().await?.into();
+    for idx in 1..=last_entry {
+        let entry = store_actor.get_entry_by_index(idx.into()).await;
+        println!("KeystoreIndex({}) {:?}", idx, entry);
+    }
+
+    Ok(())
+}
+
 /// Gen loop of lair executable with file path.
 pub async fn execute_load_ed25519_keypair_from_file(
     load_ed25519_keypair_from_file: std::path::PathBuf,
