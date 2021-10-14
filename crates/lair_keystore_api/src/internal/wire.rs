@@ -1011,9 +1011,9 @@ trait WriterExt {
 
 impl WriterExt for codec::CodecWriter {
     fn write_str(&mut self, s: &str, max: usize) -> LairResult<()> {
-        let s = s.as_bytes();
+        let mut s = s.as_bytes();
         if s.len() > max {
-            return Err(format!("exceeded {} byte maximum", max).into());
+            s = "Message too long to display".as_bytes();
         }
         self.write_u64(s.len() as u64)?;
         self.write_bytes(s)?;
