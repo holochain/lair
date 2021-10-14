@@ -734,7 +734,7 @@ dependencies = [
 
 [[package]]
 name = "hc_seed_bundle"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "base64",
  "futures",
@@ -860,7 +860,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "base64",
  "criterion",
@@ -883,7 +883,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_api"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "arbitrary",
  "blake2b_simd",
@@ -915,7 +915,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_client"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "futures",
  "ghost_actor",
