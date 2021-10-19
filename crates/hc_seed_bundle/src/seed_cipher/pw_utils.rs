@@ -74,6 +74,10 @@ pub(crate) async fn pw_enc(
     sodoken::BufReadSized<24>,
     sodoken::BufReadSized<49>,
 )> {
+    // pre-hash the passphrase
+    let pw_hash = sodoken::BufWrite::new_mem_locked(64)?;
+    sodoken::hash::blake2b::hash(pw_hash.clone(), passphrase).await?;
+
     // generate a random salt
     let salt = sodoken::BufWriteSized::new_no_lock();
     sodoken::random::bytes_buf(salt.clone()).await?;
@@ -84,7 +88,7 @@ pub(crate) async fn pw_enc(
     let secret = sodoken::BufWriteSized::new_mem_locked()?;
     sodoken::hash::argon2id::hash(
         secret.clone(),
-        passphrase,
+        pw_hash,
         salt.clone(),
         opslimit,
         memlimit,
@@ -122,11 +126,15 @@ pub(crate) async fn pw_dec(
     header: sodoken::BufReadSized<24>,
     cipher: sodoken::BufReadSized<49>,
 ) -> SodokenResult<sodoken::BufReadSized<32>> {
+    // pre-hash the passphrase
+    let pw_hash = sodoken::BufWrite::new_mem_locked(64)?;
+    sodoken::hash::blake2b::hash(pw_hash.clone(), passphrase).await?;
+
     // generate the argon secret
     let secret = sodoken::BufWriteSized::new_mem_locked()?;
     sodoken::hash::argon2id::hash(
         secret.clone(),
-        passphrase,
+        pw_hash,
         salt,
         ops_limit,
         mem_limit,
