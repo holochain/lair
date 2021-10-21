@@ -147,6 +147,10 @@ impl LairServerConfigInner {
             let mut store_file = root_path.clone();
             store_file.push(STORE_FILE_NAME);
 
+            // pre-hash the passphrase
+            let pw_hash = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+            sodoken::hash::blake2b::hash(pw_hash.clone(), passphrase).await?;
+
             // generate a random salt for the pwhash
             let salt = <sodoken::BufWriteSized<16>>::new_no_lock();
             sodoken::random::bytes_buf(salt.clone()).await?;
@@ -159,7 +163,7 @@ impl LairServerConfigInner {
             let pre_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
             sodoken::hash::argon2id::hash(
                 pre_secret.clone(),
-                passphrase,
+                pw_hash,
                 salt.clone(),
                 ops_limit,
                 mem_limit,

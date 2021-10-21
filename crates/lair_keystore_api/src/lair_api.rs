@@ -45,7 +45,7 @@ pub struct DeepLockPassphrase {
     /// argon2id mem_limit for decrypting runtime data
     pub mem_limit: u32,
     /// if this new seed is to be deep_locked, the passphrase for that.
-    pub passphrase: SecretData,
+    pub passphrase: SecretDataSized<64, 81>,
 }
 
 fn new_msg_id() -> Arc<str> {

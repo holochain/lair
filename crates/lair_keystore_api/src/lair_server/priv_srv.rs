@@ -32,6 +32,10 @@ impl Srv {
         passphrase: sodoken::BufRead,
     ) -> impl Future<Output = LairResult<Self>> + 'static + Send {
         async move {
+            // pre-hash the passphrase
+            let pw_hash = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+            sodoken::hash::blake2b::hash(pw_hash.clone(), passphrase).await?;
+
             // read salt from config
             let salt = sodoken::BufReadSized::from(
                 config.runtime_secrets_salt.cloned_inner(),
@@ -45,7 +49,7 @@ impl Srv {
             let pre_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
             sodoken::hash::argon2id::hash(
                 pre_secret.clone(),
-                passphrase,
+                pw_hash,
                 salt,
                 ops_limit,
                 mem_limit,

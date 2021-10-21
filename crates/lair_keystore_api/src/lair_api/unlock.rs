@@ -8,12 +8,12 @@ pub struct LairApiReqUnlock {
     pub msg_id: Arc<str>,
 
     /// passphrase to unlock the keystore.
-    pub passphrase: SecretData,
+    pub passphrase: SecretDataSized<64, 81>,
 }
 
 impl LairApiReqUnlock {
     /// Make a new server info request
-    pub fn new(passphrase: SecretData) -> Self {
+    pub fn new(passphrase: SecretDataSized<64, 81>) -> Self {
         Self {
             msg_id: new_msg_id(),
             passphrase,

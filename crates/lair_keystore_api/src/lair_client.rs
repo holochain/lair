@@ -136,8 +136,13 @@ impl LairClient {
     ) -> impl Future<Output = LairResult<()>> + 'static + Send {
         let inner = self.0.clone();
         async move {
+            // pre-hash the passphrase
+            let pw_hash = sodoken::BufWriteSized::new_mem_locked()?;
+            sodoken::hash::blake2b::hash(pw_hash.clone(), passphrase).await?;
+
             let key = inner.get_enc_ctx_key();
-            let passphrase = SecretData::encrypt(key, passphrase).await?;
+            let passphrase =
+                SecretDataSized::encrypt(key, pw_hash.to_read_sized()).await?;
             let req = LairApiReqUnlock::new(passphrase);
             let _res = priv_lair_api_request(&*inner, req).await?;
             Ok(())
@@ -186,8 +191,15 @@ impl LairClient {
             let secret = match deep_lock_passphrase {
                 None => None,
                 Some(pass) => {
+                    // pre-hash the passphrase
+                    let pw_hash =
+                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
+
                     let key = inner.get_enc_ctx_key();
-                    let secret = SecretData::encrypt(key, pass).await?;
+                    let secret =
+                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
+                            .await?;
                     Some(DeepLockPassphrase {
                         ops_limit: limits.as_ops_limit(),
                         mem_limit: limits.as_mem_limit(),
@@ -234,8 +246,15 @@ impl LairClient {
             let secret = match deep_lock_passphrase {
                 None => None,
                 Some(pass) => {
+                    // pre-hash the passphrase
+                    let pw_hash =
+                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
+
                     let key = inner.get_enc_ctx_key();
-                    let secret = SecretData::encrypt(key, pass).await?;
+                    let secret =
+                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
+                            .await?;
                     Some(secret)
                 }
             };
@@ -262,8 +281,15 @@ impl LairClient {
             let secret = match deep_lock_passphrase {
                 None => None,
                 Some(pass) => {
+                    // pre-hash the passphrase
+                    let pw_hash =
+                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
+
                     let key = inner.get_enc_ctx_key();
-                    let secret = SecretData::encrypt(key, pass).await?;
+                    let secret =
+                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
+                            .await?;
                     Some(secret)
                 }
             };
@@ -295,8 +321,15 @@ impl LairClient {
             let secret = match deep_lock_passphrase {
                 None => None,
                 Some(pass) => {
+                    // pre-hash the passphrase
+                    let pw_hash =
+                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
+
                     let key = inner.get_enc_ctx_key();
-                    let secret = SecretData::encrypt(key, pass).await?;
+                    let secret =
+                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
+                            .await?;
                     Some(secret)
                 }
             };
