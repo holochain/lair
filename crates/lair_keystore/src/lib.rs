@@ -6,7 +6,12 @@
 #![deny(unsafe_code)]
 #![deny(warnings)]
 
-//! secret lair private keystore
+//! Secret lair private keystore
+#![doc = include_str!("./docs/help.md")]
+#![doc = include_str!("./docs/init-help.md")]
+#![doc = include_str!("./docs/url-help.md")]
+#![doc = include_str!("./docs/import-seed-help.md")]
+#![doc = include_str!("./docs/server-help.md")]
 
 include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 

@@ -50,6 +50,23 @@ test: tools
 fmt: tools
 	cargo fmt
 
+gen-bin-docs: tools
+	printf '## `lair-keystore --help`\n```no-compile\n' > crates/lair_keystore/src/docs/help.md
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- --help >> crates/lair_keystore/src/docs/help.md
+	printf '\n```' >> crates/lair_keystore/src/docs/help.md
+	printf '## `lair-keystore init --help`\n```no-compile\n' > crates/lair_keystore/src/docs/init-help.md
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- init --help >> crates/lair_keystore/src/docs/init-help.md
+	printf '\n```' >> crates/lair_keystore/src/docs/init-help.md
+	printf '## `lair-keystore url --help`\n```no-compile\n' > crates/lair_keystore/src/docs/url-help.md
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- url --help >> crates/lair_keystore/src/docs/url-help.md
+	printf '\n```' >> crates/lair_keystore/src/docs/url-help.md
+	printf '## `lair-keystore import-seed --help`\n```no-compile\n' > crates/lair_keystore/src/docs/import-seed-help.md
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- import-seed --help >> crates/lair_keystore/src/docs/import-seed-help.md
+	printf '\n```' >> crates/lair_keystore/src/docs/import-seed-help.md
+	printf '## `lair-keystore server --help`\n```no-compile\n' > crates/lair_keystore/src/docs/server-help.md
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- server --help >> crates/lair_keystore/src/docs/server-help.md
+	printf '\n```' >> crates/lair_keystore/src/docs/server-help.md
+
 clean:
 	$(ENV) cargo clean
 

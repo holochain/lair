@@ -1,6 +1,7 @@
-# hc_seed_bundle
+<a href="https://github.com/holochain/lair/blob/master/LICENSE-APACHE">![Crates.io](https://img.shields.io/crates/l/hc_seed_bundle)</a>
+<a href="https://crates.io/crates/hc_seed_bundle">![Crates.io](https://img.shields.io/crates/v/hc_seed_bundle)</a>
 
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+# hc_seed_bundle
 
 SeedBundle parsing and generation library.
 
@@ -104,5 +105,3 @@ To better facilitate rust/javascript interoperability, the rust library will tre
   - passphrase: user-supplied
 - `secretstream_xchacha20poly1305`
   - single `push_final/pull_final` with entire contents
-
-License: Apache-2.0
