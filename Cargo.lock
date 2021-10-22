@@ -733,22 +733,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hc_seed_bundle"
-version = "0.0.8"
-dependencies = [
- "base64",
- "futures",
- "one_err",
- "rmp-serde",
- "rmpv",
- "serde",
- "serde_bytes",
- "serde_json",
- "sodoken",
- "tokio",
-]
-
-[[package]]
 name = "heck"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1735,18 +1719,6 @@ dependencies = [
  "byteorder",
  "rmp",
  "serde",
-]
-
-[[package]]
-name = "rmpv"
-version = "1.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de8813b3a2f95c5138fe5925bfb8784175d88d6bff059ba8ce090aa891319754"
-dependencies = [
- "num-traits",
- "rmp",
- "serde",
- "serde_bytes",
 ]
 
 [[package]]
