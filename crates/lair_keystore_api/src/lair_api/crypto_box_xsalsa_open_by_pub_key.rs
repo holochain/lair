@@ -12,7 +12,7 @@ pub struct LairApiReqCryptoBoxXSalsaOpenByPubKey {
     pub recipient_pub_key: X25519PubKey,
     /// if this new seed is to be deep_locked, the passphrase for that.
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub deep_lock_passphrase: Option<SecretData>,
+    pub deep_lock_passphrase: Option<SecretDataSized<64, 81>>,
     /// the nonce associated with the cipher
     pub nonce: [u8; 24],
     /// the data to decrypt
@@ -24,7 +24,7 @@ impl LairApiReqCryptoBoxXSalsaOpenByPubKey {
     pub fn new(
         sender_pub_key: X25519PubKey,
         recipient_pub_key: X25519PubKey,
-        deep_lock_passphrase: Option<SecretData>,
+        deep_lock_passphrase: Option<SecretDataSized<64, 81>>,
         nonce: [u8; 24],
         cipher: Arc<[u8]>,
     ) -> Self {

@@ -109,13 +109,17 @@ pub(crate) async fn exec(
         let ops_limit = limits.as_ops_limit();
         let mem_limit = limits.as_mem_limit();
 
+        // pre-hash the passphrase
+        let pw_hash = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+        sodoken::hash::blake2b::hash(pw_hash.clone(), deep_pass).await?;
+
         store
             .insert_deep_locked_seed(
                 seed,
                 opt.tag.as_str().into(),
                 ops_limit,
                 mem_limit,
-                deep_pass,
+                pw_hash.to_read_sized(),
             )
             .await?
     } else {

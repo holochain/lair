@@ -285,7 +285,7 @@ impl LairStore {
         tag: Arc<str>,
         ops_limit: u32,
         mem_limit: u32,
-        deep_lock_passphrase: sodoken::BufRead,
+        deep_lock_passphrase: sodoken::BufReadSized<64>,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let inner = self.0.clone();
         async move {
@@ -358,7 +358,7 @@ impl LairStore {
         tag: Arc<str>,
         ops_limit: u32,
         mem_limit: u32,
-        deep_lock_passphrase: sodoken::BufRead,
+        deep_lock_passphrase: sodoken::BufReadSized<64>,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let this = self.clone();
         async move {

@@ -10,7 +10,7 @@ pub struct LairApiReqSignByPubKey {
     pub pub_key: Ed25519PubKey,
     /// if this new seed is to be deep_locked, the passphrase for that.
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub deep_lock_passphrase: Option<SecretData>,
+    pub deep_lock_passphrase: Option<SecretDataSized<64, 81>>,
     /// the data to sign
     pub data: Arc<[u8]>,
 }
@@ -19,7 +19,7 @@ impl LairApiReqSignByPubKey {
     /// Make a new_seed request
     pub fn new(
         pub_key: Ed25519PubKey,
-        deep_lock_passphrase: Option<SecretData>,
+        deep_lock_passphrase: Option<SecretDataSized<64, 81>>,
         data: Arc<[u8]>,
     ) -> Self {
         Self {
