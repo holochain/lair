@@ -139,6 +139,17 @@ impl UnlockedSeedBundle {
     pub fn lock(&self) -> crate::SeedCipherBuilder {
         crate::SeedCipherBuilder::new(self.seed.clone(), self.app_data.clone())
     }
+    /// This function will deprecating soon
+    /// For now lair does not take in any encrypted bytes so we pass back an empty encrypted byte string
+    pub fn bundle_to_old_key_format(&self) -> Vec<u8> {
+        let mut encrypted_key = vec![
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        ];
+        encrypted_key.extend(&self.sign_pub_key.read_lock().to_vec());
+        encrypted_key.extend(&self.sign_sec_key.read_lock().to_vec());
+        encrypted_key
+    }
 }
 
 #[cfg(test)]
