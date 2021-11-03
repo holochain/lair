@@ -73,6 +73,9 @@ async fn sf_one_and_done() {
         .unwrap();
     assert_eq!([0; 64], *sig_good.0);
 
+    // give windows a chance to understand the broken pipe :/
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
     println!("req 2");
 
     // even though our executable exited between the requests
