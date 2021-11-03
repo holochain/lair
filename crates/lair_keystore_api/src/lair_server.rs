@@ -96,153 +96,263 @@ use priv_srv::*;
 mod priv_api;
 use priv_api::*;
 
+type SubProcReqSender = tokio::sync::mpsc::Sender<(
+    LairApiReqSignByPubKey,
+    tokio::sync::oneshot::Sender<LairResult<LairApiResSignByPubKey>>,
+)>;
+
+struct FallbackCmdInner {
+    id: String,
+    sender: SubProcReqSender,
+    child: tokio::process::Child,
+}
+
 /// Helper for managing a signature_fallback sub-process
 #[derive(Clone)]
 pub(crate) struct FallbackCmd {
-    req: tokio::sync::mpsc::Sender<(
-        LairApiReqSignByPubKey,
-        tokio::sync::oneshot::Sender<LairResult<LairApiResSignByPubKey>>,
-    )>,
-    child: Arc<tokio::process::Child>,
+    config: LairServerConfig,
+    inner: Arc<RwLock<Option<FallbackCmdInner>>>,
 }
 
 impl FallbackCmd {
     /// spawn a new sub-process for fallback signature requests
     pub(crate) async fn new(config: &LairServerConfig) -> LairResult<Self> {
-        let (program, args) = match &config.signature_fallback {
-            LairServerSignatureFallback::Command { program, args } => {
-                (program.clone(), args.clone())
-            }
-            oth => {
-                return Err(format!(
-                    "invalid signature_fallback type: {:?}",
-                    oth,
-                )
-                .into());
-            }
-        };
+        Ok(Self {
+            config: config.clone(),
+            inner: Arc::new(RwLock::new(None)),
+        })
+    }
 
-        let program = dunce::canonicalize(program)?;
-        let args = args.unwrap_or_else(Vec::new);
+    fn check_get_sub_process_sender(
+        &self,
+    ) -> impl Future<Output = LairResult<SubProcReqSender>> + 'static + Send
+    {
+        let config = self.config.clone();
+        let inner = self.inner.clone();
+        async move {
+            let (send, mut recv, mut stdin, stdout, id) = {
+                let mut lock = inner.write();
 
-        // spawn the actual sub-process
-        let mut child = tokio::process::Command::new(program)
-            .args(args)
-            .kill_on_drop(true)
-            .stdin(std::process::Stdio::piped())
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::inherit())
-            .spawn()?;
+                if let Some(inner) = &mut *lock {
+                    if let Ok(None) = inner.child.try_wait() {
+                        tracing::trace!("@sig_fb@ using existing child");
 
-        // get our pipe handles
-        let mut stdin = child.stdin.take().unwrap();
-        let stdout = child.stdout.take().unwrap();
-
-        let (send, mut recv) = tokio::sync::mpsc::channel::<(
-            LairApiReqSignByPubKey,
-            tokio::sync::oneshot::Sender<LairResult<LairApiResSignByPubKey>>,
-        )>(4096);
-
-        use std::collections::HashMap;
-        struct Inner {
-            p: HashMap<
-                Arc<str>,
-                tokio::sync::oneshot::Sender<
-                    LairResult<LairApiResSignByPubKey>,
-                >,
-            >,
-        }
-
-        use parking_lot::Mutex;
-        let inner = Arc::new(Mutex::new(Inner { p: HashMap::new() }));
-
-        // spawn a tokio task to manage sending requests into the sub-process
-        let inner2 = inner.clone();
-        tokio::task::spawn(async move {
-            while let Some((req, res)) = recv.recv().await {
-                inner2.lock().p.insert(req.msg_id.clone(), res);
-                let pub_key = base64::encode_config(
-                    &*req.pub_key.0,
-                    base64::URL_SAFE_NO_PAD,
-                );
-                let data = base64::encode(req.data);
-                let output = format!(
-                    "{}\n",
-                    serde_json::to_string(&serde_json::json!({
-                        "msgId": req.msg_id,
-                        "pubKey": pub_key,
-                        "dataToSign": data,
-                    }))
-                    .unwrap(),
-                );
-                use tokio::io::AsyncWriteExt;
-                if let Err(e) = stdin.write_all(output.as_bytes()).await {
-                    tracing::error!("signature_fallback write error: {:?}", e);
-                    return;
-                }
-            }
-        });
-
-        // spawn a tokio task to manage receiving responses from the sub-process
-        tokio::task::spawn(async move {
-            use tokio::io::AsyncBufReadExt;
-            let stdout = tokio::io::BufReader::new(stdout);
-            let mut lines = stdout.lines();
-            while let Ok(Some(line)) = lines.next_line().await {
-                // parse the response
-                #[derive(Debug, serde::Deserialize)]
-                #[serde(rename_all = "camelCase")]
-                struct Res {
-                    msg_id: Arc<str>,
-                    signature: Option<String>,
-                    error: Option<String>,
-                }
-                let res: Res = match serde_json::from_str(&line) {
-                    Err(e) => {
-                        tracing::error!(
-                            "signature_fallback read error: {:?}",
-                            e
-                        );
-                        return;
+                        // child is still running
+                        return Ok(inner.sender.clone());
                     }
-                    Ok(r) => r,
+                }
+
+                let id = nanoid::nanoid!();
+
+                // otherwise, we need to spawn a new child
+                let (send, recv) = tokio::sync::mpsc::channel::<(
+                    LairApiReqSignByPubKey,
+                    tokio::sync::oneshot::Sender<
+                        LairResult<LairApiResSignByPubKey>,
+                    >,
+                )>(4096);
+
+                let (program, args) = match &config.signature_fallback {
+                    LairServerSignatureFallback::Command { program, args } => {
+                        (program.clone(), args.clone())
+                    }
+                    oth => {
+                        return Err(format!(
+                            "invalid signature_fallback type: {:?}",
+                            oth,
+                        )
+                        .into());
+                    }
                 };
 
-                // send the response back to the requesting logic
-                let respond = inner.lock().p.remove(&res.msg_id);
-                if let Some(respond) = respond {
-                    if let Some(error) = res.error {
-                        let _ = respond.send(Err(error.into()));
-                    } else if let Some(signature) = res.signature {
-                        let signature = match base64::decode(&signature) {
-                            Ok(s) => s,
-                            Err(e) => {
-                                tracing::error!(
-                                    "signature_fallback read error: {:?}",
-                                    e
-                                );
-                                return;
-                            }
-                        };
-                        if signature.len() != 64 {
-                            tracing::error!("signature_fallback read error: invalid signature size");
-                            return;
+                let program = dunce::canonicalize(program)?;
+                let args = args.unwrap_or_else(Vec::new);
+
+                // spawn the actual sub-process
+                let mut child = tokio::process::Command::new(program);
+                child
+                    .args(args)
+                    .kill_on_drop(true)
+                    .stdin(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::inherit());
+                tracing::info!("@sig_fb@ spawn new child: {:?}", child);
+                let mut child = child.spawn()?;
+
+                // get our pipe handles
+                let stdin = child.stdin.take().unwrap();
+                let stdout = child.stdout.take().unwrap();
+
+                // set at the beginning BEFORE ANY AWAITS
+                // so we don't have a race condition
+                *lock = Some(FallbackCmdInner {
+                    id: id.clone(),
+                    sender: send.clone(),
+                    child,
+                });
+
+                (send, recv, stdin, stdout, id)
+            };
+
+            use std::collections::HashMap;
+            struct Pending {
+                running: bool,
+                pending: HashMap<
+                    Arc<str>,
+                    tokio::sync::oneshot::Sender<
+                        LairResult<LairApiResSignByPubKey>,
+                    >,
+                >,
+            }
+
+            use parking_lot::Mutex;
+            let pending = Arc::new(Mutex::new(Pending {
+                running: true,
+                pending: HashMap::new(),
+            }));
+
+            // spawn a tokio task to manage sending requests into the sub-process
+            let inner2 = inner.clone();
+            let pending2 = pending.clone();
+            let id2 = id.clone();
+            tokio::task::spawn(async move {
+                while let Some((req, res)) = recv.recv().await {
+                    {
+                        let mut lock = pending2.lock();
+                        if !lock.running {
+                            tracing::warn!("@sig_fb@ exit write loop due to shutdown from read side");
+                            let _ = res.send(Err(
+                                "signature fallback process closed".into(),
+                            ));
+                            break;
                         }
-                        let mut sized_sig = [0; 64];
-                        sized_sig.copy_from_slice(&signature);
-                        let _ = respond.send(Ok(LairApiResSignByPubKey {
-                            msg_id: res.msg_id,
-                            signature: sized_sig.into(),
-                        }));
+                        lock.pending.insert(req.msg_id.clone(), res);
+                    }
+                    let pub_key = base64::encode_config(
+                        &*req.pub_key.0,
+                        base64::URL_SAFE_NO_PAD,
+                    );
+                    let data = base64::encode(req.data);
+                    let output = format!(
+                        "{}\n",
+                        serde_json::to_string(&serde_json::json!({
+                            "msgId": req.msg_id.clone(),
+                            "pubKey": pub_key,
+                            "dataToSign": data,
+                        }))
+                        .unwrap(),
+                    );
+                    use tokio::io::AsyncWriteExt;
+                    if let Err(e) = stdin.write_all(output.as_bytes()).await {
+                        let e =
+                            format!("signature_fallback write error: {:?}", e);
+                        tracing::error!("@sig_fb@ {}", e);
+                        let respond =
+                            pending2.lock().pending.remove(&req.msg_id);
+                        if let Some(respond) = respond {
+                            let _ = respond.send(Err(e.into()));
+                        }
+                        break;
                     }
                 }
-            }
-        });
 
-        Ok(Self {
-            req: send,
-            child: Arc::new(child),
-        })
+                tracing::warn!("@sig_fb@ write loop exiting");
+
+                let mut lock = inner2.write();
+                let remove = if let Some(inner) = &mut *lock {
+                    inner.id == id2
+                } else {
+                    false
+                };
+                if remove {
+                    *lock = None
+                }
+            });
+
+            // spawn a tokio task to manage receiving responses from the sub-process
+            tokio::task::spawn(async move {
+                use tokio::io::AsyncBufReadExt;
+                let stdout = tokio::io::BufReader::new(stdout);
+                let mut lines = stdout.lines();
+                while let Ok(Some(line)) = lines.next_line().await {
+                    // parse the response
+                    #[derive(Debug, serde::Deserialize)]
+                    #[serde(rename_all = "camelCase")]
+                    struct Res {
+                        msg_id: Arc<str>,
+                        signature: Option<String>,
+                        error: Option<String>,
+                    }
+                    let res: Res = match serde_json::from_str(&line) {
+                        Err(e) => {
+                            tracing::error!(
+                                "signature_fallback read error: {:?}",
+                                e
+                            );
+                            break;
+                        }
+                        Ok(r) => r,
+                    };
+
+                    // send the response back to the requesting logic
+                    let respond = pending.lock().pending.remove(&res.msg_id);
+                    if let Some(respond) = respond {
+                        if let Some(error) = res.error {
+                            let _ = respond.send(Err(error.into()));
+                        } else if let Some(signature) = res.signature {
+                            let signature = match base64::decode(&signature) {
+                                Ok(s) => s,
+                                Err(e) => {
+                                    let e = format!(
+                                        "signature_fallback read error: {:?}",
+                                        e
+                                    );
+                                    tracing::error!("@sig_fb@ {}", e);
+                                    let _ = respond.send(Err(e.into()));
+                                    break;
+                                }
+                            };
+                            if signature.len() != 64 {
+                                let e =
+                                    "signature_fallback read error: invalid signature size";
+                                tracing::error!("@sig_fb@ {}", e);
+                                let _ = respond.send(Err(e.into()));
+                                break;
+                            }
+                            let mut sized_sig = [0; 64];
+                            sized_sig.copy_from_slice(&signature);
+                            let _ = respond.send(Ok(LairApiResSignByPubKey {
+                                msg_id: res.msg_id,
+                                signature: sized_sig.into(),
+                            }));
+                        }
+                    }
+                }
+
+                tracing::warn!("@sig_fb@ read loop exiting");
+
+                {
+                    let mut lock = inner.write();
+                    let remove = if let Some(inner) = &mut *lock {
+                        inner.id == id
+                    } else {
+                        false
+                    };
+                    if remove {
+                        *lock = None
+                    }
+                }
+
+                let mut lock = pending.lock();
+                lock.running = false;
+                for (_, respond) in lock.pending.drain() {
+                    let _ =
+                        respond.send(Err("fallback executable closed".into()));
+                }
+            });
+
+            Ok(send)
+        }
     }
 
     /// make a request of the sub-process to sign some data
@@ -251,8 +361,9 @@ impl FallbackCmd {
         req: LairApiReqSignByPubKey,
     ) -> impl Future<Output = LairResult<LairApiResSignByPubKey>> + 'static + Send
     {
-        let send = self.req.clone();
+        let send_fut = self.check_get_sub_process_sender();
         async move {
+            let send = send_fut.await?;
             let (s, r) = tokio::sync::oneshot::channel();
             send.send((req, s))
                 .await
