@@ -18,15 +18,17 @@ bump:
 	@for toml in $$(find crates -name Cargo.toml); do \
 		echo "# updating version in $${toml} to $(ver)"; \
 		sed -i'' 's/^version = \"[^"]*"$$/version = "$(ver)"/g' $${toml}; \
+		sed -i'' 's/^hc_seed_bundle = { version = \"[^"]*"/hc_seed_bundle = { version = "=$(ver)"/g' $${toml}; \
 		sed -i'' 's/^lair_keystore_api = { version = \"[^"]*"/lair_keystore_api = { version = "=$(ver)"/g' $${toml}; \
 	done
 
 publish: tools
 	git diff --exit-code
+	cargo publish --manifest-path crates/hc_seed_bundle/Cargo.toml
+	echo "-- wait for crates.io... --"; sleep 30
 	cargo publish --manifest-path crates/lair_keystore_api/Cargo.toml
 	echo "-- wait for crates.io... --"; sleep 30
 	cargo publish --manifest-path crates/lair_keystore/Cargo.toml
-	cargo publish --manifest-path crates/lair_keystore_client/Cargo.toml
 	VER="v$$(grep version crates/lair_keystore/Cargo.toml | head -1 | cut -d ' ' -f 3 | cut -d \" -f 2)"; git tag -a $$VER -m $$VER
 	git push --tags
 
@@ -36,16 +38,34 @@ test: tools
 	if [ "${CI}x" != "x" ]; then \
 		$(ENV) cargo install --debug -f --path crates/lair_keystore; \
 	fi
+	$(ENV) RUST_BACKTRACE=1 cargo build
 	$(ENV) RUST_BACKTRACE=1 cargo test --all-targets --no-run
 	$(ENV) RUST_BACKTRACE=1 cargo test
+	$(ENV) cargo readme -r crates/hc_seed_bundle -o README.md
 	$(ENV) cargo readme -r crates/lair_keystore_api -o README.md
 	$(ENV) cargo readme -r crates/lair_keystore -o README.md
 	$(ENV) cargo readme -r crates/lair_keystore -o ../../README.md
-	$(ENV) cargo readme -r crates/lair_keystore_client -o README.md
 	@if [ "${CI}x" != "x" ]; then git diff --exit-code; fi
 
 fmt: tools
 	cargo fmt
+
+gen-bin-docs: tools
+	printf '## `lair-keystore --help`\n```no-compile\n' > crates/lair_keystore/src/docs/help.md
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- --help >> crates/lair_keystore/src/docs/help.md
+	printf '\n```' >> crates/lair_keystore/src/docs/help.md
+	printf '## `lair-keystore init --help`\n```no-compile\n' > crates/lair_keystore/src/docs/init-help.md
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- init --help >> crates/lair_keystore/src/docs/init-help.md
+	printf '\n```' >> crates/lair_keystore/src/docs/init-help.md
+	printf '## `lair-keystore url --help`\n```no-compile\n' > crates/lair_keystore/src/docs/url-help.md
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- url --help >> crates/lair_keystore/src/docs/url-help.md
+	printf '\n```' >> crates/lair_keystore/src/docs/url-help.md
+	printf '## `lair-keystore import-seed --help`\n```no-compile\n' > crates/lair_keystore/src/docs/import-seed-help.md
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- import-seed --help >> crates/lair_keystore/src/docs/import-seed-help.md
+	printf '\n```' >> crates/lair_keystore/src/docs/import-seed-help.md
+	printf '## `lair-keystore server --help`\n```no-compile\n' > crates/lair_keystore/src/docs/server-help.md
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- server --help >> crates/lair_keystore/src/docs/server-help.md
+	printf '\n```' >> crates/lair_keystore/src/docs/server-help.md
 
 clean:
 	$(ENV) cargo clean

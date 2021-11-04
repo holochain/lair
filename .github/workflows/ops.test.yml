@@ -1,5 +1,11 @@
-name: test
-on: [ push ]
+name: Test
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -22,11 +28,21 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
 
-      - name: Build Release
+      - name: Cargo Build
         uses: actions-rs/cargo@v1
+        env:
+          RUST_BACKTRACE: 1
         with:
           command: build
-          args: --release
+          args:
+
+      - name: Cargo Targets
+        uses: actions-rs/cargo@v1
+        env:
+          RUST_BACKTRACE: 1
+        with:
+          command: test
+          args: --all-targets --no-run
 
       - name: Cargo Test
         uses: actions-rs/cargo@v1
