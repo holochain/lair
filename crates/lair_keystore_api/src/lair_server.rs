@@ -166,7 +166,7 @@ impl FallbackCmd {
                 };
 
                 let program = dunce::canonicalize(program)?;
-                let args = args.unwrap_or_else(Vec::new);
+                let args = args.unwrap_or_default();
 
                 // spawn the actual sub-process
                 let mut child = tokio::process::Command::new(program);
