@@ -76,6 +76,7 @@ impl PrivFramedRecv {
             // the uninitialized data, and in the case of an error
             // this potentially partially filled buffer is not returned.
             #[allow(unsafe_code)]
+            #[allow(clippy::uninit_vec)]
             unsafe {
                 msg.set_len(ltag);
             }

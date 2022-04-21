@@ -55,7 +55,7 @@ pub(crate) fn ipc_bind(
         // we've already acquired our pid_file
         // it's safe to say we own the domain socket
         // and can remove any previous remnant
-        let _ = tokio::fs::remove_file(path).await;
+        let _ = tokio::fs::remove_file(&path).await;
 
         // bind to the domain socket
         let socket = tokio::net::UnixListener::bind(path)?;
