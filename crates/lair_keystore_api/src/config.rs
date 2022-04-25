@@ -35,6 +35,7 @@ fn build_socket_path(root_path: &Path) -> PathBuf {
 
 /// Lair configuration struct.
 pub struct Config {
+    panicky: bool,
     root_path: PathBuf,
     db_key_path: PathBuf,
     store_path: PathBuf,
@@ -69,6 +70,12 @@ impl Config {
     /// Obtain a new config builder.
     pub fn builder() -> ConfigBuilder {
         ConfigBuilder::default()
+    }
+
+    /// Are we configured to be panicky?
+    /// I.e. we should panic on any connection close
+    pub fn is_panicky(&self) -> bool {
+        self.panicky
     }
 
     /// Get the root data directory as specified by this config.
@@ -115,6 +122,7 @@ impl Default for ConfigBuilder {
         let pdir = directories::ProjectDirs::from("host", "Holo", "Lair")
             .expect("can determine project dir");
         Self(Config {
+            panicky: false,
             root_path: pdir.data_local_dir().to_path_buf(),
             db_key_path: PathBuf::new(),
             store_path: PathBuf::new(),
@@ -135,6 +143,12 @@ impl ConfigBuilder {
     /// Consume the config builder to obtain a true Config instance.
     pub fn build(self) -> Arc<Config> {
         self.0.finalize()
+    }
+
+    /// Set the panicky flag.
+    pub fn set_panicky(mut self) -> Self {
+        self.0.panicky = true;
+        self
     }
 
     /// Override the default data directory.

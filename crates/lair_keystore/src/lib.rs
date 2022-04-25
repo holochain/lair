@@ -26,11 +26,27 @@ pub mod store;
 pub mod ipc;
 
 /// Main loop of lair executable.
-pub async fn execute_lair() -> LairResult<()> {
+pub async fn execute_lair(panicky: bool) -> LairResult<()> {
+    if panicky {
+        let orig_handler = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |panic_info| {
+            // print the panic message
+            eprintln!("FATAL PANIC {:#?}", panic_info);
+            // invoke the original handler
+            orig_handler(panic_info);
+            // Abort the process
+            std::process::abort();
+        }));
+    }
+
     let mut config = Config::builder();
 
     if let Some(lair_dir) = std::env::var_os("LAIR_DIR") {
         config = config.set_root_path(lair_dir);
+    }
+
+    if panicky {
+        config = config.set_panicky();
     }
 
     let config = config.build();
