@@ -12,6 +12,7 @@ pub(crate) async fn spawn_bind_server_ipc<S>(
 where
     S: ghost_actor::GhostChannelSender<LairClientApi>,
 {
+    let panicky = config.is_panicky();
     let incoming_ipc_recv = spawn_bind_ipc(config)?;
 
     err_spawn("srv-ipc-incoming-loop", async move {
@@ -32,7 +33,12 @@ where
                     return;
                 }
 
-                spawn_srv_con_evt_loop(api_sender.clone(), ipc_send, ipc_recv);
+                spawn_srv_con_evt_loop(
+                    panicky,
+                    api_sender.clone(),
+                    ipc_send,
+                    ipc_recv,
+                );
             })
             .await;
 
@@ -43,6 +49,7 @@ where
 }
 
 fn spawn_srv_con_evt_loop<S>(
+    panicky: bool,
     api_sender: S,
     ipc_send: IpcSender,
     ipc_recv: IpcReceiver,
@@ -303,5 +310,8 @@ fn spawn_srv_con_evt_loop<S>(
         }).await;
 
         tracing::warn!("spawn-bind-server-con-loop ENDED");
+        if panicky {
+            panic!("spawn-bind-server-con-loop ENDED");
+        }
     });
 }

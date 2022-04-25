@@ -23,7 +23,7 @@ impl BenchStatic {
             let tmpdir = tempfile::tempdir().unwrap();
             std::env::set_var("LAIR_DIR", tmpdir.path());
 
-            lair_keystore::execute_lair().await.unwrap();
+            lair_keystore::execute_lair(false).await.unwrap();
 
             let config = Config::builder().set_root_path(tmpdir.path()).build();
 

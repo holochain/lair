@@ -24,6 +24,12 @@ struct Opt {
     #[structopt(short, long)]
     version: bool,
 
+    /// Temporary workaround for legacy lair,
+    /// causes executable to panic every time
+    /// a client connection is closed.
+    #[structopt(long, env = "LAIR_PANICKY")]
+    panicky: bool,
+
     /// DANGER! - SECRETS EXPOSED!
     /// - Dump the keystore to stdout.
     /// - Requires --load-db-passphrase
@@ -140,7 +146,7 @@ pub async fn main() -> lair_keystore_api::LairResult<()> {
     }
 
     trace!("executing lair main tasks");
-    lair_keystore::execute_lair().await?;
+    lair_keystore::execute_lair(opt.panicky).await?;
 
     info!("lair-keystore up and running");
 
