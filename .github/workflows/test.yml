@@ -6,39 +6,42 @@ on:
   pull_request:
     branches:
       - main
-runs-on: ${{ matrix.os }}
-strategy:
-  matrix:
-    os: [
-      ubuntu-latest,
-      macos-latest,
-      windows-latest,
-    ]
-    toolchain: [
-      stable,
-    ]
-steps:
-  - name: Checkout
-    uses: actions/checkout@v2
+jobs:
+  test:
+    name: Test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [
+          ubuntu-latest,
+          macos-latest,
+          windows-latest,
+        ]
+        toolchain: [
+          stable,
+        ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
 
-  - name: Toolchain
-    uses: actions-rs/toolchain@v1
-    with:
-      toolchain: ${{ matrix.toolchain }}
+      - name: Toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.toolchain }}
 
-  - name: Cargo Build
-    uses: actions-rs/cargo@v1
-    env:
-      RUST_BACKTRACE: 1
-    with:
-      command: build
-      args: --all-features --all-targets
+      - name: Cargo Build
+        uses: actions-rs/cargo@v1
+        env:
+          RUST_BACKTRACE: 1
+        with:
+          command: build
+          args: --all-features --all-targets
 
-  - name: Cargo Test
-    uses: actions-rs/cargo@v1
-    env:
-      RUST_BACKTRACE: 1
-      RUST_LOG: DEBUG
-    with:
-      command: test
-      args: --all-features -- --test-threads 1
+      - name: Cargo Test
+        uses: actions-rs/cargo@v1
+        env:
+          RUST_BACKTRACE: 1
+          RUST_LOG: DEBUG
+        with:
+          command: test
+          args: --all-features -- --test-threads 1
