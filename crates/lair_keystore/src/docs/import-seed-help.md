@@ -1,5 +1,5 @@
-## `lair-keystore import-seed --help`
-```no-compile
+### `lair-keystore import-seed --help`
+```text
 lair-keystore-import-seed 0.1.1
 Load a seed bundle into this lair-keystore instance.
 Note, this operation requires capturing the pid_file,

@@ -1,5 +1,5 @@
-## `lair-keystore server --help`
-```no-compile
+### `lair-keystore server --help`
+```text
 lair-keystore-server 0.1.1
 Run a lair keystore server instance. Note you must
 have initialized a config file first with

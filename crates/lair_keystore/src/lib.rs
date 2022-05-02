@@ -7,6 +7,24 @@
 #![deny(warnings)]
 
 //! Secret lair private keystore
+//!
+//! [![Project](https://img.shields.io/badge/project-holochain-blue.svg?style=flat-square)](http://holochain.org/)
+//! [![Forum](https://img.shields.io/badge/chat-forum%2eholochain%2enet-blue.svg?style=flat-square)](https://forum.holochain.org)
+//! [![Chat](https://img.shields.io/badge/chat-chat%2eholochain%2enet-blue.svg?style=flat-square)](https://chat.holochain.org)
+//!
+//! [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
+//!
+//! This crate mostly provides the `lair-keystore` executable allowing
+//! initialization, configuration, and running of a Lair keystore.
+//!
+//! If you want to run an in-process keystore, this crate also provides the
+//! canonical sqlite store.
+//!
+//! For making use of a Lair keystore in a client application, see the
+//! lair_keystore_api crate.
+//!
+//! # `lair-keystore` commandline executable usage:
+//!
 #![doc = include_str!("./docs/help.md")]
 #![doc = include_str!("./docs/init-help.md")]
 #![doc = include_str!("./docs/url-help.md")]

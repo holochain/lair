@@ -1,6 +1,6 @@
 [package]
 name = "lair_keystore"
-version = "0.1.1"
+version = "0.1.2"
 resolver = "2"
 description = "secret lair private keystore"
 license = "Apache-2.0"

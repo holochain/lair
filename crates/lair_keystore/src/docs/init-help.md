@@ -1,5 +1,5 @@
-## `lair-keystore init --help`
-```no-compile
+### `lair-keystore init --help`
+```text
 lair-keystore-init 0.1.1
 Set up a new lair private keystore.
 

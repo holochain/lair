@@ -27,13 +27,11 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
           components: rustfmt, clippy
 
-      - name: Cargo Fmt
+      - name: Cargo Install Readme
         uses: actions-rs/cargo@v1
         with:
-          command: fmt
-          args: -- --check
+          command: install
+          args: cargo-readme
 
-      - name: Cargo Clippy
-        uses: actions-rs/cargo@v1
-        with:
-          command: clippy
+      - name: Make static
+        run: make static
