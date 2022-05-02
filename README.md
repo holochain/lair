@@ -25,7 +25,7 @@ lair_keystore_api crate.
 
 ### `lair-keystore --help`
 ```text
-lair_keystore 0.1.1
+lair_keystore 0.1.2
 secret lair private keystore
 
 USAGE:
@@ -56,7 +56,7 @@ SUBCOMMANDS:
 ```
 ### `lair-keystore init --help`
 ```text
-lair-keystore-init 0.1.1
+lair-keystore-init 0.1.2
 Set up a new lair private keystore.
 
 USAGE:
@@ -74,7 +74,7 @@ FLAGS:
 ```
 ### `lair-keystore url --help`
 ```text
-lair-keystore-url 0.1.1
+lair-keystore-url 0.1.2
 Print the connection_url for a configured lair-keystore
 server to stdout and exit.
 
@@ -88,7 +88,7 @@ FLAGS:
 ```
 ### `lair-keystore import-seed --help`
 ```text
-lair-keystore-import-seed 0.1.1
+lair-keystore-import-seed 0.1.2
 Load a seed bundle into this lair-keystore instance.
 Note, this operation requires capturing the pid_file,
 make sure you do not have a lair-server running.
@@ -122,7 +122,7 @@ ARGS:
 ```
 ### `lair-keystore server --help`
 ```text
-lair-keystore-server 0.1.1
+lair-keystore-server 0.1.2
 Run a lair keystore server instance. Note you must
 have initialized a config file first with
 'lair-keystore init'.

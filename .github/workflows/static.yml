@@ -34,5 +34,5 @@ jobs:
           command: install
           args: cargo-readme
 
-      - name: Make static
+      - name: Make Static
         run: make static

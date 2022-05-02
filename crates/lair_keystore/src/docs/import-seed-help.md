@@ -1,6 +1,6 @@
 ### `lair-keystore import-seed --help`
 ```text
-lair-keystore-import-seed 0.1.1
+lair-keystore-import-seed 0.1.2
 Load a seed bundle into this lair-keystore instance.
 Note, this operation requires capturing the pid_file,
 make sure you do not have a lair-server running.
