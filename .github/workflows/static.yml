@@ -6,32 +6,30 @@ on:
   pull_request:
     branches:
       - main
-jobs:
-  static-analysis:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [
-          ubuntu-latest,
-        ]
-        toolchain: [
-          stable,
-        ]
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
+runs-on: ${{ matrix.os }}
+strategy:
+  matrix:
+    os: [
+      ubuntu-latest,
+    ]
+    toolchain: [
+      stable,
+    ]
+steps:
+  - name: Checkout
+    uses: actions/checkout@v2
 
-      - name: Toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: ${{ matrix.toolchain }}
-          components: rustfmt, clippy
+  - name: Toolchain
+    uses: actions-rs/toolchain@v1
+    with:
+      toolchain: ${{ matrix.toolchain }}
+      components: rustfmt, clippy
 
-      - name: Cargo Install Readme
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: cargo-readme
+  - name: Cargo Install Readme
+    uses: actions-rs/cargo@v1
+    with:
+      command: install
+      args: cargo-readme
 
-      - name: Make static
-        run: make static
+  - name: Make static
+    run: make static
