@@ -1,4 +1,4 @@
-name: Test
+name: Release Build
 on:
   push:
     branches:
@@ -7,7 +7,8 @@ on:
     branches:
       - main
 jobs:
-  test:
+  release-build:
+    name: Release Build
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -28,26 +29,10 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
 
-      - name: Cargo Build
+      - name: Cargo Release Build
         uses: actions-rs/cargo@v1
         env:
           RUST_BACKTRACE: 1
         with:
           command: build
-          args:
-
-      - name: Cargo Targets
-        uses: actions-rs/cargo@v1
-        env:
-          RUST_BACKTRACE: 1
-        with:
-          command: test
-          args: --all-targets --no-run
-
-      - name: Cargo Test
-        uses: actions-rs/cargo@v1
-        env:
-          RUST_BACKTRACE: 1
-        with:
-          command: test
-          args:
+          args: --release --all-features --all-targets

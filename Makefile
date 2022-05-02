@@ -1,48 +1,46 @@
 # Lair Makefile
 
-.PHONY: all test docs clean tools tool_rust tool_fmt tool_readme
-
-#RUSTFLAGS += ...
+.PHONY: all test static docs tools tool_rust tool_fmt tool_readme
 
 SHELL = /usr/bin/env sh
 
-ENV = RUSTFLAGS='$(RUSTFLAGS)' CARGO_BUILD_JOBS='$(shell nproc || sysctl -n hw.physicalcpu)' NUM_JOBS='$(shell nproc || sysctl -n hw.physicalcpu)' CARGO_TARGET_DIR='$(shell pwd)/target'
-
 all: test
 
-test: docs tools
-	$(ENV) cargo fmt -- --check
-	$(ENV) cargo clippy
-	if [ "${CI}x" != "x" ]; then \
-		$(ENV) cargo install --debug -f --path crates/lair_keystore; \
-	fi
-	$(ENV) RUST_BACKTRACE=1 cargo test --all-targets --no-run
-	$(ENV) RUST_BACKTRACE=1 cargo test
-	@if [ "${CI}x" != "x" ]; then git diff --exit-code; fi
+test: static tools
+	RUST_BACKTRACE=1 cargo build --all-features --all-targets
+	RUST_BACKTRACE=1 cargo test --all-features -- --test-threads 1
+
+static: docs tools
+	cargo fmt -- --check
+	cargo clippy
 
 docs: tools
-	$(ENV) cargo readme -r crates/hc_seed_bundle -o README.md
-	$(ENV) cargo readme -r crates/lair_keystore_api -o README.md
-	$(ENV) cargo readme -r crates/lair_keystore -o README.md
-	$(ENV) cargo readme -r crates/lair_keystore -o ../../README.md
-	printf '## `lair-keystore --help`\n```no-compile\n' > crates/lair_keystore/src/docs/help.md
+	printf '### `lair-keystore --help`\n```text\n' > crates/lair_keystore/src/docs/help.md
 	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- --help >> crates/lair_keystore/src/docs/help.md
-	printf '\n```' >> crates/lair_keystore/src/docs/help.md
-	printf '## `lair-keystore init --help`\n```no-compile\n' > crates/lair_keystore/src/docs/init-help.md
+	printf '\n```\n' >> crates/lair_keystore/src/docs/help.md
+	printf '### `lair-keystore init --help`\n```text\n' > crates/lair_keystore/src/docs/init-help.md
 	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- init --help >> crates/lair_keystore/src/docs/init-help.md
-	printf '\n```' >> crates/lair_keystore/src/docs/init-help.md
-	printf '## `lair-keystore url --help`\n```no-compile\n' > crates/lair_keystore/src/docs/url-help.md
+	printf '\n```\n' >> crates/lair_keystore/src/docs/init-help.md
+	printf '### `lair-keystore url --help`\n```text\n' > crates/lair_keystore/src/docs/url-help.md
 	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- url --help >> crates/lair_keystore/src/docs/url-help.md
-	printf '\n```' >> crates/lair_keystore/src/docs/url-help.md
-	printf '## `lair-keystore import-seed --help`\n```no-compile\n' > crates/lair_keystore/src/docs/import-seed-help.md
+	printf '\n```\n' >> crates/lair_keystore/src/docs/url-help.md
+	printf '### `lair-keystore import-seed --help`\n```text\n' > crates/lair_keystore/src/docs/import-seed-help.md
 	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- import-seed --help >> crates/lair_keystore/src/docs/import-seed-help.md
-	printf '\n```' >> crates/lair_keystore/src/docs/import-seed-help.md
-	printf '## `lair-keystore server --help`\n```no-compile\n' > crates/lair_keystore/src/docs/server-help.md
+	printf '\n```\n' >> crates/lair_keystore/src/docs/import-seed-help.md
+	printf '### `lair-keystore server --help`\n```text\n' > crates/lair_keystore/src/docs/server-help.md
 	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- server --help >> crates/lair_keystore/src/docs/server-help.md
-	printf '\n```' >> crates/lair_keystore/src/docs/server-help.md
-
-clean:
-	$(ENV) cargo clean
+	printf '\n```\n' >> crates/lair_keystore/src/docs/server-help.md
+	cargo readme -r crates/hc_seed_bundle -o README.md
+	cargo readme -r crates/lair_keystore_api -o README.md
+	cargo readme -r crates/lair_keystore -o README.md
+	printf '\n' >> crates/lair_keystore/README.md
+	cat crates/lair_keystore/src/docs/help.md >> crates/lair_keystore/README.md
+	cat crates/lair_keystore/src/docs/init-help.md >> crates/lair_keystore/README.md
+	cat crates/lair_keystore/src/docs/url-help.md >> crates/lair_keystore/README.md
+	cat crates/lair_keystore/src/docs/import-seed-help.md >> crates/lair_keystore/README.md
+	cat crates/lair_keystore/src/docs/server-help.md >> crates/lair_keystore/README.md
+	cp crates/lair_keystore/README.md README.md
+	@if [ "${CI}x" != "x" ]; then git diff --exit-code; fi
 
 tools: tool_rust tool_fmt tool_clippy tool_readme
 

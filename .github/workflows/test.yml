@@ -1,4 +1,4 @@
-name: Static Analysis
+name: Test
 on:
   push:
     branches:
@@ -7,12 +7,15 @@ on:
     branches:
       - main
 jobs:
-  static-analysis:
+  test:
+    name: Test
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [
           ubuntu-latest,
+          macos-latest,
+          windows-latest,
         ]
         toolchain: [
           stable,
@@ -25,15 +28,20 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.toolchain }}
-          components: rustfmt, clippy
 
-      - name: Cargo Fmt
+      - name: Cargo Build
         uses: actions-rs/cargo@v1
+        env:
+          RUST_BACKTRACE: 1
         with:
-          command: fmt
-          args: -- --check
+          command: build
+          args: --all-features --all-targets
 
-      - name: Cargo Clippy
+      - name: Cargo Test
         uses: actions-rs/cargo@v1
+        env:
+          RUST_BACKTRACE: 1
+          RUST_LOG: DEBUG
         with:
-          command: clippy
+          command: test
+          args: --all-features -- --test-threads 1

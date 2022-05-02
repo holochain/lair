@@ -1,6 +1,6 @@
-## `lair-keystore --help`
-```no-compile
-lair_keystore 0.1.1
+### `lair-keystore --help`
+```text
+lair_keystore 0.1.2
 secret lair private keystore
 
 USAGE:
