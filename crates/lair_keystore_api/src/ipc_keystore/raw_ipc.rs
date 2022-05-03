@@ -23,7 +23,7 @@ pub(crate) fn ipc_connect(
         }
 
         // connect the socket
-        let path = connection_url.path();
+        let path = get_connection_path(&connection_url);
         let socket = tokio::net::UnixStream::connect(path)
             .await
             .map_err(one_err::OneErr::new)?;
@@ -87,10 +87,10 @@ pub(crate) fn ipc_connect(
         }
 
         // this loop is verbatim from the tokio docs
-        let path = connection_url.path();
+        let path = get_connection_path(&connection_url);
         let pipe = loop {
             match tokio::net::windows::named_pipe::ClientOptions::new()
-                .open(path)
+                .open(&path)
             {
                 Ok(client) => break client,
                 Err(e)
