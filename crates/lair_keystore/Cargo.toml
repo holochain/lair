@@ -12,7 +12,7 @@ categories = [ "cryptography" ]
 edition = "2018"
 
 [dependencies]
-lair_keystore_api = { version = "0.1.1", path = "../lair_keystore_api" }
+lair_keystore_api = { version = "0.1.2", path = "../lair_keystore_api" }
 rpassword = "5.0.1"
 structopt = "0.3.23"
 sysinfo = "0.20.3"

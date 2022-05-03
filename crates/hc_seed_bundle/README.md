@@ -26,11 +26,12 @@ To better facilitate rust/javascript interoperability, the rust library will tre
 
 ##### SeedBundle
 
-```javascript
+```
 // seed_bundle is a top-level array
 'seed_bundle':array [
   // literal 'hcsb0' version / heuristic marker
   'id_ver':str,
+
   // list of SeedCiphers define how to decrypt
   'cipher_list':array [
     'cipher_1':SeedCipher,
@@ -38,27 +39,33 @@ To better facilitate rust/javascript interoperability, the rust library will tre
     // ..
     'cipher_N':SeedCipher,
   ],
-  // additional second-level encoding app data
+
+  // associated application data
   'app_data':bin,
 ]
 ```
 
 ##### SeedCipher::PwHash
 
-```javascript
+```
 // the PwHash type SeedCipher defines a straight-forward
 // pwhash secret that is use to secretstream encrypt a seed
 'seed_cipher':array [
-  // for the pw hash cipher, this is a literal 'pw'
+  // literal 'pw' indicates the pw hash cipher type
   'type':str,
+
   // argon2id 16 byte salt
   'salt':bin,
+
   // argon2id mem limit capped to u32 for js compatibility
   'mem_limit':int,
+
   // argon2id ops limit capped to u32 for js compatibility
   'ops_limit':int,
+
   // secretstream 24 byte header
   'header':bin,
+
   // secretstream 49 byte cipher
   'cipher':bin,
 ]
@@ -66,26 +73,34 @@ To better facilitate rust/javascript interoperability, the rust library will tre
 
 ##### SeedCipher::SecurityQuestions
 
-```javascript
+```
 // Security Questions SeedCipher defines a pwhash cipher
 // based on concatonating 3 answers that are lcased/trimmed
 'seed_cipher':array [
-  // for the pw hash cipher, this is a literal 'qa'
+  // literal 'qa' indicates the security question cipher type
   'type':str,
+
   // argon2id 16 byte salt
   'salt':bin,
+
   // argon2id mem limit capped to u32 for js compatibility
   'mem_limit':int,
+
   // argon2id ops limit capped to u32 for js compatibility
   'ops_limit':int,
+
   // the first security question to be answered
   'question_1':str,
+
   // the second security question to be answered
   'question_2':str,
+
   // the third security question to be answered
   'question_3':str,
+
   // secretstream 24 byte header
   'header':bin,
+
   // secretstream 49 byte cipher
   'cipher':bin,
 ]

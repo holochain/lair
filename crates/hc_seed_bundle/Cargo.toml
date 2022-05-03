@@ -1,6 +1,6 @@
 [package]
 name = "hc_seed_bundle"
-version = "0.1.0"
+version = "0.1.1"
 description = "SeedBundle parsing and generation library."
 license = "Apache-2.0"
 repository = "https://github.com/holochain/lair"

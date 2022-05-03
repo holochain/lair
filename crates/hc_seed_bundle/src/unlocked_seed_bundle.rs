@@ -8,6 +8,16 @@ use std::sync::Arc;
 const KDF_CONTEXT: &[u8; 8] = b"SeedBndl";
 
 /// This is the main struct for interacting with SeedBundles.
+///
+/// To create an [UnlockedSeedBundle]:
+/// - A new random bundle: [UnlockedSeedBundle::new_random]
+/// - Derived from an existing bundle: [UnlockedSeedBundle::derive]
+/// - Unlock encrypted bundle bytes: [UnlockedSeedBundle::from_locked]
+///
+/// Once unlocked, you can get or set associated app data, or sign messages.
+///
+/// To "lock" (generate encrypted binary seed bundle representation), use
+/// [UnlockedSeedBundle::lock] and supply the desired SeedCiphers.
 #[derive(Clone)]
 pub struct UnlockedSeedBundle {
     seed: sodoken::BufReadSized<32>,
