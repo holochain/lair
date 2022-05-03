@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn server_test_happy_path() {
-    let tmpdir = tempdir::TempDir::new("lair-keystore-test").unwrap();
+    let tmpdir = tempdir::TempDir::new("lair keystore test").unwrap();
 
     // set up a passphrase
     let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);

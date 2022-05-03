@@ -272,22 +272,26 @@ impl LairServerConfigInner {
     /// Get the connection "path". This could have different meanings
     /// depending on if we are a unix domain socket or named pipe, etc.
     pub fn get_connection_path(&self) -> std::path::PathBuf {
-        #[cfg(windows)]
-        {
-            std::path::PathBuf::from(self.connection_url.path())
-        }
-
-        #[cfg(not(windows))]
-        {
-            self.connection_url
-                .to_file_path()
-                .expect("can decode as file path")
-        }
+        get_connection_path(&self.connection_url)
     }
 
     /// Get the server pub key BinDataSized<32> bytes from the connectionUrl
     pub fn get_server_pub_key(&self) -> LairResult<BinDataSized<32>> {
         get_server_pub_key_from_connection_url(&self.connection_url)
+    }
+}
+
+/// Get the connection "path". This could have different meanings
+/// depending on if we are a unix domain socket or named pipe, etc.
+pub fn get_connection_path(url: &url::Url) -> std::path::PathBuf {
+    #[cfg(windows)]
+    {
+        std::path::PathBuf::from(url.path())
+    }
+
+    #[cfg(not(windows))]
+    {
+        url.to_file_path().expect("can decode as file path")
     }
 }
 
