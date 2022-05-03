@@ -8,7 +8,7 @@
 /// ```rust
 /// # use hc_seed_bundle::*;
 /// let _my_result = PwHashLimits::Sensitive.with_exec(|| {
-///   // execute my function that needs "interactive" limits
+///   // execute my function that needs "Sensitive" limits
 /// });
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

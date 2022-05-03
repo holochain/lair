@@ -275,6 +275,8 @@ impl LockedSeedCipherSecurityQuestions {
 }
 
 /// Enum of Locked SeedCipher types handled by this library.
+///
+/// These are obtained by calling [crate::UnlockedSeedBundle::from_locked].
 #[non_exhaustive]
 #[derive(Debug)]
 pub enum LockedSeedCipher {
