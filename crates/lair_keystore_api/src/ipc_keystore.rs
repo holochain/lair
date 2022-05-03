@@ -112,6 +112,8 @@ where
 
 /// Connect to an IpcKeystoreServer instance via
 /// unix domain socket on linux/macOs or named pipe on windows.
+/// This variant is identical to [ipc_keystore_connect] but allows
+/// additional less-used configuration options.
 pub fn ipc_keystore_connect_options(
     opts: IpcKeystoreClientOptions,
 ) -> impl Future<Output = LairResult<LairClient>> + 'static + Send {
