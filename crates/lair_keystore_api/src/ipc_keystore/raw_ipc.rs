@@ -90,7 +90,7 @@ pub(crate) fn ipc_connect(
         let path = get_connection_path(&connection_url);
         let pipe = loop {
             match tokio::net::windows::named_pipe::ClientOptions::new()
-                .open(path)
+                .open(&path)
             {
                 Ok(client) => break client,
                 Err(e)
