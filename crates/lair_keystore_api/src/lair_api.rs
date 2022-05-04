@@ -1,4 +1,4 @@
-//! Lair api serialization types
+//! Lair api serialization types.
 
 use crate::*;
 use std::sync::Arc;
@@ -85,7 +85,7 @@ pub use new_wka_tls_cert::*;
 mod get_wka_tls_cert_priv_key;
 pub use get_wka_tls_cert_priv_key::*;
 
-/// Lair Api enum
+/// Lair api enum.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 #[non_exhaustive]

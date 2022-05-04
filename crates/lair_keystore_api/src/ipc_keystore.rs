@@ -1,4 +1,4 @@
-//! client / server keystore items for dealing with ipc keystores,
+//! Client / server keystore items for dealing with ipc keystores,
 //! both unix domain sockets and windows named pipes.
 
 use crate::*;
@@ -7,7 +7,7 @@ use std::future::Future;
 
 mod raw_ipc;
 
-/// server keystore item for dealing with ipc keystores,
+/// Server keystore item for dealing with ipc keystores,
 /// both unix domain sockets and windows named pipes.
 #[derive(Clone)]
 pub struct IpcKeystoreServer {
@@ -66,7 +66,7 @@ impl IpcKeystoreServer {
         }
     }
 
-    /// get a handle to the LairStore instantiated by this server,
+    /// Get a handle to the LairStore instantiated by this server,
     /// may error if a store has not yet been created.
     pub fn store(
         &self,
@@ -82,10 +82,12 @@ impl IpcKeystoreServer {
 
 /// Client connection options for customizing how to connect to an ipc server.
 pub struct IpcKeystoreClientOptions {
-    /// the ipc url ('unix://' or 'named-pipe:\\.\pipe\[yada]') to connect to
+    /// The ipc url ('unix://' or 'named-pipe:\\.\pipe\[yada]') to connect to.
     pub connection_url: url::Url,
-    /// the passphrase to use to connect
+
+    /// The passphrase to use to connect.
     pub passphrase: sodoken::BufRead,
+
     /// Require the client and server to have exactly matching
     /// client / server versions.
     pub exact_client_server_version_match: bool,
@@ -112,6 +114,8 @@ where
 
 /// Connect to an IpcKeystoreServer instance via
 /// unix domain socket on linux/macOs or named pipe on windows.
+/// This variant is identical to [ipc_keystore_connect] but allows
+/// additional less-used configuration options.
 pub fn ipc_keystore_connect_options(
     opts: IpcKeystoreClientOptions,
 ) -> impl Future<Output = LairResult<LairClient>> + 'static + Send {

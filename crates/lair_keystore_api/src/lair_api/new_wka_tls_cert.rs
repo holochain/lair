@@ -5,14 +5,15 @@ use super::*;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LairApiReqNewWkaTlsCert {
-    /// msg id to relate request / response.
+    /// Msg id to relate request / response.
     pub msg_id: Arc<str>,
-    /// user-defined tag to associate with the new seed.
+
+    /// User-defined tag to associate with the new seed.
     pub tag: Arc<str>,
 }
 
 impl LairApiReqNewWkaTlsCert {
-    /// Make a new_seed request
+    /// Make a new_seed request.
     pub fn new(tag: Arc<str>) -> Self {
         Self {
             msg_id: new_msg_id(),
@@ -45,11 +46,13 @@ impl AsLairCodec for LairApiReqNewWkaTlsCert {
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct LairApiResNewWkaTlsCert {
-    /// msg id to relate request / response.
+    /// Msg id to relate request / response.
     pub msg_id: Arc<str>,
-    /// user-defined tag associated with the generated seed.
+
+    /// User-defined tag associated with the generated seed.
     pub tag: Arc<str>,
-    /// the associated cert info
+
+    /// The associated cert info.
     pub cert_info: CertInfo,
 }
 

@@ -1,4 +1,5 @@
-//! Lair Configuration Types
+//! Lair server configuration types. You only need this module if you are
+//! configuring a standalone or in-process lair keystore server.
 
 use crate::*;
 use std::future::Future;
@@ -7,7 +8,7 @@ use std::sync::Arc;
 const PID_FILE_NAME: &str = "pid_file";
 const STORE_FILE_NAME: &str = "store_file";
 
-/// Enum for configuring signature fallback handling
+/// Enum for configuring signature fallback handling.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
@@ -30,7 +31,8 @@ pub enum LairServerSignatureFallback {
     },
 }
 
-/// Config used by lair servers.
+/// Inner config type used by lair servers. This will be wrapped in an
+/// `Arc` in the typedef [LairServerConfig].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
@@ -295,7 +297,7 @@ pub fn get_connection_path(url: &url::Url) -> std::path::PathBuf {
     }
 }
 
-/// extract a server_pub_key from a connection_url
+/// Helper utility for extracting a server_pub_key from a connection_url.
 pub fn get_server_pub_key_from_connection_url(
     url: &url::Url,
 ) -> LairResult<BinDataSized<32>> {

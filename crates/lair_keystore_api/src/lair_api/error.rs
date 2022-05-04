@@ -4,7 +4,7 @@ use super::*;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LairApiResError {
-    /// msg id to relate request / response.
+    /// Msg id to relate request / response.
     pub msg_id: Arc<str>,
 
     /// The error returned.

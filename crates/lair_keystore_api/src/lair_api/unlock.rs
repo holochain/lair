@@ -4,15 +4,15 @@ use super::*;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LairApiReqUnlock {
-    /// msg id to relate request / response.
+    /// Msg id to relate request / response.
     pub msg_id: Arc<str>,
 
-    /// passphrase to unlock the keystore.
+    /// Passphrase to unlock the keystore.
     pub passphrase: SecretDataSized<64, 81>,
 }
 
 impl LairApiReqUnlock {
-    /// Make a new server info request
+    /// Make a new server unlock request.
     pub fn new(passphrase: SecretDataSized<64, 81>) -> Self {
         Self {
             msg_id: new_msg_id(),
@@ -43,7 +43,7 @@ impl AsLairCodec for LairApiReqUnlock {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LairApiResUnlock {
-    /// msg id to relate request / response.
+    /// Msg id to relate request / response.
     pub msg_id: Arc<str>,
 }
 

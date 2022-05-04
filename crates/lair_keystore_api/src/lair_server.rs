@@ -1,4 +1,4 @@
-//! host a lair keystore
+//! Items for acting as a lair keystore server.
 
 use crate::lair_api::traits::AsLairCodec;
 use crate::*;
@@ -14,13 +14,14 @@ use std::sync::Arc;
 pub mod traits {
     use super::*;
 
-    /// trait object type for AsyncWrite instance.
+    /// Trait object type for AsyncWrite instance.
     pub type RawSend = Box<dyn tokio::io::AsyncWrite + 'static + Send + Unpin>;
 
-    /// trait object type for AsyncRead instance.
+    /// Trait object type for AsyncRead instance.
     pub type RawRecv = Box<dyn tokio::io::AsyncRead + 'static + Send + Unpin>;
 
-    /// host a lair keystore
+    /// Object-safe lair server trait. Implement this to provide a new
+    /// lair server backend implementation.
     pub trait AsLairServer: 'static + Send + Sync {
         /// accept an incoming connection, servicing the lair protocol.
         fn accept(
@@ -36,12 +37,13 @@ pub mod traits {
 }
 use traits::*;
 
-/// host a lair keystore
+/// A lair keystore server handle.
+/// Use this to handle incoming client connections.
 #[derive(Clone)]
 pub struct LairServer(pub Arc<dyn AsLairServer>);
 
 impl LairServer {
-    /// accept an incoming connection, servicing the lair protocol.
+    /// Accept an incoming connection, servicing the lair protocol.
     pub fn accept<S, R>(
         &self,
         send: S,
@@ -54,7 +56,7 @@ impl LairServer {
         AsLairServer::accept(&*self.0, Box::new(send), Box::new(recv))
     }
 
-    /// get a handle to the LairStore instantiated by this server,
+    /// Get a handle to the LairStore instantiated by this server,
     /// may error if a store has not yet been created.
     pub fn store(
         &self,
@@ -63,7 +65,7 @@ impl LairServer {
     }
 }
 
-/// spawn a tokio task managing a lair server with given store factory.
+/// Spawn a tokio task managing a lair server with given store factory.
 pub fn spawn_lair_server_task<C>(
     config: C,
     server_name: Arc<str>,

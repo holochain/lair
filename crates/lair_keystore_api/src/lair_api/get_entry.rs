@@ -4,14 +4,15 @@ use super::*;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LairApiReqGetEntry {
-    /// msg id to relate request / response.
+    /// Msg id to relate request / response.
     pub msg_id: Arc<str>,
-    /// user-defined tag associated entry being requested.
+
+    /// User-defined tag associated entry being requested.
     pub tag: Arc<str>,
 }
 
 impl LairApiReqGetEntry {
-    /// Make a new list entries request
+    /// Make a new list entries request.
     pub fn new(tag: Arc<str>) -> Self {
         Self {
             msg_id: new_msg_id(),
@@ -42,9 +43,10 @@ impl AsLairCodec for LairApiReqGetEntry {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LairApiResGetEntry {
-    /// msg id to relate request / response.
+    /// Msg id to relate request / response.
     pub msg_id: Arc<str>,
-    /// entry info for the item requested.
+
+    /// Entry info for the item requested.
     pub entry_info: LairEntryInfo,
 }
 

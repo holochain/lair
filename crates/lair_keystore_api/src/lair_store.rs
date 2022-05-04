@@ -1,4 +1,4 @@
-//! lair persistance
+//! Items related to securely persisting keystore secrets (e.g. to disk).
 
 use crate::*;
 use futures::future::BoxFuture;
@@ -57,7 +57,7 @@ pub mod traits {
 }
 use traits::*;
 
-/// Public information associated with a given seed
+/// Public information associated with a given seed.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct SeedInfo {
@@ -85,37 +85,41 @@ pub struct CertInfo {
     pub cert: BinData,
 }
 
-/// The Type and Tag of this lair entry.
+/// The type and tag of this lair entry.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 #[non_exhaustive]
 pub enum LairEntryInfo {
     /// This entry is type 'Seed' (see LairEntryInner).
     Seed {
-        /// user-supplied tag for this seed
+        /// User-supplied tag for this seed.
         tag: Arc<str>,
-        /// the seed info associated with this seed
+
+        /// The seed info associated with this seed.
         seed_info: SeedInfo,
     },
 
     /// This entry is type 'DeepLockedSeed' (see LairEntryInner).
     DeepLockedSeed {
-        /// user-supplied tag for this seed
+        /// User-supplied tag for this seed.
         tag: Arc<str>,
-        /// the seed info associated with this seed
+
+        /// The seed info associated with this seed
         seed_info: SeedInfo,
     },
 
     /// This entry is type 'TlsCert' (see LairEntryInner).
     WkaTlsCert {
-        /// user-supplied tag for this seed
+        /// User-supplied tag for this seed.
         tag: Arc<str>,
-        /// the certificate info
+
+        /// The certificate info.
         cert_info: CertInfo,
     },
 }
 
-/// The raw lair entry inner types that can be stored.
+/// The raw lair entry inner types that can be stored. This is generally
+/// wrapped by an `Arc`. See the typedef [LairEntry].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 #[non_exhaustive]
@@ -127,27 +131,34 @@ pub enum LairEntryInner {
     /// The secretstream seed uses the base passphrase-derived secret
     /// for decryption.
     Seed {
-        /// user-supplied tag for this seed
+        /// User-supplied tag for this seed.
         tag: Arc<str>,
-        /// the seed info associated with this seed
+
+        /// The seed info associated with this seed.
         seed_info: SeedInfo,
-        /// the actual seed, encrypted with context key
+
+        /// The actual seed, encrypted with context key.
         seed: SecretDataSized<32, 49>,
     },
 
-    /// As 'Seed' but requires an additional access-time passphrase to use
+    /// As 'Seed' but requires an additional access-time passphrase.
     DeepLockedSeed {
-        /// user-supplied tag for this seed
+        /// User-supplied tag for this seed.
         tag: Arc<str>,
-        /// the seed info associated with this seed
+
+        /// The seed info associated with this seed.
         seed_info: SeedInfo,
-        /// salt for argon2id encrypted seed
+
+        /// Salt for argon2id encrypted seed.
         salt: BinDataSized<16>,
-        /// argon2id ops limit used when encrypting this seed
+
+        /// Argon2id ops limit used when encrypting this seed.
         ops_limit: u32,
-        /// argon2id mem limit used when encrypting this seed
+
+        /// Argon2id mem limit used when encrypting this seed.
         mem_limit: u32,
-        /// the actual seed, encrypted with deep passphrase
+
+        /// The actual seed, encrypted with deep passphrase.
         seed: SecretDataSized<32, 49>,
     },
 
@@ -155,17 +166,19 @@ pub enum LairEntryInner {
     /// The secretstream priv_key uses the base passphrase-derived secret
     /// for decryption.
     WkaTlsCert {
-        /// user-supplied tag for this tls certificate
+        /// User-supplied tag for this tls certificate.
         tag: Arc<str>,
-        /// the certificate info
+
+        /// The certificate info.
         cert_info: CertInfo,
-        /// the certificate private key, encrypted with context key
+
+        /// The certificate private key, encrypted with context key.
         priv_key: SecretData,
     },
 }
 
 impl LairEntryInner {
-    /// encode this LairEntry as bytes
+    /// Encode this LairEntry as bytes.
     pub fn encode(&self) -> LairResult<Box<[u8]>> {
         use serde::Serialize;
         let mut se = rmp_serde::encode::Serializer::new(Vec::new())
@@ -175,14 +188,14 @@ impl LairEntryInner {
         Ok(se.into_inner().into_boxed_slice())
     }
 
-    /// decode a LairEntry from bytes
+    /// Decode a LairEntry from bytes.
     pub fn decode(bytes: &[u8]) -> LairResult<LairEntryInner> {
         let item: LairEntryInner =
             rmp_serde::from_read(bytes).map_err(one_err::OneErr::new)?;
         Ok(item)
     }
 
-    /// get the tag associated with this entry
+    /// Get the tag associated with this entry.
     pub fn tag(&self) -> Arc<str> {
         match self {
             Self::Seed { tag, .. } => tag.clone(),
@@ -192,10 +205,12 @@ impl LairEntryInner {
     }
 }
 
-/// The LairEntry enum.
+/// An actual LairEntry. Unlike [LairEntryInfo], this type contains the
+/// actual secrets associated with the keystore entry.
 pub type LairEntry = Arc<LairEntryInner>;
 
-/// Lair store concrete struct
+/// A handle to a running lair keystore backend persistance instance.
+/// Allows storing, listing, and retrieving keystore secrets.
 #[derive(Clone)]
 pub struct LairStore(pub Arc<dyn AsLairStore>);
 
@@ -455,7 +470,8 @@ impl LairStore {
     }
 }
 
-/// Lair store factory concrete struct
+/// A factory abstraction allowing connecting to a lair keystore persistance
+/// backend with an unlock secret (generally derived from a user passphrase).
 #[derive(Clone)]
 pub struct LairStoreFactory(pub Arc<dyn AsLairStoreFactory>);
 

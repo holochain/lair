@@ -5,17 +5,19 @@ use super::*;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LairApiReqNewSeed {
-    /// msg id to relate request / response.
+    /// Msg id to relate request / response.
     pub msg_id: Arc<str>,
-    /// user-defined tag to associate with the new seed.
+
+    /// User-defined tag to associate with the new seed.
     pub tag: Arc<str>,
-    /// if this new seed is to be deep_locked, the passphrase for that.
+
+    /// If this new seed is to be deep_locked, the passphrase for that.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub deep_lock_passphrase: Option<DeepLockPassphrase>,
 }
 
 impl LairApiReqNewSeed {
-    /// Make a new_seed request
+    /// Make a new_seed request.
     pub fn new(
         tag: Arc<str>,
         deep_lock_passphrase: Option<DeepLockPassphrase>,
@@ -52,11 +54,13 @@ impl AsLairCodec for LairApiReqNewSeed {
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct LairApiResNewSeed {
-    /// msg id to relate request / response.
+    /// Msg id to relate request / response.
     pub msg_id: Arc<str>,
-    /// user-defined tag associated with the generated seed.
+
+    /// User-defined tag associated with the generated seed.
     pub tag: Arc<str>,
-    /// the seed info associated with this seed
+
+    /// The seed info associated with this seed.
     pub seed_info: SeedInfo,
 }
 

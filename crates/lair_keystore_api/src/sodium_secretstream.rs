@@ -1,4 +1,4 @@
-//! libsodium secretstream Async reader / writer wrappers.
+//! Libsodium secretstream Async reader / writer wrappers.
 
 use crate::*;
 use futures::future::{BoxFuture, FutureExt};
@@ -20,7 +20,7 @@ const MAX_FRAME: usize = 1024 * 8; // 8 KiB
 pub mod traits {
     use super::*;
 
-    /// SodiumSecretStream - Sender
+    /// The send / write half of a sodium secret stream.
     pub trait AsS3Sender<T>: 'static + Send + Sync
     where
         T: 'static + serde::Serialize + Send,
@@ -28,17 +28,17 @@ pub mod traits {
         /// Send data to the remote side of this connection.
         fn send(&self, t: T) -> BoxFuture<'static, LairResult<()>>;
 
-        /// Get outgoing encryption context key
+        /// Get outgoing encryption context key.
         fn get_enc_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }>;
 
-        /// Get incoming decryption context key
+        /// Get incoming decryption context key.
         fn get_dec_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }>;
 
         /// Shutdown the channel.
         fn shutdown(&self) -> BoxFuture<'static, LairResult<()>>;
     }
 
-    /// SodiumSecretStream - Receiver
+    /// The recv / read half of a sodium secret stream.
     pub trait AsS3Receiver<T>:
         'static + Send + Stream<Item = LairResult<T>> + Unpin
     where
@@ -48,7 +48,7 @@ pub mod traits {
 }
 use traits::*;
 
-/// SodiumSecretStream - Sender
+/// The send / write half of a sodium secret stream.
 pub struct S3Sender<T>(pub Arc<dyn AsS3Sender<T>>);
 
 impl<T> Clone for S3Sender<T> {
@@ -69,12 +69,12 @@ where
         AsS3Sender::send(&*self.0, t)
     }
 
-    /// Get outgoing encryption context key
+    /// Get outgoing encryption context key.
     pub fn get_enc_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }> {
         AsS3Sender::get_enc_ctx_key(&*self.0)
     }
 
-    /// Get incoming decryption context key
+    /// Get incoming decryption context key.
     pub fn get_dec_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }> {
         AsS3Sender::get_dec_ctx_key(&*self.0)
     }
@@ -87,7 +87,7 @@ where
     }
 }
 
-/// SodiumSecretStream - Receiver
+/// The recv / read half of a sodium secret stream.
 pub struct S3Receiver<T>(pub Box<dyn AsS3Receiver<T>>);
 
 impl<T> Stream for S3Receiver<T>

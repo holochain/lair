@@ -14,7 +14,7 @@ fn from_base64_url<S: AsRef<str>>(s: S) -> LairResult<Arc<[u8]>> {
         .map(|b| b.into())
 }
 
-/// Wrapper newtype for serde encoding / decoding binary data
+/// Wrapper newtype for serde encoding / decoding binary data.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BinData(pub Arc<[u8]>);
 
@@ -89,7 +89,7 @@ impl<'de> serde::Deserialize<'de> for BinData {
     }
 }
 
-/// Wrapper newtype for serde encoding / decoding sized binary data
+/// Wrapper newtype for serde encoding / decoding sized binary data.
 #[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BinDataSized<const N: usize>(pub Arc<[u8; N]>);
 
@@ -206,7 +206,7 @@ pub struct SecretData(
 );
 
 impl SecretData {
-    /// encrypt some data as a 'SecretData' object with given context key.
+    /// Encrypt some data as a 'SecretData' object with given context key.
     pub async fn encrypt(
         key: sodoken::BufReadSized<32>,
         data: sodoken::BufRead,
@@ -227,7 +227,7 @@ impl SecretData {
         Ok(Self(header.into(), cipher_r.into()))
     }
 
-    /// decrypt some data as a 'SecretData' object with given context key.
+    /// Decrypt some data as a 'SecretData' object with given context key.
     pub async fn decrypt(
         &self,
         key: sodoken::BufReadSized<32>,
@@ -243,7 +243,7 @@ impl SecretData {
     }
 }
 
-/// Secret data sized. Encrypted with sodium secretstream.
+/// Sized secret data. Encrypted with sodium secretstream.
 /// The key used to encrypt / decrypt is context dependent.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SecretDataSized<const M: usize, const C: usize>(
@@ -254,7 +254,7 @@ pub struct SecretDataSized<const M: usize, const C: usize>(
 );
 
 impl<const M: usize, const C: usize> SecretDataSized<M, C> {
-    /// encrypt some data as a 'SecretDataSized' object with given context key.
+    /// Encrypt some data as a 'SecretDataSized' object with given context key.
     pub async fn encrypt(
         key: sodoken::BufReadSized<32>,
         data: sodoken::BufReadSized<M>,
@@ -272,7 +272,7 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
         Ok(Self(header.into(), cipher.into()))
     }
 
-    /// decrypt some data as a 'SecretDataSized' object with given context key.
+    /// Decrypt some data as a 'SecretDataSized' object with given context key.
     pub async fn decrypt(
         &self,
         key: sodoken::BufReadSized<32>,
@@ -287,11 +287,11 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
     }
 }
 
-/// ed25519 signature public key derived from this seed.
+/// Ed25519 signature public key derived from this seed.
 pub type Ed25519PubKey = BinDataSized<32>;
 
-/// ed25519 signature bytes.
+/// Ed25519 signature bytes.
 pub type Ed25519Signature = BinDataSized<64>;
 
-/// x25519 encryption public key derived from this seed.
+/// X25519 encryption public key derived from this seed.
 pub type X25519PubKey = BinDataSized<32>;

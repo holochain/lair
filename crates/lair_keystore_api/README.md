@@ -12,8 +12,8 @@ an external lair keystore as a client, this is the library for you.
 - If you want to run the canonical lair-keystore, you need the [lair_keystore](https://crates.io/crates/lair_keystore) crate.
 - If you want to run a canonical lair-keystore in-process, but using
 the canonical sqlcipher database, you also the [lair_keystore](https://crates.io/crates/lair_keystore) crate.
-- See the [lair_api](./lair_api/index.html) module for information about the lair_keystore_api protocol.
-- See [LairClient](./lair_client/struct.LairClient.html) for the client struct api.
+- See the [lair_api] module for information about the lair_keystore_api protocol.
+- See [LairClient] for the client struct api.
 
 ##### Establishing a client connection to a canonical ipc keystore binary:
 

@@ -15,8 +15,8 @@
 //! - If you want to run the canonical lair-keystore, you need the [lair_keystore](https://crates.io/crates/lair_keystore) crate.
 //! - If you want to run a canonical lair-keystore in-process, but using
 //! the canonical sqlcipher database, you also the [lair_keystore](https://crates.io/crates/lair_keystore) crate.
-//! - See the [lair_api](./lair_api/index.html) module for information about the lair_keystore_api protocol.
-//! - See [LairClient](./lair_client/struct.LairClient.html) for the client struct api.
+//! - See the [lair_api] module for information about the lair_keystore_api protocol.
+//! - See [LairClient] for the client struct api.
 //!
 //! #### Establishing a client connection to a canonical ipc keystore binary:
 //!
@@ -76,7 +76,7 @@
 
 include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 
-/// re-exported dependencies
+/// Re-exported dependencies.
 pub mod dependencies {
     pub use base64;
     pub use dunce;
@@ -94,7 +94,7 @@ pub mod dependencies {
 
 use dependencies::*;
 
-/// Lair Result Type
+/// Lair result type.
 pub type LairResult<T> = Result<T, one_err::OneErr>;
 
 pub mod config;
@@ -109,7 +109,7 @@ pub mod lair_store;
 pub mod mem_store;
 pub mod sodium_secretstream;
 
-/// re-export module of types generally used with lair
+/// Re-export module of types generally used with lair.
 pub mod prelude {
     pub use crate::config::*;
     pub use crate::encoding_types::*;
@@ -122,3 +122,10 @@ pub mod prelude {
 }
 
 use prelude::*;
+
+#[doc(inline)]
+pub use crate::ipc_keystore::ipc_keystore_connect;
+#[doc(inline)]
+pub use crate::ipc_keystore::ipc_keystore_connect_options;
+#[doc(inline)]
+pub use crate::lair_client::LairClient;

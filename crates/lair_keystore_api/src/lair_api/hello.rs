@@ -4,12 +4,12 @@ use super::*;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LairApiReqHello {
-    /// msg id to relate request / response.
+    /// Msg id to relate request / response.
     pub msg_id: Arc<str>,
 }
 
 impl LairApiReqHello {
-    /// Make a new server info request
+    /// Make a new server info request.
     pub fn new() -> Self {
         Self {
             msg_id: new_msg_id(),
@@ -40,7 +40,7 @@ impl AsLairCodec for LairApiReqHello {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LairApiResHello {
-    /// msg id to relate request / response.
+    /// Msg id to relate request / response.
     pub msg_id: Arc<str>,
 
     /// The server name / identifier.

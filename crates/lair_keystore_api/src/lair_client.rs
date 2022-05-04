@@ -1,4 +1,4 @@
-//! interact with a lair keystore
+//! Items for connecting and interacting with a lair keystore as a client.
 
 use crate::lair_api::traits::*;
 use crate::*;
@@ -14,7 +14,8 @@ use std::sync::Arc;
 pub mod traits {
     use super::*;
 
-    /// Defines the lair client API.
+    /// Object-safe lair client trait. Implement this to provide a new
+    /// lair client backend implementation.
     pub trait AsLairClient: 'static + Send + Sync {
         /// Return the encryption context key for passphrases, etc.
         fn get_enc_ctx_key(&self) -> sodoken::BufReadSized<32>;
@@ -34,7 +35,7 @@ pub mod traits {
 }
 use traits::*;
 
-/// Concrete lair client struct.
+/// A lair keystore client handle. Use this to make requests of the keystore.
 #[derive(Clone)]
 pub struct LairClient(pub Arc<dyn AsLairClient>);
 

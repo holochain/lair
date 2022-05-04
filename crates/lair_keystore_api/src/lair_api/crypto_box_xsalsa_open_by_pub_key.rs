@@ -4,23 +4,28 @@ use super::*;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LairApiReqCryptoBoxXSalsaOpenByPubKey {
-    /// msg id to relate request / response.
+    /// Msg id to relate request / response.
     pub msg_id: Arc<str>,
-    /// the pub key representing the sender.
+
+    /// The pub key representing the sender.
     pub sender_pub_key: X25519PubKey,
-    /// the pub key of the recipient.
+
+    /// The pub key of the recipient.
     pub recipient_pub_key: X25519PubKey,
-    /// if this new seed is to be deep_locked, the passphrase for that.
+
+    /// If this new seed is to be deep_locked, the passphrase for that.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub deep_lock_passphrase: Option<SecretDataSized<64, 81>>,
-    /// the nonce associated with the cipher
+
+    /// The nonce associated with the cipher.
     pub nonce: [u8; 24],
-    /// the data to decrypt
+
+    /// The data to decrypt.
     pub cipher: Arc<[u8]>,
 }
 
 impl LairApiReqCryptoBoxXSalsaOpenByPubKey {
-    /// Make a crypto_box_open request
+    /// Make a crypto_box_open request.
     pub fn new(
         sender_pub_key: X25519PubKey,
         recipient_pub_key: X25519PubKey,
@@ -64,9 +69,10 @@ impl AsLairCodec for LairApiReqCryptoBoxXSalsaOpenByPubKey {
 #[serde(rename_all = "camelCase")]
 #[non_exhaustive]
 pub struct LairApiResCryptoBoxXSalsaOpenByPubKey {
-    /// msg id to relate request / response.
+    /// Msg id to relate request / response.
     pub msg_id: Arc<str>,
-    /// the decrypted bytes
+
+    /// The decrypted bytes.
     pub message: Arc<[u8]>,
 }
 
