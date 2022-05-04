@@ -1,10 +1,10 @@
-//! an in-process keystore that manages the entire lair server life-cycle
+//! An in-process keystore that manages the entire lair server life-cycle
 //! without needing to call out to an external process.
 
 use crate::*;
 use std::future::Future;
 
-/// an in-process keystore that manages the entire lair server life-cycle
+/// An in-process keystore that manages the entire lair server life-cycle
 /// without needing to call out to an external process.
 #[derive(Clone)]
 pub struct InProcKeystore {
@@ -45,22 +45,22 @@ impl InProcKeystore {
         }
     }
 
-    /// get a handle to the LairStore instantiated by this server,
+    /// Get a handle to the LairStore instantiated by this server,
     /// may error if a store has not yet been created.
     pub fn store(
         &self,
     ) -> impl Future<Output = LairResult<LairStore>> + 'static + Send {
         self.srv_hnd.store()
     }
+
     /// Get the config used by the LairServer held by this InProcKeystore.
     pub fn get_config(&self) -> LairServerConfig {
         self.config.clone()
     }
 
     /// Get a new LairClient connection to this InProcKeystore server.
-    /// While not strictly necessary, this new connection will already
-    /// have verified the server identity via "Hello" as well as unlocked
-    /// the connection.
+    /// This new connection will already have verified the server identity
+    /// via "hello" request as well as unlocked the connection.
     pub fn new_client(
         &self,
     ) -> impl Future<Output = LairResult<LairClient>> + 'static + Send {

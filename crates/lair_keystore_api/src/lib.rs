@@ -76,7 +76,7 @@
 
 include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 
-/// re-exported dependencies
+/// Re-exported dependencies.
 pub mod dependencies {
     pub use base64;
     pub use dunce;
@@ -94,7 +94,7 @@ pub mod dependencies {
 
 use dependencies::*;
 
-/// Lair Result Type
+/// Lair result type.
 pub type LairResult<T> = Result<T, one_err::OneErr>;
 
 pub mod config;
@@ -109,7 +109,7 @@ pub mod lair_store;
 pub mod mem_store;
 pub mod sodium_secretstream;
 
-/// re-export module of types generally used with lair
+/// Re-export module of types generally used with lair.
 pub mod prelude {
     pub use crate::config::*;
     pub use crate::encoding_types::*;

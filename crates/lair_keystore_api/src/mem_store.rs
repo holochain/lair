@@ -1,4 +1,5 @@
-//! Lair in-memory store - usually for testing
+//! Lair in-memory store - This does not provide any peristance, and
+//! should generally only be used for testing.
 
 use crate::lair_store::traits::*;
 use crate::*;
@@ -7,7 +8,8 @@ use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// create an in-memory LairStore
+/// Create an in-memory LairStoreFactory - This does not provide any
+/// peristance, and should generally only be used for testing.
 pub fn create_mem_store_factory() -> LairStoreFactory {
     LairStoreFactory(Arc::new(PrivMemStoreFactory))
 }
