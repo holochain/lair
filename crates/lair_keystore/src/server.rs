@@ -1,12 +1,12 @@
-//! standalone binary server
-//! - you probably only want to use this directly if you're writing tests
+//! Standalone binary lair server used by the 'lair-keystore' executable.
+//! You probably only want to use this directly if you're writing tests.
 
 use crate::*;
 use lair_keystore_api::ipc_keystore::IpcKeystoreServer;
 use std::future::Future;
 
-/// standalone binary server
-/// - you probably only want to use this directly if you're writing tests
+/// Standalone binary lair server used by the 'lair-keystore' executable.
+/// You probably only want to use this directly if you're writing tests.
 pub struct StandaloneServer {
     config: LairServerConfig,
     srv_hnd: Option<IpcKeystoreServer>,
