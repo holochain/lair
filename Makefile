@@ -1,10 +1,35 @@
 # Lair Makefile
 
-.PHONY: all test static docs tools tool_rust tool_fmt tool_readme
+.PHONY: all publish test static docs tools tool_rust tool_fmt tool_readme
 
 SHELL = /usr/bin/env sh
 
 all: test
+
+publish:
+	@case "$(crate)" in \
+		hc_seed_bundle) \
+			export MANIFEST="./crates/hc_seed_bundle/Cargo.toml"; \
+			;; \
+		lair_keystore_api) \
+			export MANIFEST="./crates/lair_keystore_api/Cargo.toml"; \
+			;; \
+		lair_keystore) \
+			export MANIFEST="./crates/lair_keystore/Cargo.toml"; \
+			;; \
+		*) \
+			echo "USAGE: make publish crate=hc_seed_bundle"; \
+			echo "USAGE: make publish crate=lair_keystore_api"; \
+			echo "USAGE: make publish crate=lair_keystore"; \
+			exit 1; \
+			;; \
+	esac; \
+	export VER="v$$(grep version $${MANIFEST} | head -1 | cut -d ' ' -f 3 | cut -d \" -f 2)"; \
+	echo "publish $(crate) $${MANIFEST} $${VER}"; \
+	git diff --exit-code; \
+	cargo publish --manifest-path $${MANIFEST}; \
+	git tag -a "$(crate)-$${VER}" -m "$(crate)-$${VER}"; \
+	git push --tags;
 
 test: static tools
 	RUST_BACKTRACE=1 cargo build --all-features --all-targets
@@ -15,21 +40,26 @@ static: docs tools
 	cargo clippy
 
 docs: tools
-	printf '### `lair-keystore --help`\n```text\n' > crates/lair_keystore/src/docs/help.md
-	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- --help >> crates/lair_keystore/src/docs/help.md
-	printf '\n```\n' >> crates/lair_keystore/src/docs/help.md
-	printf '### `lair-keystore init --help`\n```text\n' > crates/lair_keystore/src/docs/init-help.md
-	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- init --help >> crates/lair_keystore/src/docs/init-help.md
-	printf '\n```\n' >> crates/lair_keystore/src/docs/init-help.md
-	printf '### `lair-keystore url --help`\n```text\n' > crates/lair_keystore/src/docs/url-help.md
-	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- url --help >> crates/lair_keystore/src/docs/url-help.md
-	printf '\n```\n' >> crates/lair_keystore/src/docs/url-help.md
-	printf '### `lair-keystore import-seed --help`\n```text\n' > crates/lair_keystore/src/docs/import-seed-help.md
-	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- import-seed --help >> crates/lair_keystore/src/docs/import-seed-help.md
-	printf '\n```\n' >> crates/lair_keystore/src/docs/import-seed-help.md
-	printf '### `lair-keystore server --help`\n```text\n' > crates/lair_keystore/src/docs/server-help.md
-	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- server --help >> crates/lair_keystore/src/docs/server-help.md
-	printf '\n```\n' >> crates/lair_keystore/src/docs/server-help.md
+	printf '### `lair-keystore --help`\n```text\n' > crates/lair_keystore/src/docs/help.md.tmp
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- --help >> crates/lair_keystore/src/docs/help.md.tmp
+	printf '\n```\n' >> crates/lair_keystore/src/docs/help.md.tmp
+	printf '### `lair-keystore init --help`\n```text\n' > crates/lair_keystore/src/docs/init-help.md.tmp
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- init --help >> crates/lair_keystore/src/docs/init-help.md.tmp
+	printf '\n```\n' >> crates/lair_keystore/src/docs/init-help.md.tmp
+	printf '### `lair-keystore url --help`\n```text\n' > crates/lair_keystore/src/docs/url-help.md.tmp
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- url --help >> crates/lair_keystore/src/docs/url-help.md.tmp
+	printf '\n```\n' >> crates/lair_keystore/src/docs/url-help.md.tmp
+	printf '### `lair-keystore import-seed --help`\n```text\n' > crates/lair_keystore/src/docs/import-seed-help.md.tmp
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- import-seed --help >> crates/lair_keystore/src/docs/import-seed-help.md.tmp
+	printf '\n```\n' >> crates/lair_keystore/src/docs/import-seed-help.md.tmp
+	printf '### `lair-keystore server --help`\n```text\n' > crates/lair_keystore/src/docs/server-help.md.tmp
+	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- server --help >> crates/lair_keystore/src/docs/server-help.md.tmp
+	printf '\n```\n' >> crates/lair_keystore/src/docs/server-help.md.tmp
+	mv -f crates/lair_keystore/src/docs/help.md.tmp crates/lair_keystore/src/docs/help.md
+	mv -f crates/lair_keystore/src/docs/init-help.md.tmp crates/lair_keystore/src/docs/init-help.md
+	mv -f crates/lair_keystore/src/docs/url-help.md.tmp crates/lair_keystore/src/docs/url-help.md
+	mv -f crates/lair_keystore/src/docs/import-seed-help.md.tmp crates/lair_keystore/src/docs/import-seed-help.md
+	mv -f crates/lair_keystore/src/docs/server-help.md.tmp crates/lair_keystore/src/docs/server-help.md
 	cargo readme -r crates/hc_seed_bundle -o README.md
 	cargo readme -r crates/lair_keystore_api -o README.md
 	cargo readme -r crates/lair_keystore -o README.md

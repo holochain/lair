@@ -1,4 +1,4 @@
-//! lair store backed by a sqlite / sqlcipher database file
+//! Lair store backed by a sqlite / sqlcipher database file.
 
 use crate::*;
 use futures::future::{BoxFuture, FutureExt};
@@ -12,8 +12,10 @@ use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 const READ_CON_COUNT: usize = 3;
 
-/// create a LairStoreFactory that will construct a SqlPool instance
-/// at the given sqlite/sqlcipher file path.
+/// Create a [lair_keystore_api::lair_store::LairStoreFactory] backed
+/// by an encrypted (sqlcipher) sqlite database.
+/// WARNING: If running on windows, this currently degenerates to a
+/// plaintext (non-encrypted) sqlite database.
 pub fn create_sql_pool_factory<P>(sqlite_file_path: P) -> LairStoreFactory
 where
     P: AsRef<std::path::Path>,

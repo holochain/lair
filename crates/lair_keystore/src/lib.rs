@@ -23,6 +23,26 @@
 //! For making use of a Lair keystore in a client application, see the
 //! lair_keystore_api crate.
 //!
+//! # Naming quirks
+//!
+//! - Install with an underscore: `cargo install lair_keystore`
+//! - Use binary with a dash: `$ lair-keystore help`
+//! - Cargo.toml with an underscore:
+//!
+//! ```text
+//! [dependencies]
+//! lair_keystore = "0.1.1"
+//! ```
+//!
+//! - Library usage with underscores and postfix `_lib`:
+//!
+//! ```
+//! use lair_keystore_lib::create_sql_pool_factory;
+//! let _sqlite_store_factory = create_sql_pool_factory(".");
+//! ```
+//!
+//! We might clean up the `_lib` thing in version "0.2.0".
+//!
 //! # `lair-keystore` commandline executable usage:
 //!
 #![doc = include_str!("./docs/help.md")]
@@ -33,7 +53,7 @@
 
 include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 
-/// re-exported dependencies
+/// Re-exported dependencies.
 pub mod dependencies {
     pub use hc_seed_bundle::dependencies::*;
     pub use lair_keystore_api;
@@ -52,6 +72,9 @@ pub(crate) mod sql;
 pub mod pid_check;
 pub mod server;
 pub mod store_sqlite;
+
+#[doc(inline)]
+pub use store_sqlite::create_sql_pool_factory;
 
 #[cfg(test)]
 mod server_test;
