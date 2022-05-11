@@ -21,7 +21,7 @@
 //! canonical sqlite store.
 //!
 //! For making use of a Lair keystore in a client application, see the
-//! lair_keystore_api crate.
+//! [lair_keystore_api](https://crates.io/crates/lair_keystore_api) crate.
 //!
 //! # Naming quirks
 //!
