@@ -52,6 +52,10 @@ fn new_msg_id() -> Arc<str> {
     nanoid::nanoid!().into()
 }
 
+fn is_false(b: impl std::borrow::Borrow<bool>) -> bool {
+    !b.borrow()
+}
+
 mod error;
 pub use error::*;
 
@@ -84,6 +88,9 @@ pub use new_wka_tls_cert::*;
 
 mod get_wka_tls_cert_priv_key;
 pub use get_wka_tls_cert_priv_key::*;
+
+mod secret_box_xsalsa_by_tag;
+pub use secret_box_xsalsa_by_tag::*;
 
 /// Lair api enum.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -157,6 +164,12 @@ pub enum LairApiEnum {
 
     /// Returns the private key associated with a tagged wka tls cert.
     ResGetWkaTlsCertPrivKey(LairApiResGetWkaTlsCertPrivKey),
+
+    /// Request "secretbox" encryption.
+    ReqSecretBoxXSalsaByTag(LairApiReqSecretBoxXSalsaByTag),
+
+    /// A "secretbox" encryption response.
+    ResSecretBoxXSalsaByTag(LairApiResSecretBoxXSalsaByTag),
 }
 
 impl LairApiEnum {
@@ -215,6 +228,14 @@ impl LairApiEnum {
                 ..
             }) => msg_id.clone(),
             Self::ResGetWkaTlsCertPrivKey(LairApiResGetWkaTlsCertPrivKey {
+                msg_id,
+                ..
+            }) => msg_id.clone(),
+            Self::ReqSecretBoxXSalsaByTag(LairApiReqSecretBoxXSalsaByTag {
+                msg_id,
+                ..
+            }) => msg_id.clone(),
+            Self::ResSecretBoxXSalsaByTag(LairApiResSecretBoxXSalsaByTag {
                 msg_id,
                 ..
             }) => msg_id.clone(),

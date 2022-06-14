@@ -14,6 +14,10 @@ pub struct LairApiReqNewSeed {
     /// If this new seed is to be deep_locked, the passphrase for that.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub deep_lock_passphrase: Option<DeepLockPassphrase>,
+
+    /// If this seed should be exportable.
+    #[serde(skip_serializing_if = "is_false", default)]
+    pub exportable: bool,
 }
 
 impl LairApiReqNewSeed {
@@ -21,11 +25,13 @@ impl LairApiReqNewSeed {
     pub fn new(
         tag: Arc<str>,
         deep_lock_passphrase: Option<DeepLockPassphrase>,
+        exportable: bool,
     ) -> Self {
         Self {
             msg_id: new_msg_id(),
             tag,
             deep_lock_passphrase,
+            exportable,
         }
     }
 }

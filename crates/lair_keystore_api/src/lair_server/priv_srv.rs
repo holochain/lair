@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct FullLairEntry {
     pub(crate) entry: LairEntry,
+    pub(crate) seed: Option<sodoken::BufReadSized<32>>,
     pub(crate) ed_sk: Option<sodoken::BufReadSized<64>>,
     pub(crate) x_sk: Option<sodoken::BufReadSized<32>>,
 }
@@ -274,6 +275,10 @@ pub(crate) fn priv_dispatch_incoming<'a>(
                 )
                 .await
             }
+            LairApiEnum::ReqSecretBoxXSalsaByTag(req) => {
+                priv_req_secret_box_xsalsa_by_tag(inner, send, unlocked, req)
+                    .await
+            }
             LairApiEnum::ResError(_)
             | LairApiEnum::ResHello(_)
             | LairApiEnum::ResUnlock(_)
@@ -284,7 +289,8 @@ pub(crate) fn priv_dispatch_incoming<'a>(
             | LairApiEnum::ResCryptoBoxXSalsaByPubKey(_)
             | LairApiEnum::ResCryptoBoxXSalsaOpenByPubKey(_)
             | LairApiEnum::ResNewWkaTlsCert(_)
-            | LairApiEnum::ResGetWkaTlsCertPrivKey(_) => {
+            | LairApiEnum::ResGetWkaTlsCertPrivKey(_)
+            | LairApiEnum::ResSecretBoxXSalsaByTag(_) => {
                 Err(format!("invalid request: {:?}", incoming).into())
             }
         }

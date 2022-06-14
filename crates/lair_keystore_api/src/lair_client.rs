@@ -185,6 +185,19 @@ impl LairClient {
         tag: Arc<str>,
         deep_lock_passphrase: Option<sodoken::BufRead>,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
+        self.new_seed_exportable(tag, deep_lock_passphrase, false)
+    }
+
+    /// Instruct lair to generate a new seed from cryptographically secure
+    /// random data with given tag. If the seed should be deeply locked,
+    /// supply the deep_lock_passphrase as well.
+    /// Respects hc_seed_bundle::PwHashLimits.
+    pub fn new_seed_exportable(
+        &self,
+        tag: Arc<str>,
+        deep_lock_passphrase: Option<sodoken::BufRead>,
+        exportable: bool,
+    ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let limits = hc_seed_bundle::PwHashLimits::current();
         let inner = self.0.clone();
         async move {
@@ -208,7 +221,7 @@ impl LairClient {
                     })
                 }
             };
-            let req = LairApiReqNewSeed::new(tag, secret);
+            let req = LairApiReqNewSeed::new(tag, secret, exportable);
             let res = priv_lair_api_request(&*inner, req).await?;
             Ok(res.seed_info)
         }
