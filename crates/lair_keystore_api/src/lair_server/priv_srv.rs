@@ -279,6 +279,12 @@ pub(crate) fn priv_dispatch_incoming<'a>(
                 priv_req_secret_box_xsalsa_by_tag(inner, send, unlocked, req)
                     .await
             }
+            LairApiEnum::ReqSecretBoxXSalsaOpenByTag(req) => {
+                priv_req_secret_box_xsalsa_open_by_tag(
+                    inner, send, unlocked, req,
+                )
+                .await
+            }
             LairApiEnum::ResError(_)
             | LairApiEnum::ResHello(_)
             | LairApiEnum::ResUnlock(_)
@@ -290,7 +296,8 @@ pub(crate) fn priv_dispatch_incoming<'a>(
             | LairApiEnum::ResCryptoBoxXSalsaOpenByPubKey(_)
             | LairApiEnum::ResNewWkaTlsCert(_)
             | LairApiEnum::ResGetWkaTlsCertPrivKey(_)
-            | LairApiEnum::ResSecretBoxXSalsaByTag(_) => {
+            | LairApiEnum::ResSecretBoxXSalsaByTag(_)
+            | LairApiEnum::ResSecretBoxXSalsaOpenByTag(_) => {
                 Err(format!("invalid request: {:?}", incoming).into())
             }
         }

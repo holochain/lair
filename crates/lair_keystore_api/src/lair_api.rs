@@ -92,6 +92,9 @@ pub use get_wka_tls_cert_priv_key::*;
 mod secret_box_xsalsa_by_tag;
 pub use secret_box_xsalsa_by_tag::*;
 
+mod secret_box_xsalsa_open_by_tag;
+pub use secret_box_xsalsa_open_by_tag::*;
+
 /// Lair api enum.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -170,6 +173,12 @@ pub enum LairApiEnum {
 
     /// A "secretbox" encryption response.
     ResSecretBoxXSalsaByTag(LairApiResSecretBoxXSalsaByTag),
+
+    /// Request "secretbox" decryption.
+    ReqSecretBoxXSalsaOpenByTag(LairApiReqSecretBoxXSalsaOpenByTag),
+
+    /// A "secretbox" decryption response.
+    ResSecretBoxXSalsaOpenByTag(LairApiResSecretBoxXSalsaOpenByTag),
 }
 
 impl LairApiEnum {
@@ -239,6 +248,12 @@ impl LairApiEnum {
                 msg_id,
                 ..
             }) => msg_id.clone(),
+            Self::ReqSecretBoxXSalsaOpenByTag(
+                LairApiReqSecretBoxXSalsaOpenByTag { msg_id, .. },
+            ) => msg_id.clone(),
+            Self::ResSecretBoxXSalsaOpenByTag(
+                LairApiResSecretBoxXSalsaOpenByTag { msg_id, .. },
+            ) => msg_id.clone(),
         }
     }
 }

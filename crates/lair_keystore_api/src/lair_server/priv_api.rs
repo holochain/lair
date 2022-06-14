@@ -630,3 +630,42 @@ pub(crate) fn priv_req_secret_box_xsalsa_by_tag<'a>(
         Ok(())
     }
 }
+
+pub(crate) fn priv_req_secret_box_xsalsa_open_by_tag<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqSecretBoxXSalsaOpenByTag,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("KeystoreLocked".into());
+        }
+
+        // get cached full entry
+        let (full_entry, _) =
+            priv_get_full_entry_by_tag(inner, req.tag.clone()).await?;
+
+        use sodoken::secretbox::xsalsa20poly1305::*;
+
+        let message =
+            sodoken::BufWrite::new_no_lock(open_easy_msg_len(req.cipher.len()));
+
+        if let Some(seed) = full_entry.seed {
+            open_easy(req.nonce, message.clone(), req.cipher, seed).await?;
+        } else {
+            return Err("deep_seed secretbox not yet implemented".into());
+        }
+
+        send.send(
+            LairApiResSecretBoxXSalsaOpenByTag {
+                msg_id: req.msg_id,
+                message: message.try_unwrap().unwrap().into(),
+            }
+            .into_api_enum(),
+        )
+        .await?;
+
+        Ok(())
+    }
+}
