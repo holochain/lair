@@ -36,7 +36,7 @@ async fn server_test_happy_path() {
 
     // create a new seed
     let seed_info_ref = client
-        .new_seed_exportable("test-tag".into(), None, true)
+        .new_seed("test-tag".into(), None, true)
         .await
         .unwrap();
 
@@ -82,6 +82,7 @@ async fn server_test_happy_path() {
             client.new_seed(
                 "test-tag-deep".into(),
                 Some(sodoken::BufRead::from(&b"deep"[..])),
+                false,
             )
         })
         .await

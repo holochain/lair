@@ -236,17 +236,6 @@ impl LairStore {
         &self,
         seed: sodoken::BufReadSized<32>,
         tag: Arc<str>,
-    ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
-        self.insert_seed_exportable(seed, tag, false)
-    }
-
-    /// Inject a pre-generated seed,
-    /// and associate it with the given tag, returning the
-    /// seed_info derived from the generated seed.
-    pub fn insert_seed_exportable(
-        &self,
-        seed: sodoken::BufReadSized<32>,
-        tag: Arc<str>,
         exportable: bool,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let inner = self.0.clone();
@@ -299,16 +288,6 @@ impl LairStore {
     pub fn new_seed(
         &self,
         tag: Arc<str>,
-    ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
-        self.new_seed_exportable(tag, false)
-    }
-
-    /// Generate a new cryptographically secure random seed,
-    /// and associate it with the given tag, returning the
-    /// seed_info derived from the generated seed.
-    pub fn new_seed_exportable(
-        &self,
-        tag: Arc<str>,
         exportable: bool,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let this = self.clone();
@@ -317,7 +296,7 @@ impl LairStore {
             let seed = sodoken::BufWriteSized::new_mem_locked()?;
             sodoken::random::bytes_buf(seed.clone()).await?;
 
-            this.insert_seed_exportable(seed.to_read_sized(), tag, exportable)
+            this.insert_seed(seed.to_read_sized(), tag, exportable)
                 .await
         }
     }
@@ -328,29 +307,6 @@ impl LairStore {
     /// This seed is deep_locked, meaning it needs an additional
     /// runtime passphrase to be decrypted / used.
     pub fn insert_deep_locked_seed(
-        &self,
-        seed: sodoken::BufReadSized<32>,
-        tag: Arc<str>,
-        ops_limit: u32,
-        mem_limit: u32,
-        deep_lock_passphrase: sodoken::BufReadSized<64>,
-    ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
-        self.insert_deep_locked_seed_exportable(
-            seed,
-            tag,
-            ops_limit,
-            mem_limit,
-            deep_lock_passphrase,
-            false,
-        )
-    }
-
-    /// Inject a pre-generated seed,
-    /// and associate it with the given tag, returning the
-    /// seed_info derived from the generated seed.
-    /// This seed is deep_locked, meaning it needs an additional
-    /// runtime passphrase to be decrypted / used.
-    pub fn insert_deep_locked_seed_exportable(
         &self,
         seed: sodoken::BufReadSized<32>,
         tag: Arc<str>,
@@ -432,27 +388,6 @@ impl LairStore {
         ops_limit: u32,
         mem_limit: u32,
         deep_lock_passphrase: sodoken::BufReadSized<64>,
-    ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
-        self.new_deep_locked_seed_exportable(
-            tag,
-            ops_limit,
-            mem_limit,
-            deep_lock_passphrase,
-            false,
-        )
-    }
-
-    /// Generate a new cryptographically secure random seed,
-    /// and associate it with the given tag, returning the
-    /// seed_info derived from the generated seed.
-    /// This seed is deep_locked, meaning it needs an additional
-    /// runtime passphrase to be decrypted / used.
-    pub fn new_deep_locked_seed_exportable(
-        &self,
-        tag: Arc<str>,
-        ops_limit: u32,
-        mem_limit: u32,
-        deep_lock_passphrase: sodoken::BufReadSized<64>,
         exportable: bool,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let this = self.clone();
@@ -461,7 +396,7 @@ impl LairStore {
             let seed = sodoken::BufWriteSized::new_mem_locked()?;
             sodoken::random::bytes_buf(seed.clone()).await?;
 
-            this.insert_deep_locked_seed_exportable(
+            this.insert_deep_locked_seed(
                 seed.to_read_sized(),
                 tag,
                 ops_limit,

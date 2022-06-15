@@ -205,8 +205,10 @@ mod tests {
                 .unwrap();
 
         // create a new seed
-        let seed_info_ref =
-            client.new_seed("test-tag".into(), None).await.unwrap();
+        let seed_info_ref = client
+            .new_seed("test-tag".into(), None, false)
+            .await
+            .unwrap();
 
         // list keystore contents
         let mut entry_list = client.list_entries().await.unwrap();
@@ -250,6 +252,7 @@ mod tests {
                 client.new_seed(
                     "test-tag-deep".into(),
                     Some(sodoken::BufRead::from(&b"deep"[..])),
+                    false,
                 )
             })
             .await

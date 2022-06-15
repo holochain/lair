@@ -209,7 +209,8 @@ mod tests {
             .await
             .unwrap();
 
-        let seed_info = store.new_seed("test-seed".into()).await.unwrap();
+        let seed_info =
+            store.new_seed("test-seed".into(), false).await.unwrap();
         println!("generated new seed: {:#?}", seed_info);
 
         let list = store.list_entries().await.unwrap();

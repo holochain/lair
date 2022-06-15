@@ -31,7 +31,11 @@ let client =
         .unwrap();
 
 // create a new seed
-let seed_info = client.new_seed("test-seed".into(), None).await.unwrap();
+let seed_info = client.new_seed(
+    "test-seed".into(),
+    None,
+    false,
+).await.unwrap();
 
 // sign some data
 let sig = client.sign_by_pub_key(

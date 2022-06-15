@@ -523,7 +523,7 @@ mod tests {
         let pool = SqlPool::new(sqlite, db_key).await.unwrap();
 
         let pk = pool
-            .new_seed("test-tag".into())
+            .new_seed("test-tag".into(), false)
             .await
             .unwrap()
             .ed25519_pub_key;

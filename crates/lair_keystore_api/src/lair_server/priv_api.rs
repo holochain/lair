@@ -204,7 +204,7 @@ pub(crate) fn priv_req_new_seed<'a>(
 
                 // create a new deep locked seed
                 store
-                    .new_deep_locked_seed_exportable(
+                    .new_deep_locked_seed(
                         req.tag.clone(),
                         secret.ops_limit,
                         secret.mem_limit,
@@ -214,11 +214,7 @@ pub(crate) fn priv_req_new_seed<'a>(
                     .await?
             }
             // create a new seed
-            None => {
-                store
-                    .new_seed_exportable(req.tag.clone(), req.exportable)
-                    .await?
-            }
+            None => store.new_seed(req.tag.clone(), req.exportable).await?,
         };
 
         // send the response

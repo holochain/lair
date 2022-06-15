@@ -120,10 +120,13 @@ pub(crate) async fn exec(
                 ops_limit,
                 mem_limit,
                 pw_hash.to_read_sized(),
+                opt.exportable,
             )
             .await?
     } else {
-        store.insert_seed(seed, opt.tag.as_str().into()).await?
+        store
+            .insert_seed(seed, opt.tag.as_str().into(), opt.exportable)
+            .await?
     };
 
     println!("# imported seed {} {:?}", opt.tag, seed_info);

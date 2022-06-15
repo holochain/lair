@@ -125,6 +125,12 @@ pub(crate) struct OptImportSeed {
     /// The base64url encoded hc_seed_bundle.
     #[structopt(verbatim_doc_comment)]
     pub seed_bundle_base64: String,
+
+    /// Mark this seed as "exportable" indicating
+    /// this key can be extracted again after having
+    /// been imported.
+    #[structopt(short = "e", long, verbatim_doc_comment)]
+    pub exportable: bool,
 }
 
 #[derive(Debug, StructOpt)]
