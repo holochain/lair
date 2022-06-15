@@ -74,6 +74,9 @@ pub use list_entries::*;
 mod new_seed;
 pub use new_seed::*;
 
+mod export_seed_by_tag;
+pub use export_seed_by_tag::*;
+
 mod sign_by_pub_key;
 pub use sign_by_pub_key::*;
 
@@ -135,6 +138,13 @@ pub enum LairApiEnum {
     /// On new seed generation, lair will respond with info about
     /// that seed.
     ResNewSeed(LairApiResNewSeed),
+
+    /// Export a seed (if it is marked exportable) for a specific
+    /// target using the crypto box xsalsa20poly1305 algorithm.
+    ReqExportSeedByTag(LairApiReqExportSeedByTag),
+
+    /// Response for export seed by tag.
+    ResExportSeedByTag(LairApiResExportSeedByTag),
 
     /// Request a signature.
     ReqSignByPubKey(LairApiReqSignByPubKey),
@@ -208,6 +218,14 @@ impl LairApiEnum {
             Self::ResNewSeed(LairApiResNewSeed { msg_id, .. }) => {
                 msg_id.clone()
             }
+            Self::ReqExportSeedByTag(LairApiReqExportSeedByTag {
+                msg_id,
+                ..
+            }) => msg_id.clone(),
+            Self::ResExportSeedByTag(LairApiResExportSeedByTag {
+                msg_id,
+                ..
+            }) => msg_id.clone(),
             Self::ReqSignByPubKey(LairApiReqSignByPubKey {
                 msg_id, ..
             }) => msg_id.clone(),

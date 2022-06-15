@@ -20,7 +20,7 @@ canonical sqlite store.
 For making use of a Lair keystore in a client application, see the
 [lair_keystore_api](https://crates.io/crates/lair_keystore_api) crate.
 
-## Naming quirks
+## Rust conventions for dashes and underscores:
 
 - Install with an underscore: `cargo install lair_keystore`
 - Use binary with a dash: `$ lair-keystore help`
@@ -31,14 +31,12 @@ For making use of a Lair keystore in a client application, see the
 lair_keystore = "0.1.1"
 ```
 
-- Library usage with underscores and postfix `_lib`:
+- Library usage with underscores:
 
 ```rust
-use lair_keystore_lib::create_sql_pool_factory;
+use lair_keystore::create_sql_pool_factory;
 let _sqlite_store_factory = create_sql_pool_factory(".");
 ```
-
-We might clean up the `_lib` thing in version "0.2.0".
 
 ## `lair-keystore` commandline executable usage:
 

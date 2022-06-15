@@ -35,7 +35,10 @@ async fn server_test_happy_path() {
     .unwrap();
 
     // create a new seed
-    let seed_info_ref = client.new_seed("test-tag".into(), None).await.unwrap();
+    let seed_info_ref = client
+        .new_seed_exportable("test-tag".into(), None, true)
+        .await
+        .unwrap();
 
     // list keystore contents
     let mut entry_list = client.list_entries().await.unwrap();
@@ -95,4 +98,33 @@ async fn server_test_happy_path() {
     println!("got priv key: {} bytes", priv_key.len());
 
     println!("{:#?}", client.list_entries().await.unwrap());
+
+    // secretbox encrypt some data
+    let (nonce, cipher) = client
+        .secretbox_xsalsa_by_tag(
+            "test-tag".into(),
+            None,
+            b"hello".to_vec().into(),
+        )
+        .await
+        .unwrap();
+
+    // make sure we can decrypt our own message
+    let msg = client
+        .secretbox_xsalsa_open_by_tag("test-tag".into(), None, nonce, cipher)
+        .await
+        .unwrap();
+
+    assert_eq!(b"hello", &*msg);
+
+    // try exporting the seed (just to ourselves)
+    let (_nonce, _cipher) = client
+        .export_seed_by_tag(
+            "test-tag".into(),
+            seed_info_ref.x25519_pub_key.clone(),
+            seed_info_ref.x25519_pub_key.clone(),
+            None,
+        )
+        .await
+        .unwrap();
 }

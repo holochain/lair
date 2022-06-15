@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct FullLairEntry {
     pub(crate) entry: LairEntry,
+    pub(crate) exportable: bool,
     pub(crate) seed: Option<sodoken::BufReadSized<32>>,
     pub(crate) ed_sk: Option<sodoken::BufReadSized<64>>,
     pub(crate) x_sk: Option<sodoken::BufReadSized<32>>,
@@ -247,6 +248,9 @@ pub(crate) fn priv_dispatch_incoming<'a>(
             LairApiEnum::ReqNewSeed(req) => {
                 priv_req_new_seed(inner, send, dec_ctx_key, unlocked, req).await
             }
+            LairApiEnum::ReqExportSeedByTag(req) => {
+                priv_req_export_seed_by_tag(inner, send, unlocked, req).await
+            }
             LairApiEnum::ReqSignByPubKey(req) => {
                 priv_req_sign_by_pub_key(inner, send, unlocked, req).await
             }
@@ -291,6 +295,7 @@ pub(crate) fn priv_dispatch_incoming<'a>(
             | LairApiEnum::ResGetEntry(_)
             | LairApiEnum::ResListEntries(_)
             | LairApiEnum::ResNewSeed(_)
+            | LairApiEnum::ResExportSeedByTag(_)
             | LairApiEnum::ResSignByPubKey(_)
             | LairApiEnum::ResCryptoBoxXSalsaByPubKey(_)
             | LairApiEnum::ResCryptoBoxXSalsaOpenByPubKey(_)

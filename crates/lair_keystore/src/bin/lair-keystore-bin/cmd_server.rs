@@ -6,7 +6,7 @@ pub(crate) async fn exec(
 ) -> LairResult<()> {
     // construct the server so that pid-check etc happens first
     let mut server =
-        lair_keystore_lib::server::StandaloneServer::new(config).await?;
+        lair_keystore::server::StandaloneServer::new(config).await?;
 
     let passphrase = if opt.piped {
         read_piped_passphrase().await?

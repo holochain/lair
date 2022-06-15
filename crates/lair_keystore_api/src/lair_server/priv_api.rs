@@ -204,16 +204,21 @@ pub(crate) fn priv_req_new_seed<'a>(
 
                 // create a new deep locked seed
                 store
-                    .new_deep_locked_seed(
+                    .new_deep_locked_seed_exportable(
                         req.tag.clone(),
                         secret.ops_limit,
                         secret.mem_limit,
                         deep_lock_passphrase,
+                        req.exportable,
                     )
                     .await?
             }
             // create a new seed
-            None => store.new_seed(req.tag.clone()).await?,
+            None => {
+                store
+                    .new_seed_exportable(req.tag.clone(), req.exportable)
+                    .await?
+            }
         };
 
         // send the response
@@ -222,6 +227,64 @@ pub(crate) fn priv_req_new_seed<'a>(
                 msg_id: req.msg_id,
                 tag: req.tag.clone(),
                 seed_info,
+            }
+            .into_api_enum(),
+        )
+        .await?;
+
+        Ok(())
+    }
+}
+
+pub(crate) fn priv_req_export_seed_by_tag<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqExportSeedByTag,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("KeystoreLocked".into());
+        }
+
+        // get cached full entry
+        let (seed_entry, _) =
+            priv_get_full_entry_by_tag(inner, req.tag.clone()).await?;
+
+        // get cached full entry
+        let (enc_entry, _) =
+            priv_get_full_entry_by_x_pub_key(inner, req.sender_pub_key.clone())
+                .await?;
+
+        let nonce = sodoken::BufWriteSized::new_no_lock();
+        sodoken::random::bytes_buf(nonce.clone()).await?;
+
+        use sodoken::crypto_box::curve25519xsalsa20poly1305::*;
+        let cipher = if let Some(x_sk) = enc_entry.x_sk {
+            if let Some(seed) = seed_entry.seed {
+                if !seed_entry.exportable {
+                    return Err("seed is not exportable".into());
+                }
+
+                easy(
+                    nonce.clone(),
+                    seed,
+                    req.recipient_pub_key.cloned_inner(),
+                    x_sk,
+                )
+                .await?
+            } else {
+                return Err("deep_seed crypto_box not yet implemented".into());
+            }
+        } else {
+            return Err("deep_seed crypto_box not yet implemented".into());
+        };
+
+        send.send(
+            LairApiResExportSeedByTag {
+                msg_id: req.msg_id,
+                nonce: nonce.try_unwrap_sized().unwrap(),
+                cipher: cipher.try_unwrap().unwrap().into(),
             }
             .into_api_enum(),
         )
@@ -415,9 +478,11 @@ pub(crate) fn priv_gen_and_register_entry<'a>(
     entry: LairEntry,
 ) -> impl Future<Output = LairResult<FullLairEntry>> + 'a + Send {
     async move {
-        let (seed, ed_pk, ed_sk, x_pk, x_sk) = match &*entry {
+        let (seed, exportable, ed_pk, ed_sk, x_pk, x_sk) = match &*entry {
             // only cache non-deep-locked seeds
-            LairEntryInner::Seed { seed, .. } => {
+            LairEntryInner::Seed {
+                seed_info, seed, ..
+            } => {
                 // read the seed
                 let seed = seed.decrypt(store.get_bidi_ctx_key()).await?;
 
@@ -443,17 +508,19 @@ pub(crate) fn priv_gen_and_register_entry<'a>(
 
                 (
                     Some(seed),
+                    seed_info.exportable,
                     Some(ed_pk.try_unwrap_sized().unwrap().into()),
                     Some(ed_sk.to_read_sized()),
                     Some(x_pk.try_unwrap_sized().unwrap().into()),
                     Some(x_sk.to_read_sized()),
                 )
             }
-            _ => (None, None, None, None, None),
+            _ => (None, false, None, None, None, None),
         };
 
         let full_entry = FullLairEntry {
             seed,
+            exportable,
             entry,
             ed_sk,
             x_sk,

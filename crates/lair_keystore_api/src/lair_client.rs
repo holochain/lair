@@ -227,6 +227,46 @@ impl LairClient {
         }
     }
 
+    /// Export seeds (that are marked "exportable") by using the
+    /// x25519xsalsa20poly1305 "crypto_box" algorithm.
+    /// Respects hc_seed_bundle::PwHashLimits.
+    pub fn export_seed_by_tag(
+        &self,
+        tag: Arc<str>,
+        sender_pub_key: X25519PubKey,
+        recipient_pub_key: X25519PubKey,
+        deep_lock_passphrase: Option<sodoken::BufRead>,
+    ) -> impl Future<Output = LairResult<([u8; 24], Arc<[u8]>)>> + 'static + Send
+    {
+        let inner = self.0.clone();
+        async move {
+            // if this is a deep locked seed, we need to encrypt the passphrase
+            let secret = match deep_lock_passphrase {
+                None => None,
+                Some(pass) => {
+                    // pre-hash the passphrase
+                    let pw_hash =
+                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
+
+                    let key = inner.get_enc_ctx_key();
+                    let secret =
+                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
+                            .await?;
+                    Some(secret)
+                }
+            };
+            let req = LairApiReqExportSeedByTag::new(
+                tag,
+                sender_pub_key,
+                recipient_pub_key,
+                secret,
+            );
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok((res.nonce, res.cipher))
+        }
+    }
+
     // uhhhh... clippy?? [u32] by itself is not sized... so, yes
     // this *does* have to be Boxed...
     #[allow(clippy::boxed_local)]
@@ -388,6 +428,76 @@ impl LairClient {
             let res = priv_lair_api_request(&*inner, req).await?;
             let res = res.priv_key.decrypt(inner.get_dec_ctx_key()).await?;
             Ok(res)
+        }
+    }
+
+    /// Shared secret encryption using the libsodium
+    /// xsalsa20poly1305 "secretbox" algorithm.
+    /// Respects hc_seed_bundle::PwHashLimits.
+    pub fn secretbox_xsalsa_by_tag(
+        &self,
+        tag: Arc<str>,
+        deep_lock_passphrase: Option<sodoken::BufRead>,
+        data: Arc<[u8]>,
+    ) -> impl Future<Output = LairResult<([u8; 24], Arc<[u8]>)>> + 'static + Send
+    {
+        let inner = self.0.clone();
+        async move {
+            // if this is a deep locked seed, we need to encrypt the passphrase
+            let secret = match deep_lock_passphrase {
+                None => None,
+                Some(pass) => {
+                    // pre-hash the passphrase
+                    let pw_hash =
+                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
+
+                    let key = inner.get_enc_ctx_key();
+                    let secret =
+                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
+                            .await?;
+                    Some(secret)
+                }
+            };
+            let req = LairApiReqSecretBoxXSalsaByTag::new(tag, secret, data);
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok((res.nonce, res.cipher))
+        }
+    }
+
+    /// Shared secret decryption using the libsodium
+    /// xsalsa20poly1305 "secretbox_open" algorithm.
+    /// Respects hc_seed_bundle::PwHashLimits.
+    pub fn secretbox_xsalsa_open_by_tag(
+        &self,
+        tag: Arc<str>,
+        deep_lock_passphrase: Option<sodoken::BufRead>,
+        nonce: [u8; 24],
+        cipher: Arc<[u8]>,
+    ) -> impl Future<Output = LairResult<Arc<[u8]>>> + 'static + Send {
+        let inner = self.0.clone();
+        async move {
+            // if this is a deep locked seed, we need to encrypt the passphrase
+            let secret = match deep_lock_passphrase {
+                None => None,
+                Some(pass) => {
+                    // pre-hash the passphrase
+                    let pw_hash =
+                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
+
+                    let key = inner.get_enc_ctx_key();
+                    let secret =
+                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
+                            .await?;
+                    Some(secret)
+                }
+            };
+            let req = LairApiReqSecretBoxXSalsaOpenByTag::new(
+                tag, secret, nonce, cipher,
+            );
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok(res.message)
         }
     }
 }

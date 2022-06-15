@@ -7,3 +7,5 @@ pub(crate) const SELECT_ALL: &str = include_str!("./sql/select_all.sql");
 pub(crate) const SELECT_BY_TAG: &str = include_str!("./sql/select_by_tag.sql");
 pub(crate) const SELECT_BY_SIGN_PK: &str =
     include_str!("./sql/select_by_sign_pk.sql");
+pub(crate) const SELECT_VERSION: &str =
+    include_str!("./sql/select_version.sql");

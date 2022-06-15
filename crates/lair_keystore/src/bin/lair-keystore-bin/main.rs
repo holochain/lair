@@ -8,8 +8,8 @@
 
 //! sqlite/sqlcipher backed LairKeystore server control binary
 
+use lair_keystore::dependencies::*;
 use lair_keystore_api::prelude::*;
-use lair_keystore_lib::dependencies::*;
 use std::sync::Arc;
 use structopt::StructOpt;
 

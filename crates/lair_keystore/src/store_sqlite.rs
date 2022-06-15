@@ -166,7 +166,7 @@ impl SqlPool {
         let key_pragma = secure_write_key_pragma(dbk_secret)?;
 
         // open a single write connection to the database
-        let write_con = rusqlite::Connection::open_with_flags(
+        let mut write_con = rusqlite::Connection::open_with_flags(
             &path,
             OpenFlags::SQLITE_OPEN_READ_WRITE
                 | OpenFlags::SQLITE_OPEN_CREATE
@@ -185,7 +185,20 @@ impl SqlPool {
             .map_err(one_err::OneErr::new)?;
 
         // initialize tables if they don't already exist
-        write_con.execute_optional(sql::SCHEMA, [])?;
+        {
+            let tx = write_con
+                .transaction_with_behavior(
+                    rusqlite::TransactionBehavior::Exclusive,
+                )
+                .map_err(one_err::OneErr::new)?;
+            tx.execute_batch(sql::SCHEMA)
+                .map_err(one_err::OneErr::new)?;
+            tx.commit().map_err(one_err::OneErr::new)?;
+        }
+
+        let _version = write_con
+            .query_row(sql::SELECT_VERSION, [], |row| row.get::<_, i64>(0))
+            .map_err(one_err::OneErr::new)?;
 
         // initialize READ_CON_COUNT read connections to the database
         let mut read_cons: [Option<rusqlite::Connection>; READ_CON_COUNT] =

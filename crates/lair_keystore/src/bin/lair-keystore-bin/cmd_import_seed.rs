@@ -6,7 +6,7 @@ pub(crate) async fn exec(
 ) -> LairResult<()> {
     // first start the server so the pid_file is acquired / etc
     let mut server =
-        lair_keystore_lib::server::StandaloneServer::new(config).await?;
+        lair_keystore::server::StandaloneServer::new(config).await?;
 
     // then capture the needed passphrases
     let (store_pass, bundle_pass, deep_pass) = if opt.piped {
