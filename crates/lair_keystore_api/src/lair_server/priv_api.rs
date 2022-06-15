@@ -290,6 +290,90 @@ pub(crate) fn priv_req_export_seed_by_tag<'a>(
     }
 }
 
+pub(crate) fn priv_req_import_seed<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    dec_ctx_key: &'a sodoken::BufReadSized<32>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqImportSeed,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        let store = priv_get_store(inner, unlocked)?;
+
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("KeystoreLocked".into());
+        }
+
+        // get cached full entry
+        let (full_entry, _) = priv_get_full_entry_by_x_pub_key(
+            inner,
+            req.recipient_pub_key.clone(),
+        )
+        .await?;
+
+        use sodoken::crypto_box::curve25519xsalsa20poly1305::*;
+
+        if open_easy_msg_len(req.cipher.len()) != 32 {
+            return Err("Bad Seed Length".into());
+        }
+
+        let seed = sodoken::BufWriteSized::new_mem_locked()?;
+
+        if let Some(x_sk) = full_entry.x_sk {
+            open_easy(
+                req.nonce,
+                seed.clone(),
+                req.cipher,
+                req.sender_pub_key.cloned_inner(),
+                x_sk,
+            )
+            .await?;
+        } else {
+            return Err("deep_seed crypto_box not yet implemented".into());
+        }
+
+        let seed = seed.to_read_sized();
+
+        let seed_info = match req.deep_lock_passphrase {
+            Some(secret) => {
+                // if deep locked, decrypt the deep lock passphrase
+                let deep_lock_passphrase =
+                    secret.passphrase.decrypt(dec_ctx_key.clone()).await?;
+
+                // create a new deep locked seed
+                store
+                    .insert_deep_locked_seed(
+                        seed,
+                        req.tag.clone(),
+                        secret.ops_limit,
+                        secret.mem_limit,
+                        deep_lock_passphrase,
+                        req.exportable,
+                    )
+                    .await?
+            }
+            // create a new seed
+            None => {
+                store
+                    .insert_seed(seed, req.tag.clone(), req.exportable)
+                    .await?
+            }
+        };
+
+        send.send(
+            LairApiResImportSeed {
+                msg_id: req.msg_id,
+                tag: req.tag.clone(),
+                seed_info,
+            }
+            .into_api_enum(),
+        )
+        .await?;
+
+        Ok(())
+    }
+}
+
 pub(crate) fn priv_req_sign_by_pub_key<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,

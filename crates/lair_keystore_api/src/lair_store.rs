@@ -26,6 +26,7 @@ pub mod traits {
         ) -> BoxFuture<'static, LairResult<Vec<LairEntryInfo>>>;
 
         /// Write a new entry to the lair store.
+        /// Should error if the tag already exists.
         fn write_entry(
             &self,
             entry: LairEntry,

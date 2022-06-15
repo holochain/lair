@@ -166,10 +166,7 @@ mod tests {
     use super::*;
     use std::sync::Arc;
 
-    #[tokio::test(flavor = "multi_thread")]
-    async fn ipc_happy_path() {
-        let tmp_dir = tempdir::TempDir::new("lair_ipc_keystore_test").unwrap();
-
+    async fn connect(tmp_dir: &tempdir::TempDir) -> crate::LairClient {
         // set up a passphrase
         let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
 
@@ -199,14 +196,23 @@ mod tests {
         println!("{}", config);
 
         // create a client connection
-        let client =
-            ipc_keystore_connect(config.connection_url.clone(), passphrase)
-                .await
-                .unwrap();
+        ipc_keystore_connect(config.connection_url.clone(), passphrase)
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn ipc_happy_path() {
+        let tmp_dir = tempdir::TempDir::new("lair_ipc_keystore_test").unwrap();
+        let tmp_dir2 =
+            tempdir::TempDir::new("lair_ipc_keystore_test2").unwrap();
+
+        let client = connect(&tmp_dir).await;
+        let client2 = connect(&tmp_dir2).await;
 
         // create a new seed
         let seed_info_ref = client
-            .new_seed("test-tag".into(), None, false)
+            .new_seed("test-tag".into(), None, true)
             .await
             .unwrap();
 
@@ -270,5 +276,60 @@ mod tests {
         println!("got priv key: {} bytes", priv_key.len());
 
         println!("{:#?}", client.list_entries().await.unwrap());
+
+        // secretbox encrypt some data
+        let (nonce, cipher) = client
+            .secretbox_xsalsa_by_tag(
+                "test-tag".into(),
+                None,
+                b"hello".to_vec().into(),
+            )
+            .await
+            .unwrap();
+
+        // make sure we can decrypt our own message
+        let msg = client
+            .secretbox_xsalsa_open_by_tag(
+                "test-tag".into(),
+                None,
+                nonce,
+                cipher,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(b"hello", &*msg);
+
+        let seed_info_ref2 = client2
+            .new_seed("test-tag2".into(), None, true)
+            .await
+            .unwrap();
+
+        // try exporting the seed
+        let (nonce, cipher) = client
+            .export_seed_by_tag(
+                "test-tag".into(),
+                seed_info_ref.x25519_pub_key.clone(),
+                seed_info_ref2.x25519_pub_key.clone(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        // try importing the exported seed
+        let imported_seed_info = client2
+            .import_seed(
+                seed_info_ref.x25519_pub_key.clone(),
+                seed_info_ref2.x25519_pub_key.clone(),
+                None,
+                nonce,
+                cipher,
+                "test-tag".into(),
+                true,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(seed_info_ref, imported_seed_info);
     }
 }

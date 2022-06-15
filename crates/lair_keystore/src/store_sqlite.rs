@@ -365,7 +365,7 @@ impl AsLairStore for SqlPool {
                         // if the entry type has seed info
                         // add the extra columns so we can look up
                         // the entry by public keys
-                        txn.execute_optional(
+                        txn.execute(
                             sql::INSERT_SEED,
                             params![
                                 entry.tag(),
@@ -374,15 +374,16 @@ impl AsLairStore for SqlPool {
                                 bytes,
                             ],
                         )
+                        .map(|_| ())
+                        .map_err(one_err::OneErr::new)
                     })
                     .await
             } else {
                 write
                     .transaction(move |txn| {
-                        txn.execute_optional(
-                            sql::INSERT,
-                            params![entry.tag(), bytes],
-                        )
+                        txn.execute(sql::INSERT, params![entry.tag(), bytes])
+                            .map(|_| ())
+                            .map_err(one_err::OneErr::new)
                     })
                     .await
             }

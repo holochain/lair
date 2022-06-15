@@ -255,6 +255,59 @@ impl LairClient {
         }
     }
 
+    /// Import a seed encrypted via x25519xsalsa20poly1305 secretbox.
+    /// Note it is 100% valid to co-opt this function to allow importing
+    /// seeds that have been generated via custom algorithms, but
+    /// you take responsibility for those security concerns.
+    /// Respects hc_seed_bundle::PwHashLimits.
+    #[allow(clippy::too_many_arguments)]
+    pub fn import_seed(
+        &self,
+        sender_pub_key: X25519PubKey,
+        recipient_pub_key: X25519PubKey,
+        deep_lock_passphrase: Option<sodoken::BufRead>,
+        nonce: [u8; 24],
+        cipher: Arc<[u8]>,
+        tag: Arc<str>,
+        exportable: bool,
+    ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
+        let limits = hc_seed_bundle::PwHashLimits::current();
+        let inner = self.0.clone();
+        async move {
+            // if this is to be a deep locked seed / encrypt the passphrase
+            let secret = match deep_lock_passphrase {
+                None => None,
+                Some(pass) => {
+                    // pre-hash the passphrase
+                    let pw_hash =
+                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
+
+                    let key = inner.get_enc_ctx_key();
+                    let secret =
+                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
+                            .await?;
+                    Some(DeepLockPassphrase {
+                        ops_limit: limits.as_ops_limit(),
+                        mem_limit: limits.as_mem_limit(),
+                        passphrase: secret,
+                    })
+                }
+            };
+            let req = LairApiReqImportSeed::new(
+                sender_pub_key,
+                recipient_pub_key,
+                secret,
+                nonce,
+                cipher,
+                tag,
+                exportable,
+            );
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok(res.seed_info)
+        }
+    }
+
     // uhhhh... clippy?? [u32] by itself is not sized... so, yes
     // this *does* have to be Boxed...
     #[allow(clippy::boxed_local)]

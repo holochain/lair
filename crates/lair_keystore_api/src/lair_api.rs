@@ -77,6 +77,9 @@ pub use new_seed::*;
 mod export_seed_by_tag;
 pub use export_seed_by_tag::*;
 
+mod import_seed;
+pub use import_seed::*;
+
 mod sign_by_pub_key;
 pub use sign_by_pub_key::*;
 
@@ -145,6 +148,12 @@ pub enum LairApiEnum {
 
     /// Response for export seed by tag.
     ResExportSeedByTag(LairApiResExportSeedByTag),
+
+    /// Import a seed encrypted as a xsalsa20poly1305 secretbox.
+    ReqImportSeed(LairApiReqImportSeed),
+
+    /// Response for import seed.
+    ResImportSeed(LairApiResImportSeed),
 
     /// Request a signature.
     ReqSignByPubKey(LairApiReqSignByPubKey),
@@ -226,6 +235,12 @@ impl LairApiEnum {
                 msg_id,
                 ..
             }) => msg_id.clone(),
+            Self::ReqImportSeed(LairApiReqImportSeed { msg_id, .. }) => {
+                msg_id.clone()
+            }
+            Self::ResImportSeed(LairApiResImportSeed { msg_id, .. }) => {
+                msg_id.clone()
+            }
             Self::ReqSignByPubKey(LairApiReqSignByPubKey {
                 msg_id, ..
             }) => msg_id.clone(),
