@@ -1,6 +1,3 @@
-<a href="https://github.com/holochain/lair/blob/master/LICENSE-APACHE">![Crates.io](https://img.shields.io/crates/l/lair_keystore)</a>
-<a href="https://crates.io/crates/lair_keystore">![Crates.io](https://img.shields.io/crates/v/lair_keystore)</a>
-
 # lair_keystore
 
 Secret lair private keystore
@@ -9,6 +6,7 @@ Secret lair private keystore
 [![Forum](https://img.shields.io/badge/chat-forum%2eholochain%2enet-blue.svg?style=flat-square)](https://forum.holochain.org)
 [![Chat](https://img.shields.io/badge/chat-chat%2eholochain%2enet-blue.svg?style=flat-square)](https://chat.holochain.org)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 This crate mostly provides the `lair-keystore` executable allowing
@@ -40,6 +38,8 @@ let _sqlite_store_factory = create_sql_pool_factory(".");
 
 ## `lair-keystore` commandline executable usage:
 
+
+License: MIT OR Apache-2.0
 
 ### `lair-keystore --help`
 ```text

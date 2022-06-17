@@ -2,7 +2,7 @@
 name = "hc_seed_bundle"
 version = "0.1.2"
 description = "SeedBundle parsing and generation library."
-license = "Apache-2.0"
+license = "MIT OR Apache-2.0"
 repository = "https://github.com/holochain/lair"
 documentation = "https://docs.rs/hc_seed_bundle"
 authors = [ "Holochain Core Dev Team <devcore@holochain.org>" ]
@@ -17,7 +17,7 @@ rmp-serde = "0.15.5"
 rmpv = { version = "1.0.0", features = [ "with-serde" ] }
 serde = { version = "1", features = [ "derive", "rc" ] }
 serde_bytes = "0.11.5"
-sodoken = "=0.0.3"
+sodoken = "=0.0.4"
 
 [dev-dependencies]
 base64 = "0.13"

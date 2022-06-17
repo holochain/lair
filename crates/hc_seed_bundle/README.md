@@ -1,9 +1,13 @@
-<a href="https://github.com/holochain/lair/blob/master/LICENSE-APACHE">![Crates.io](https://img.shields.io/crates/l/hc_seed_bundle)</a>
-<a href="https://crates.io/crates/hc_seed_bundle">![Crates.io](https://img.shields.io/crates/v/hc_seed_bundle)</a>
-
 # hc_seed_bundle
 
 SeedBundle parsing and generation library.
+
+[![Project](https://img.shields.io/badge/project-holochain-blue.svg?style=flat-square)](http://holochain.org/)
+[![Forum](https://img.shields.io/badge/chat-forum%2eholochain%2enet-blue.svg?style=flat-square)](https://forum.holochain.org)
+[![Chat](https://img.shields.io/badge/chat-chat%2eholochain%2enet-blue.svg?style=flat-square)](https://chat.holochain.org)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 #### Links
 
@@ -131,3 +135,5 @@ will treat msgpack "ext" types as binary data.
   - passphrase: user-supplied
 - `secretstream_xchacha20poly1305`
   - single `push_final/pull_final` with entire contents
+
+License: MIT OR Apache-2.0
