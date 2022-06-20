@@ -1,6 +1,3 @@
-<a href="https://github.com/holochain/lair/blob/master/LICENSE-APACHE">![Crates.io](https://img.shields.io/crates/l/lair_keystore)</a>
-<a href="https://crates.io/crates/lair_keystore">![Crates.io](https://img.shields.io/crates/v/lair_keystore)</a>
-
 # lair_keystore
 
 Secret lair private keystore
@@ -9,6 +6,7 @@ Secret lair private keystore
 [![Forum](https://img.shields.io/badge/chat-forum%2eholochain%2enet-blue.svg?style=flat-square)](https://forum.holochain.org)
 [![Chat](https://img.shields.io/badge/chat-chat%2eholochain%2enet-blue.svg?style=flat-square)](https://chat.holochain.org)
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 This crate mostly provides the `lair-keystore` executable allowing
@@ -20,7 +18,7 @@ canonical sqlite store.
 For making use of a Lair keystore in a client application, see the
 [lair_keystore_api](https://crates.io/crates/lair_keystore_api) crate.
 
-## Naming quirks
+## Rust conventions for dashes and underscores:
 
 - Install with an underscore: `cargo install lair_keystore`
 - Use binary with a dash: `$ lair-keystore help`
@@ -31,21 +29,21 @@ For making use of a Lair keystore in a client application, see the
 lair_keystore = "0.1.1"
 ```
 
-- Library usage with underscores and postfix `_lib`:
+- Library usage with underscores:
 
 ```rust
-use lair_keystore_lib::create_sql_pool_factory;
+use lair_keystore::create_sql_pool_factory;
 let _sqlite_store_factory = create_sql_pool_factory(".");
 ```
-
-We might clean up the `_lib` thing in version "0.2.0".
 
 ## `lair-keystore` commandline executable usage:
 
 
+License: MIT OR Apache-2.0
+
 ### `lair-keystore --help`
 ```text
-lair_keystore 0.1.3
+lair_keystore 0.2.0
 secret lair private keystore
 
 USAGE:
@@ -76,7 +74,7 @@ SUBCOMMANDS:
 ```
 ### `lair-keystore init --help`
 ```text
-lair-keystore-init 0.1.3
+lair-keystore-init 0.2.0
 Set up a new lair private keystore.
 
 USAGE:
@@ -94,7 +92,7 @@ FLAGS:
 ```
 ### `lair-keystore url --help`
 ```text
-lair-keystore-url 0.1.3
+lair-keystore-url 0.2.0
 Print the connection_url for a configured lair-keystore
 server to stdout and exit.
 
@@ -108,7 +106,7 @@ FLAGS:
 ```
 ### `lair-keystore import-seed --help`
 ```text
-lair-keystore-import-seed 0.1.3
+lair-keystore-import-seed 0.2.0
 Load a seed bundle into this lair-keystore instance.
 Note, this operation requires capturing the pid_file,
 make sure you do not have a lair-server running.
@@ -120,20 +118,23 @@ USAGE:
     lair-keystore import-seed [FLAGS] <tag> <seed-bundle-base64>
 
 FLAGS:
-    -d, --deep-lock    Specify that this seed should be loaded as a
-                       "deep-locked" seed. This seed will require an
-                       additional passphrase specified at access time
-                       (signature / box / key derivation) to decrypt the seed.
-    -h, --help         Prints help information
-    -p, --piped        Instead of the normal "interactive" method of passphrase
-                       retreival, read the passphrase from stdin. Be careful
-                       how you make use of this, as it could be less secure.
-                       Passphrases are newline delimited in this order:
-                       - 1 - keystore unlock passphrase
-                       - 2 - bundle unlock passphrase
-                       - 3 - deep lock passphrase
-                             (if -d / --deep-lock is specified)
-    -V, --version      Prints version information
+    -d, --deep-lock     Specify that this seed should be loaded as a
+                        "deep-locked" seed. This seed will require an
+                        additional passphrase specified at access time
+                        (signature / box / key derivation) to decrypt the seed.
+    -e, --exportable    Mark this seed as "exportable" indicating
+                        this key can be extracted again after having
+                        been imported.
+    -h, --help          Prints help information
+    -p, --piped         Instead of the normal "interactive" method of passphrase
+                        retreival, read the passphrase from stdin. Be careful
+                        how you make use of this, as it could be less secure.
+                        Passphrases are newline delimited in this order:
+                        - 1 - keystore unlock passphrase
+                        - 2 - bundle unlock passphrase
+                        - 3 - deep lock passphrase
+                              (if -d / --deep-lock is specified)
+    -V, --version       Prints version information
 
 ARGS:
     <tag>                   The identification tag for this seed.
@@ -142,7 +143,7 @@ ARGS:
 ```
 ### `lair-keystore server --help`
 ```text
-lair-keystore-server 0.1.3
+lair-keystore-server 0.2.0
 Run a lair keystore server instance. Note you must
 have initialized a config file first with
 'lair-keystore init'.

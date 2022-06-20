@@ -147,8 +147,10 @@ mod tests {
         let client = keystore.new_client().await.unwrap();
 
         // create a new seed
-        let seed_info_ref =
-            client.new_seed("test-tag".into(), None).await.unwrap();
+        let seed_info_ref = client
+            .new_seed("test-tag".into(), None, false)
+            .await
+            .unwrap();
 
         // list keystore contents
         let mut entry_list = client.list_entries().await.unwrap();
@@ -168,6 +170,7 @@ mod tests {
                 client.new_seed(
                     "test-tag-deep".into(),
                     Some(sodoken::BufRead::from(&b"deep"[..])),
+                    false,
                 )
             })
             .await
@@ -175,8 +178,10 @@ mod tests {
 
         println!("{:#?}", client.list_entries().await.unwrap());
 
-        let seed_info_ref2 =
-            client.new_seed("test-tag-2".into(), None).await.unwrap();
+        let seed_info_ref2 = client
+            .new_seed("test-tag-2".into(), None, false)
+            .await
+            .unwrap();
 
         let (nonce, cipher) = client
             .crypto_box_xsalsa_by_pub_key(

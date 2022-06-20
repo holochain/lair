@@ -3,6 +3,8 @@ use super::*;
 #[derive(Clone)]
 pub(crate) struct FullLairEntry {
     pub(crate) entry: LairEntry,
+    pub(crate) exportable: bool,
+    pub(crate) seed: Option<sodoken::BufReadSized<32>>,
     pub(crate) ed_sk: Option<sodoken::BufReadSized<64>>,
     pub(crate) x_sk: Option<sodoken::BufReadSized<32>>,
 }
@@ -246,6 +248,13 @@ pub(crate) fn priv_dispatch_incoming<'a>(
             LairApiEnum::ReqNewSeed(req) => {
                 priv_req_new_seed(inner, send, dec_ctx_key, unlocked, req).await
             }
+            LairApiEnum::ReqExportSeedByTag(req) => {
+                priv_req_export_seed_by_tag(inner, send, unlocked, req).await
+            }
+            LairApiEnum::ReqImportSeed(req) => {
+                priv_req_import_seed(inner, send, dec_ctx_key, unlocked, req)
+                    .await
+            }
             LairApiEnum::ReqSignByPubKey(req) => {
                 priv_req_sign_by_pub_key(inner, send, unlocked, req).await
             }
@@ -274,17 +283,31 @@ pub(crate) fn priv_dispatch_incoming<'a>(
                 )
                 .await
             }
+            LairApiEnum::ReqSecretBoxXSalsaByTag(req) => {
+                priv_req_secret_box_xsalsa_by_tag(inner, send, unlocked, req)
+                    .await
+            }
+            LairApiEnum::ReqSecretBoxXSalsaOpenByTag(req) => {
+                priv_req_secret_box_xsalsa_open_by_tag(
+                    inner, send, unlocked, req,
+                )
+                .await
+            }
             LairApiEnum::ResError(_)
             | LairApiEnum::ResHello(_)
             | LairApiEnum::ResUnlock(_)
             | LairApiEnum::ResGetEntry(_)
             | LairApiEnum::ResListEntries(_)
             | LairApiEnum::ResNewSeed(_)
+            | LairApiEnum::ResExportSeedByTag(_)
+            | LairApiEnum::ResImportSeed(_)
             | LairApiEnum::ResSignByPubKey(_)
             | LairApiEnum::ResCryptoBoxXSalsaByPubKey(_)
             | LairApiEnum::ResCryptoBoxXSalsaOpenByPubKey(_)
             | LairApiEnum::ResNewWkaTlsCert(_)
-            | LairApiEnum::ResGetWkaTlsCertPrivKey(_) => {
+            | LairApiEnum::ResGetWkaTlsCertPrivKey(_)
+            | LairApiEnum::ResSecretBoxXSalsaByTag(_)
+            | LairApiEnum::ResSecretBoxXSalsaOpenByTag(_) => {
                 Err(format!("invalid request: {:?}", incoming).into())
             }
         }

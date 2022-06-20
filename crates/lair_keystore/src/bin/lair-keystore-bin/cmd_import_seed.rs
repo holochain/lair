@@ -6,7 +6,7 @@ pub(crate) async fn exec(
 ) -> LairResult<()> {
     // first start the server so the pid_file is acquired / etc
     let mut server =
-        lair_keystore_lib::server::StandaloneServer::new(config).await?;
+        lair_keystore::server::StandaloneServer::new(config).await?;
 
     // then capture the needed passphrases
     let (store_pass, bundle_pass, deep_pass) = if opt.piped {
@@ -120,10 +120,13 @@ pub(crate) async fn exec(
                 ops_limit,
                 mem_limit,
                 pw_hash.to_read_sized(),
+                opt.exportable,
             )
             .await?
     } else {
-        store.insert_seed(seed, opt.tag.as_str().into()).await?
+        store
+            .insert_seed(seed, opt.tag.as_str().into(), opt.exportable)
+            .await?
     };
 
     println!("# imported seed {} {:?}", opt.tag, seed_info);

@@ -52,6 +52,10 @@ fn new_msg_id() -> Arc<str> {
     nanoid::nanoid!().into()
 }
 
+fn is_false(b: impl std::borrow::Borrow<bool>) -> bool {
+    !b.borrow()
+}
+
 mod error;
 pub use error::*;
 
@@ -70,6 +74,12 @@ pub use list_entries::*;
 mod new_seed;
 pub use new_seed::*;
 
+mod export_seed_by_tag;
+pub use export_seed_by_tag::*;
+
+mod import_seed;
+pub use import_seed::*;
+
 mod sign_by_pub_key;
 pub use sign_by_pub_key::*;
 
@@ -84,6 +94,12 @@ pub use new_wka_tls_cert::*;
 
 mod get_wka_tls_cert_priv_key;
 pub use get_wka_tls_cert_priv_key::*;
+
+mod secret_box_xsalsa_by_tag;
+pub use secret_box_xsalsa_by_tag::*;
+
+mod secret_box_xsalsa_open_by_tag;
+pub use secret_box_xsalsa_open_by_tag::*;
 
 /// Lair api enum.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -126,6 +142,19 @@ pub enum LairApiEnum {
     /// that seed.
     ResNewSeed(LairApiResNewSeed),
 
+    /// Export a seed (if it is marked exportable) for a specific
+    /// target using the crypto box xsalsa20poly1305 algorithm.
+    ReqExportSeedByTag(LairApiReqExportSeedByTag),
+
+    /// Response for export seed by tag.
+    ResExportSeedByTag(LairApiResExportSeedByTag),
+
+    /// Import a seed encrypted as a xsalsa20poly1305 secretbox.
+    ReqImportSeed(LairApiReqImportSeed),
+
+    /// Response for import seed.
+    ResImportSeed(LairApiResImportSeed),
+
     /// Request a signature.
     ReqSignByPubKey(LairApiReqSignByPubKey),
 
@@ -157,6 +186,18 @@ pub enum LairApiEnum {
 
     /// Returns the private key associated with a tagged wka tls cert.
     ResGetWkaTlsCertPrivKey(LairApiResGetWkaTlsCertPrivKey),
+
+    /// Request "secretbox" encryption.
+    ReqSecretBoxXSalsaByTag(LairApiReqSecretBoxXSalsaByTag),
+
+    /// A "secretbox" encryption response.
+    ResSecretBoxXSalsaByTag(LairApiResSecretBoxXSalsaByTag),
+
+    /// Request "secretbox" decryption.
+    ReqSecretBoxXSalsaOpenByTag(LairApiReqSecretBoxXSalsaOpenByTag),
+
+    /// A "secretbox" decryption response.
+    ResSecretBoxXSalsaOpenByTag(LairApiResSecretBoxXSalsaOpenByTag),
 }
 
 impl LairApiEnum {
@@ -184,6 +225,20 @@ impl LairApiEnum {
                 msg_id.clone()
             }
             Self::ResNewSeed(LairApiResNewSeed { msg_id, .. }) => {
+                msg_id.clone()
+            }
+            Self::ReqExportSeedByTag(LairApiReqExportSeedByTag {
+                msg_id,
+                ..
+            }) => msg_id.clone(),
+            Self::ResExportSeedByTag(LairApiResExportSeedByTag {
+                msg_id,
+                ..
+            }) => msg_id.clone(),
+            Self::ReqImportSeed(LairApiReqImportSeed { msg_id, .. }) => {
+                msg_id.clone()
+            }
+            Self::ResImportSeed(LairApiResImportSeed { msg_id, .. }) => {
                 msg_id.clone()
             }
             Self::ReqSignByPubKey(LairApiReqSignByPubKey {
@@ -218,6 +273,20 @@ impl LairApiEnum {
                 msg_id,
                 ..
             }) => msg_id.clone(),
+            Self::ReqSecretBoxXSalsaByTag(LairApiReqSecretBoxXSalsaByTag {
+                msg_id,
+                ..
+            }) => msg_id.clone(),
+            Self::ResSecretBoxXSalsaByTag(LairApiResSecretBoxXSalsaByTag {
+                msg_id,
+                ..
+            }) => msg_id.clone(),
+            Self::ReqSecretBoxXSalsaOpenByTag(
+                LairApiReqSecretBoxXSalsaOpenByTag { msg_id, .. },
+            ) => msg_id.clone(),
+            Self::ResSecretBoxXSalsaOpenByTag(
+                LairApiResSecretBoxXSalsaOpenByTag { msg_id, .. },
+            ) => msg_id.clone(),
         }
     }
 }

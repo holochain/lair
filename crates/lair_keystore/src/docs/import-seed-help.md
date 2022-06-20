@@ -1,6 +1,6 @@
 ### `lair-keystore import-seed --help`
 ```text
-lair-keystore-import-seed 0.1.3
+lair-keystore-import-seed 0.2.0
 Load a seed bundle into this lair-keystore instance.
 Note, this operation requires capturing the pid_file,
 make sure you do not have a lair-server running.
@@ -12,20 +12,23 @@ USAGE:
     lair-keystore import-seed [FLAGS] <tag> <seed-bundle-base64>
 
 FLAGS:
-    -d, --deep-lock    Specify that this seed should be loaded as a
-                       "deep-locked" seed. This seed will require an
-                       additional passphrase specified at access time
-                       (signature / box / key derivation) to decrypt the seed.
-    -h, --help         Prints help information
-    -p, --piped        Instead of the normal "interactive" method of passphrase
-                       retreival, read the passphrase from stdin. Be careful
-                       how you make use of this, as it could be less secure.
-                       Passphrases are newline delimited in this order:
-                       - 1 - keystore unlock passphrase
-                       - 2 - bundle unlock passphrase
-                       - 3 - deep lock passphrase
-                             (if -d / --deep-lock is specified)
-    -V, --version      Prints version information
+    -d, --deep-lock     Specify that this seed should be loaded as a
+                        "deep-locked" seed. This seed will require an
+                        additional passphrase specified at access time
+                        (signature / box / key derivation) to decrypt the seed.
+    -e, --exportable    Mark this seed as "exportable" indicating
+                        this key can be extracted again after having
+                        been imported.
+    -h, --help          Prints help information
+    -p, --piped         Instead of the normal "interactive" method of passphrase
+                        retreival, read the passphrase from stdin. Be careful
+                        how you make use of this, as it could be less secure.
+                        Passphrases are newline delimited in this order:
+                        - 1 - keystore unlock passphrase
+                        - 2 - bundle unlock passphrase
+                        - 3 - deep lock passphrase
+                              (if -d / --deep-lock is specified)
+    -V, --version       Prints version information
 
 ARGS:
     <tag>                   The identification tag for this seed.

@@ -1,9 +1,13 @@
-<a href="https://github.com/holochain/lair/blob/master/LICENSE-APACHE">![Crates.io](https://img.shields.io/crates/l/lair_keystore_api)</a>
-<a href="https://crates.io/crates/lair_keystore_api">![Crates.io](https://img.shields.io/crates/v/lair_keystore_api)</a>
-
 # lair_keystore_api
 
 Secret lair private keystore API library.
+
+[![Project](https://img.shields.io/badge/project-holochain-blue.svg?style=flat-square)](http://holochain.org/)
+[![Forum](https://img.shields.io/badge/chat-forum%2eholochain%2enet-blue.svg?style=flat-square)](https://forum.holochain.org)
+[![Chat](https://img.shields.io/badge/chat-chat%2eholochain%2enet-blue.svg?style=flat-square)](https://chat.holochain.org)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 
 This library crate contains most of the logic for dealing with lair.
 
@@ -31,7 +35,11 @@ let client =
         .unwrap();
 
 // create a new seed
-let seed_info = client.new_seed("test-seed".into(), None).await.unwrap();
+let seed_info = client.new_seed(
+    "test-seed".into(),
+    None,
+    false,
+).await.unwrap();
 
 // sign some data
 let sig = client.sign_by_pub_key(
@@ -46,3 +54,5 @@ assert!(seed_info.ed25519_pub_key.verify_detached(
     b"test-data".to_vec(),
 ).await.unwrap());
 ```
+
+License: MIT OR Apache-2.0

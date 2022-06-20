@@ -166,7 +166,7 @@ impl SqlPool {
         let key_pragma = secure_write_key_pragma(dbk_secret)?;
 
         // open a single write connection to the database
-        let write_con = rusqlite::Connection::open_with_flags(
+        let mut write_con = rusqlite::Connection::open_with_flags(
             &path,
             OpenFlags::SQLITE_OPEN_READ_WRITE
                 | OpenFlags::SQLITE_OPEN_CREATE
@@ -185,7 +185,20 @@ impl SqlPool {
             .map_err(one_err::OneErr::new)?;
 
         // initialize tables if they don't already exist
-        write_con.execute_optional(sql::SCHEMA, [])?;
+        {
+            let tx = write_con
+                .transaction_with_behavior(
+                    rusqlite::TransactionBehavior::Exclusive,
+                )
+                .map_err(one_err::OneErr::new)?;
+            tx.execute_batch(sql::SCHEMA)
+                .map_err(one_err::OneErr::new)?;
+            tx.commit().map_err(one_err::OneErr::new)?;
+        }
+
+        let _version = write_con
+            .query_row(sql::SELECT_VERSION, [], |row| row.get::<_, i64>(0))
+            .map_err(one_err::OneErr::new)?;
 
         // initialize READ_CON_COUNT read connections to the database
         let mut read_cons: [Option<rusqlite::Connection>; READ_CON_COUNT] =
@@ -352,7 +365,7 @@ impl AsLairStore for SqlPool {
                         // if the entry type has seed info
                         // add the extra columns so we can look up
                         // the entry by public keys
-                        txn.execute_optional(
+                        txn.execute(
                             sql::INSERT_SEED,
                             params![
                                 entry.tag(),
@@ -361,15 +374,16 @@ impl AsLairStore for SqlPool {
                                 bytes,
                             ],
                         )
+                        .map(|_| ())
+                        .map_err(one_err::OneErr::new)
                     })
                     .await
             } else {
                 write
                     .transaction(move |txn| {
-                        txn.execute_optional(
-                            sql::INSERT,
-                            params![entry.tag(), bytes],
-                        )
+                        txn.execute(sql::INSERT, params![entry.tag(), bytes])
+                            .map(|_| ())
+                            .map_err(one_err::OneErr::new)
                     })
                     .await
             }
@@ -510,7 +524,7 @@ mod tests {
         let pool = SqlPool::new(sqlite, db_key).await.unwrap();
 
         let pk = pool
-            .new_seed("test-tag".into())
+            .new_seed("test-tag".into(), false)
             .await
             .unwrap()
             .ed25519_pub_key;

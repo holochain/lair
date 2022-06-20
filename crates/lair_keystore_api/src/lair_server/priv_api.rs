@@ -209,16 +209,159 @@ pub(crate) fn priv_req_new_seed<'a>(
                         secret.ops_limit,
                         secret.mem_limit,
                         deep_lock_passphrase,
+                        req.exportable,
                     )
                     .await?
             }
             // create a new seed
-            None => store.new_seed(req.tag.clone()).await?,
+            None => store.new_seed(req.tag.clone(), req.exportable).await?,
         };
 
         // send the response
         send.send(
             LairApiResNewSeed {
+                msg_id: req.msg_id,
+                tag: req.tag.clone(),
+                seed_info,
+            }
+            .into_api_enum(),
+        )
+        .await?;
+
+        Ok(())
+    }
+}
+
+pub(crate) fn priv_req_export_seed_by_tag<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqExportSeedByTag,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("KeystoreLocked".into());
+        }
+
+        // get cached full entry
+        let (seed_entry, _) =
+            priv_get_full_entry_by_tag(inner, req.tag.clone()).await?;
+
+        // get cached full entry
+        let (enc_entry, _) =
+            priv_get_full_entry_by_x_pub_key(inner, req.sender_pub_key.clone())
+                .await?;
+
+        let nonce = sodoken::BufWriteSized::new_no_lock();
+        sodoken::random::bytes_buf(nonce.clone()).await?;
+
+        use sodoken::crypto_box::curve25519xsalsa20poly1305::*;
+        let cipher = if let Some(x_sk) = enc_entry.x_sk {
+            if let Some(seed) = seed_entry.seed {
+                if !seed_entry.exportable {
+                    return Err("seed is not exportable".into());
+                }
+
+                easy(
+                    nonce.clone(),
+                    seed,
+                    req.recipient_pub_key.cloned_inner(),
+                    x_sk,
+                )
+                .await?
+            } else {
+                return Err("deep_seed crypto_box not yet implemented".into());
+            }
+        } else {
+            return Err("deep_seed crypto_box not yet implemented".into());
+        };
+
+        send.send(
+            LairApiResExportSeedByTag {
+                msg_id: req.msg_id,
+                nonce: nonce.try_unwrap_sized().unwrap(),
+                cipher: cipher.try_unwrap().unwrap().into(),
+            }
+            .into_api_enum(),
+        )
+        .await?;
+
+        Ok(())
+    }
+}
+
+pub(crate) fn priv_req_import_seed<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    dec_ctx_key: &'a sodoken::BufReadSized<32>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqImportSeed,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        let store = priv_get_store(inner, unlocked)?;
+
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("KeystoreLocked".into());
+        }
+
+        // get cached full entry
+        let (full_entry, _) = priv_get_full_entry_by_x_pub_key(
+            inner,
+            req.recipient_pub_key.clone(),
+        )
+        .await?;
+
+        use sodoken::crypto_box::curve25519xsalsa20poly1305::*;
+
+        if open_easy_msg_len(req.cipher.len()) != 32 {
+            return Err("Bad Seed Length".into());
+        }
+
+        let seed = sodoken::BufWriteSized::new_mem_locked()?;
+
+        if let Some(x_sk) = full_entry.x_sk {
+            open_easy(
+                req.nonce,
+                seed.clone(),
+                req.cipher,
+                req.sender_pub_key.cloned_inner(),
+                x_sk,
+            )
+            .await?;
+        } else {
+            return Err("deep_seed crypto_box not yet implemented".into());
+        }
+
+        let seed = seed.to_read_sized();
+
+        let seed_info = match req.deep_lock_passphrase {
+            Some(secret) => {
+                // if deep locked, decrypt the deep lock passphrase
+                let deep_lock_passphrase =
+                    secret.passphrase.decrypt(dec_ctx_key.clone()).await?;
+
+                // create a new deep locked seed
+                store
+                    .insert_deep_locked_seed(
+                        seed,
+                        req.tag.clone(),
+                        secret.ops_limit,
+                        secret.mem_limit,
+                        deep_lock_passphrase,
+                        req.exportable,
+                    )
+                    .await?
+            }
+            // create a new seed
+            None => {
+                store
+                    .insert_seed(seed, req.tag.clone(), req.exportable)
+                    .await?
+            }
+        };
+
+        send.send(
+            LairApiResImportSeed {
                 msg_id: req.msg_id,
                 tag: req.tag.clone(),
                 seed_info,
@@ -415,9 +558,11 @@ pub(crate) fn priv_gen_and_register_entry<'a>(
     entry: LairEntry,
 ) -> impl Future<Output = LairResult<FullLairEntry>> + 'a + Send {
     async move {
-        let (ed_pk, ed_sk, x_pk, x_sk) = match &*entry {
+        let (seed, exportable, ed_pk, ed_sk, x_pk, x_sk) = match &*entry {
             // only cache non-deep-locked seeds
-            LairEntryInner::Seed { seed, .. } => {
+            LairEntryInner::Seed {
+                seed_info, seed, ..
+            } => {
                 // read the seed
                 let seed = seed.decrypt(store.get_bidi_ctx_key()).await?;
 
@@ -437,21 +582,29 @@ pub(crate) fn priv_gen_and_register_entry<'a>(
                 sodoken::crypto_box::curve25519xchacha20poly1305::seed_keypair(
                     x_pk.clone(),
                     x_sk.clone(),
-                    seed,
+                    seed.clone(),
                 )
                 .await?;
 
                 (
+                    Some(seed),
+                    seed_info.exportable,
                     Some(ed_pk.try_unwrap_sized().unwrap().into()),
                     Some(ed_sk.to_read_sized()),
                     Some(x_pk.try_unwrap_sized().unwrap().into()),
                     Some(x_sk.to_read_sized()),
                 )
             }
-            _ => (None, None, None, None),
+            _ => (None, false, None, None, None, None),
         };
 
-        let full_entry = FullLairEntry { entry, ed_sk, x_sk };
+        let full_entry = FullLairEntry {
+            seed,
+            exportable,
+            entry,
+            ed_sk,
+            x_sk,
+        };
 
         let mut lock = inner.write();
 
@@ -577,6 +730,84 @@ pub(crate) fn priv_req_get_wka_tls_cert_priv_key<'a>(
             LairApiResGetWkaTlsCertPrivKey {
                 msg_id: req.msg_id,
                 priv_key,
+            }
+            .into_api_enum(),
+        )
+        .await?;
+
+        Ok(())
+    }
+}
+
+pub(crate) fn priv_req_secret_box_xsalsa_by_tag<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqSecretBoxXSalsaByTag,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("KeystoreLocked".into());
+        }
+
+        // get cached full entry
+        let (full_entry, _) =
+            priv_get_full_entry_by_tag(inner, req.tag.clone()).await?;
+
+        let nonce = sodoken::BufWriteSized::new_no_lock();
+        sodoken::random::bytes_buf(nonce.clone()).await?;
+
+        use sodoken::secretbox::xsalsa20poly1305::*;
+        let cipher = if let Some(seed) = full_entry.seed {
+            easy(nonce.clone(), req.data, seed).await?
+        } else {
+            return Err("deep_seed secretbox not yet implemented".into());
+        };
+
+        send.send(
+            LairApiResSecretBoxXSalsaByTag {
+                msg_id: req.msg_id,
+                nonce: nonce.try_unwrap_sized().unwrap(),
+                cipher: cipher.try_unwrap().unwrap().into(),
+            }
+            .into_api_enum(),
+        )
+        .await?;
+
+        Ok(())
+    }
+}
+
+pub(crate) fn priv_req_secret_box_xsalsa_open_by_tag<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqSecretBoxXSalsaOpenByTag,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("KeystoreLocked".into());
+        }
+
+        // get cached full entry
+        let (full_entry, _) =
+            priv_get_full_entry_by_tag(inner, req.tag.clone()).await?;
+
+        use sodoken::secretbox::xsalsa20poly1305::*;
+
+        let message =
+            sodoken::BufWrite::new_no_lock(open_easy_msg_len(req.cipher.len()));
+
+        if let Some(seed) = full_entry.seed {
+            open_easy(req.nonce, message.clone(), req.cipher, seed).await?;
+        } else {
+            return Err("deep_seed secretbox not yet implemented".into());
+        }
+
+        send.send(
+            LairApiResSecretBoxXSalsaOpenByTag {
+                msg_id: req.msg_id,
+                message: message.try_unwrap().unwrap().into(),
             }
             .into_api_enum(),
         )

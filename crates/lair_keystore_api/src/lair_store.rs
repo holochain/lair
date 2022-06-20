@@ -5,6 +5,10 @@ use futures::future::BoxFuture;
 use std::future::Future;
 use std::sync::Arc;
 
+fn is_false(b: impl std::borrow::Borrow<bool>) -> bool {
+    !b.borrow()
+}
+
 /// Helper traits for store types - you probably don't need these unless
 /// you are implementing new lair core instance logic.
 pub mod traits {
@@ -22,6 +26,7 @@ pub mod traits {
         ) -> BoxFuture<'static, LairResult<Vec<LairEntryInfo>>>;
 
         /// Write a new entry to the lair store.
+        /// Should error if the tag already exists.
         fn write_entry(
             &self,
             entry: LairEntry,
@@ -66,6 +71,10 @@ pub struct SeedInfo {
 
     /// The x25519 encryption public key derived from this seed.
     pub x25519_pub_key: X25519PubKey,
+
+    /// Flag indicating if this seed is allowed to be exported.
+    #[serde(skip_serializing_if = "is_false", default)]
+    pub exportable: bool,
 }
 
 /// The 32 byte blake2b digest of the der encoded tls certificate.
@@ -228,6 +237,7 @@ impl LairStore {
         &self,
         seed: sodoken::BufReadSized<32>,
         tag: Arc<str>,
+        exportable: bool,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let inner = self.0.clone();
         async move {
@@ -255,6 +265,7 @@ impl LairStore {
             let seed_info = SeedInfo {
                 ed25519_pub_key: ed_pk.try_unwrap_sized().unwrap().into(),
                 x25519_pub_key: x_pk.try_unwrap_sized().unwrap().into(),
+                exportable,
             };
 
             // construct the entry for the keystore
@@ -278,6 +289,7 @@ impl LairStore {
     pub fn new_seed(
         &self,
         tag: Arc<str>,
+        exportable: bool,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let this = self.clone();
         async move {
@@ -285,7 +297,8 @@ impl LairStore {
             let seed = sodoken::BufWriteSized::new_mem_locked()?;
             sodoken::random::bytes_buf(seed.clone()).await?;
 
-            this.insert_seed(seed.to_read_sized(), tag).await
+            this.insert_seed(seed.to_read_sized(), tag, exportable)
+                .await
         }
     }
 
@@ -301,6 +314,7 @@ impl LairStore {
         ops_limit: u32,
         mem_limit: u32,
         deep_lock_passphrase: sodoken::BufReadSized<64>,
+        exportable: bool,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let inner = self.0.clone();
         async move {
@@ -343,6 +357,7 @@ impl LairStore {
             let seed_info = SeedInfo {
                 ed25519_pub_key: ed_pk.try_unwrap_sized().unwrap().into(),
                 x25519_pub_key: x_pk.try_unwrap_sized().unwrap().into(),
+                exportable,
             };
 
             // construct the entry for the keystore
@@ -374,6 +389,7 @@ impl LairStore {
         ops_limit: u32,
         mem_limit: u32,
         deep_lock_passphrase: sodoken::BufReadSized<64>,
+        exportable: bool,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let this = self.clone();
         async move {
@@ -387,6 +403,7 @@ impl LairStore {
                 ops_limit,
                 mem_limit,
                 deep_lock_passphrase,
+                exportable,
             )
             .await
         }

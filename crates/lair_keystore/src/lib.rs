@@ -12,6 +12,7 @@
 //! [![Forum](https://img.shields.io/badge/chat-forum%2eholochain%2enet-blue.svg?style=flat-square)](https://forum.holochain.org)
 //! [![Chat](https://img.shields.io/badge/chat-chat%2eholochain%2enet-blue.svg?style=flat-square)](https://chat.holochain.org)
 //!
+//! [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 //! [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://www.apache.org/licenses/LICENSE-2.0)
 //!
 //! This crate mostly provides the `lair-keystore` executable allowing
@@ -23,7 +24,7 @@
 //! For making use of a Lair keystore in a client application, see the
 //! [lair_keystore_api](https://crates.io/crates/lair_keystore_api) crate.
 //!
-//! # Naming quirks
+//! # Rust conventions for dashes and underscores:
 //!
 //! - Install with an underscore: `cargo install lair_keystore`
 //! - Use binary with a dash: `$ lair-keystore help`
@@ -34,14 +35,12 @@
 //! lair_keystore = "0.1.1"
 //! ```
 //!
-//! - Library usage with underscores and postfix `_lib`:
+//! - Library usage with underscores:
 //!
 //! ```
-//! use lair_keystore_lib::create_sql_pool_factory;
+//! use lair_keystore::create_sql_pool_factory;
 //! let _sqlite_store_factory = create_sql_pool_factory(".");
 //! ```
-//!
-//! We might clean up the `_lib` thing in version "0.2.0".
 //!
 //! # `lair-keystore` commandline executable usage:
 //!

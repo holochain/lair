@@ -118,6 +118,20 @@ impl AsLairStore for PrivMemStore {
             return async move { Err("tag already registered".into()) }.boxed();
         }
 
+        if let Some(ed) = &ed {
+            if lock.ed_pk_to_tag.contains_key(ed) {
+                return async move { Err("ed pk already registered".into()) }
+                    .boxed();
+            }
+        }
+
+        if let Some(x) = &x {
+            if lock.x_pk_to_tag.contains_key(x) {
+                return async move { Err("x pk already registered".into()) }
+                    .boxed();
+            }
+        }
+
         // if we have a signature pub key, add that index
         if let Some(ed) = ed {
             lock.ed_pk_to_tag.insert(ed, tag.clone());
@@ -209,7 +223,8 @@ mod tests {
             .await
             .unwrap();
 
-        let seed_info = store.new_seed("test-seed".into()).await.unwrap();
+        let seed_info =
+            store.new_seed("test-seed".into(), false).await.unwrap();
         println!("generated new seed: {:#?}", seed_info);
 
         let list = store.list_entries().await.unwrap();
