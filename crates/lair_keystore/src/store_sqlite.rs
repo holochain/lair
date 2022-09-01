@@ -53,9 +53,7 @@ struct SqlCon {
 
 impl Drop for SqlCon {
     fn drop(&mut self) {
-        let con = self.con.take().unwrap();
-
-        {
+        if let Some(con) = self.con.take() {
             let mut lock = self.pool.lock();
             if self.is_write {
                 lock.write_con = Some(con);
