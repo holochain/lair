@@ -54,8 +54,7 @@ where
         async move {
             // serialize the typed data
             let mut se = rmp_serde::encode::Serializer::new(Vec::new())
-                .with_struct_map()
-                .with_string_variants();
+                .with_struct_map();
             t.serialize(&mut se).map_err(OneErr::new)?;
             let t = se.into_inner().into_boxed_slice();
 

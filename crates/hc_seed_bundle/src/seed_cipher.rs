@@ -136,9 +136,8 @@ impl SeedCipherBuilder {
 
         // serialize the bundle
         use serde::Serialize;
-        let mut se = rmp_serde::encode::Serializer::new(Vec::new())
-            .with_struct_map()
-            .with_string_variants();
+        let mut se =
+            rmp_serde::encode::Serializer::new(Vec::new()).with_struct_map();
         bundle.serialize(&mut se).map_err(OneErr::new)?;
 
         // return the serialized bundle
@@ -295,7 +294,7 @@ impl LockedSeedCipher {
     pub(crate) fn from_locked(bytes: &[u8]) -> SodokenResult<Vec<Self>> {
         // deserialize the top-level bundle
         let bundle: SeedBundle =
-            rmp_serde::from_read_ref(bytes).map_err(OneErr::new)?;
+            rmp_serde::from_slice(bytes).map_err(OneErr::new)?;
 
         // destructure the cipher list and app data
         let SeedBundle {

@@ -8,4 +8,4 @@ members = [
 
 [patch.crates-io]
 #one_err = { path = "../one_err" }
-#sodoken = { path = "../sodoken/crates/sodoken" }
+sodoken = { path = "../sodoken/crates/sodoken" }
