@@ -104,7 +104,10 @@ pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
         let cert = rcgen::Certificate::from_params(params)
             .map_err(one_err::OneErr::new)?;
 
-        let priv_key = sodoken::BufRead::from(cert.serialize_private_key_der());
+        let cert_pk = zeroize::Zeroizing::new(cert.serialize_private_key_der());
+        let priv_key = sodoken::BufWrite::new_mem_locked(cert_pk.len())?;
+        priv_key.write_lock().copy_from_slice(&cert_pk);
+        let priv_key = priv_key.to_read();
 
         let root_cert = &**WK_CA_RCGEN_CERT;
         let cert_der = cert
