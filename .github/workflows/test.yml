@@ -29,19 +29,5 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
 
-      - name: Cargo Build
-        uses: actions-rs/cargo@v1
-        env:
-          RUST_BACKTRACE: 1
-        with:
-          command: build
-          args: --all-features --all-targets
-
-      - name: Cargo Test
-        uses: actions-rs/cargo@v1
-        env:
-          RUST_BACKTRACE: 1
-          RUST_LOG: DEBUG
-        with:
-          command: test
-          args: --all-features -- --test-threads 1
+      - name: Make Test
+        run: make test

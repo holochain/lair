@@ -10,7 +10,7 @@ else
 	FEATURES = --no-default-features --features=rusqlite-bundled-sqlcipher-vendored-openssl
 endif
 
-all: test
+all: static test
 
 publish:
 	@case "$(crate)" in \
@@ -37,11 +37,14 @@ publish:
 	git tag -a "$(crate)-$${VER}" -m "$(crate)-$${VER}"; \
 	git push --tags;
 
-test: static tools
+test: tools
 	RUST_BACKTRACE=1 cargo build $(FEATURES) --all-targets
 	RUST_BACKTRACE=1 cargo test $(FEATURES) -- --test-threads 1
 
-static: docs tools
+release: tools
+	RUST_BACKTRACE=1 cargo build $(FEATURES) --release --all-targets
+
+static: tools docs
 	cargo fmt -- --check
 	cargo clippy $(FEATURES)
 
