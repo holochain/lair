@@ -313,7 +313,7 @@ pub(crate) fn priv_req_import_seed<'a>(
 
         use sodoken::crypto_box::curve25519xsalsa20poly1305::*;
 
-        if open_easy_msg_len(req.cipher.len()) != 32 {
+        if req.cipher.len() != 32 + MACBYTES {
             return Err("Bad Seed Length".into());
         }
 
@@ -497,8 +497,12 @@ pub(crate) fn priv_req_crypto_box_xsalsa_open_by_pub_key<'a>(
 
         use sodoken::crypto_box::curve25519xsalsa20poly1305::*;
 
+        if req.cipher.len() < MACBYTES {
+            return Err("InvalidCipherLength".into());
+        }
+
         let message =
-            sodoken::BufWrite::new_no_lock(open_easy_msg_len(req.cipher.len()));
+            sodoken::BufWrite::new_no_lock(req.cipher.len() - MACBYTES);
 
         if let Some(x_sk) = full_entry.x_sk {
             open_easy(
@@ -795,8 +799,12 @@ pub(crate) fn priv_req_secret_box_xsalsa_open_by_tag<'a>(
 
         use sodoken::secretbox::xsalsa20poly1305::*;
 
+        if req.cipher.len() < MACBYTES {
+            return Err("InvalidCipherLength".into());
+        }
+
         let message =
-            sodoken::BufWrite::new_no_lock(open_easy_msg_len(req.cipher.len()));
+            sodoken::BufWrite::new_no_lock(req.cipher.len() - MACBYTES);
 
         if let Some(seed) = full_entry.seed {
             open_easy(req.nonce, message.clone(), req.cipher, seed).await?;
