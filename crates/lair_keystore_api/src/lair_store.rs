@@ -190,9 +190,8 @@ impl LairEntryInner {
     /// Encode this LairEntry as bytes.
     pub fn encode(&self) -> LairResult<Box<[u8]>> {
         use serde::Serialize;
-        let mut se = rmp_serde::encode::Serializer::new(Vec::new())
-            .with_struct_map()
-            .with_string_variants();
+        let mut se =
+            rmp_serde::encode::Serializer::new(Vec::new()).with_struct_map();
         self.serialize(&mut se).map_err(one_err::OneErr::new)?;
         Ok(se.into_inner().into_boxed_slice())
     }

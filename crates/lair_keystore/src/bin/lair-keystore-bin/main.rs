@@ -43,7 +43,7 @@ pub(crate) async fn read_interactive_passphrase(
     let prompt = prompt.to_owned();
     let pass_tmp = tokio::task::spawn_blocking(move || {
         LairResult::Ok(
-            rpassword::read_password_from_tty(Some(&prompt))
+            rpassword::prompt_password(prompt)
                 .map_err(one_err::OneErr::new)?
                 .into_bytes(),
         )

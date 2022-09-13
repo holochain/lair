@@ -129,7 +129,7 @@ impl UnlockedSeedBundle {
     where
         T: 'static + for<'de> serde::Deserialize<'de>,
     {
-        rmp_serde::from_read_ref(&self.app_data).map_err(OneErr::new)
+        rmp_serde::from_slice(&self.app_data).map_err(OneErr::new)
     }
 
     /// Set the encoded appData bytes by type.
@@ -137,9 +137,8 @@ impl UnlockedSeedBundle {
     where
         T: serde::Serialize,
     {
-        let mut se = rmp_serde::encode::Serializer::new(Vec::new())
-            .with_struct_map()
-            .with_string_variants();
+        let mut se =
+            rmp_serde::encode::Serializer::new(Vec::new()).with_struct_map();
         t.serialize(&mut se).map_err(OneErr::new)?;
         self.app_data = se.into_inner().into_boxed_slice().into();
         Ok(())
