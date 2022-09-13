@@ -1,7 +1,6 @@
 [package]
 name = "lair_keystore"
 version = "0.2.1"
-resolver = "2"
 description = "secret lair private keystore"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/holochain/lair"
@@ -11,23 +10,21 @@ keywords = [ "holochain", "holo", "keystore", "secret", "cryptography" ]
 categories = [ "cryptography" ]
 edition = "2018"
 
+[features]
+default = [ "rusqlite-bundled-sqlcipher-vendored-openssl" ]
+rusqlite-bundled = [ "rusqlite/bundled" ]
+rusqlite-bundled-sqlcipher = [ "rusqlite/bundled-sqlcipher" ]
+rusqlite-bundled-sqlcipher-vendored-openssl = [ "rusqlite/bundled-sqlcipher-vendored-openssl" ]
+rusqlite-sqlcipher = [ "rusqlite/sqlcipher" ]
+
 [dependencies]
 # lair_keystore_api must be pinned to enable strict version checks
 lair_keystore_api = { version = "=0.2.1", path = "../lair_keystore_api" }
 rpassword = "7.0.0"
+rusqlite = { version = "0.28", features = [ "modern_sqlite" ] }
 structopt = "0.3.26"
 sysinfo = "0.26.1"
 tracing-subscriber = { version = "0.3.15", features = [ "env-filter" ] }
-
-# switch to bundled-sqlcipher-vendored-openssl once this is released:
-# https://github.com/rusqlite/rusqlite/issues/966
-# also can remove `resolver = "2"` when this is no longer different by os
-[target.'cfg(windows)'.dependencies]
-rusqlite = { version = "0.28", features = [ "bundled" ] }
-
-# remove `resolver = "2"` when this is no longer different by os
-[target.'cfg(not(windows))'.dependencies]
-rusqlite = { version = "0.28", features = [ "bundled-sqlcipher-vendored-openssl" ] }
 
 [build-dependencies]
 lair_keystore_api = { version = "0.2.1", path = "../lair_keystore_api" }
@@ -45,3 +42,4 @@ path = "src/lib.rs"
 [[bin]]
 name = "lair-keystore"
 path = "src/bin/lair-keystore-bin/main.rs"
+doc = false

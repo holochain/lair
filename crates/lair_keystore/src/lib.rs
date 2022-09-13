@@ -58,6 +58,7 @@ pub mod dependencies {
     pub use lair_keystore_api;
     pub use lair_keystore_api::dependencies::*;
     pub use rpassword;
+    pub use rusqlite;
     pub use structopt;
     pub use sysinfo;
     pub use tracing_subscriber;

@@ -4,7 +4,13 @@
 
 SHELL = /usr/bin/env sh
 
-all: test
+ifeq ($(OS),Windows_NT)
+	FEATURES = --no-default-features --features=rusqlite-bundled
+else
+	FEATURES = --no-default-features --features=rusqlite-bundled-sqlcipher-vendored-openssl
+endif
+
+all: static test
 
 publish:
 	@case "$(crate)" in \
@@ -31,29 +37,32 @@ publish:
 	git tag -a "$(crate)-$${VER}" -m "$(crate)-$${VER}"; \
 	git push --tags;
 
-test: static tools
-	RUST_BACKTRACE=1 cargo build --all-features --all-targets
-	RUST_BACKTRACE=1 cargo test --all-features -- --test-threads 1
+test: tools
+	RUST_BACKTRACE=1 cargo build $(FEATURES) --all-targets
+	RUST_BACKTRACE=1 cargo test $(FEATURES) -- --test-threads 1
 
-static: docs tools
+release: tools
+	RUST_BACKTRACE=1 cargo build $(FEATURES) --release --all-targets
+
+static: tools docs
 	cargo fmt -- --check
-	cargo clippy
+	cargo clippy $(FEATURES)
 
 docs: tools
 	printf '### `lair-keystore --help`\n```text\n' > crates/lair_keystore/src/docs/help.md.tmp
-	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- --help >> crates/lair_keystore/src/docs/help.md.tmp
+	cargo run $(FEATURES) --manifest-path=crates/lair_keystore/Cargo.toml -- --help >> crates/lair_keystore/src/docs/help.md.tmp
 	printf '\n```\n' >> crates/lair_keystore/src/docs/help.md.tmp
 	printf '### `lair-keystore init --help`\n```text\n' > crates/lair_keystore/src/docs/init-help.md.tmp
-	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- init --help >> crates/lair_keystore/src/docs/init-help.md.tmp
+	cargo run $(FEATURES) --manifest-path=crates/lair_keystore/Cargo.toml -- init --help >> crates/lair_keystore/src/docs/init-help.md.tmp
 	printf '\n```\n' >> crates/lair_keystore/src/docs/init-help.md.tmp
 	printf '### `lair-keystore url --help`\n```text\n' > crates/lair_keystore/src/docs/url-help.md.tmp
-	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- url --help >> crates/lair_keystore/src/docs/url-help.md.tmp
+	cargo run $(FEATURES) --manifest-path=crates/lair_keystore/Cargo.toml -- url --help >> crates/lair_keystore/src/docs/url-help.md.tmp
 	printf '\n```\n' >> crates/lair_keystore/src/docs/url-help.md.tmp
 	printf '### `lair-keystore import-seed --help`\n```text\n' > crates/lair_keystore/src/docs/import-seed-help.md.tmp
-	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- import-seed --help >> crates/lair_keystore/src/docs/import-seed-help.md.tmp
+	cargo run $(FEATURES) --manifest-path=crates/lair_keystore/Cargo.toml -- import-seed --help >> crates/lair_keystore/src/docs/import-seed-help.md.tmp
 	printf '\n```\n' >> crates/lair_keystore/src/docs/import-seed-help.md.tmp
 	printf '### `lair-keystore server --help`\n```text\n' > crates/lair_keystore/src/docs/server-help.md.tmp
-	cargo run --manifest-path=crates/lair_keystore/Cargo.toml -- server --help >> crates/lair_keystore/src/docs/server-help.md.tmp
+	cargo run $(FEATURES) --manifest-path=crates/lair_keystore/Cargo.toml -- server --help >> crates/lair_keystore/src/docs/server-help.md.tmp
 	printf '\n```\n' >> crates/lair_keystore/src/docs/server-help.md.tmp
 	mv -f crates/lair_keystore/src/docs/help.md.tmp crates/lair_keystore/src/docs/help.md
 	mv -f crates/lair_keystore/src/docs/init-help.md.tmp crates/lair_keystore/src/docs/init-help.md
