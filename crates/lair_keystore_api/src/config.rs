@@ -101,15 +101,14 @@ impl std::fmt::Display for LairServerConfigInner {
                     lines.push("# in case the pub key does not exist in the lair store.");
                     lines.push("# - `signatureFallback: none`");
                     lines.push("# - ```");
-                    lines.push("#   signatureFallback:");
-                    lines.push("#     command:");
-                    lines.push("#       # 'program' will resolve to a path, specifying 'echo'");
-                    lines.push("#       # will try to run './echo', probably not what you want.");
-                    lines.push("#       program: \"./my-executable\"");
-                    lines.push("#       # args are optional");
-                    lines.push("#       args:");
-                    lines.push("#         - test-arg1");
-                    lines.push("#         - test-arg2");
+                    lines.push("#   signatureFallback: !command");
+                    lines.push("#     # 'program' will resolve to a path, specifying 'echo'");
+                    lines.push("#     # will try to run './echo', probably not what you want.");
+                    lines.push("#     program: \"./my-executable\"");
+                    lines.push("#     # args are optional");
+                    lines.push("#     args:");
+                    lines.push("#       - test-arg1");
+                    lines.push("#       - test-arg2");
                     lines.push("#   ```");
                 } else if line.starts_with("runtimeSecretsSalt:") {
                     lines.push("");
