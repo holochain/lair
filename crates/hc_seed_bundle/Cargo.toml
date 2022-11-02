@@ -1,6 +1,6 @@
 [package]
 name = "hc_seed_bundle"
-version = "0.1.3"
+version = "0.1.4"
 description = "SeedBundle parsing and generation library."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/holochain/lair"
@@ -12,12 +12,12 @@ edition = "2018"
 
 [dependencies]
 futures = "0.3.24"
-one_err = "0.0.6"
+one_err = "0.0.7"
 rmp-serde = "1.1.0"
 rmpv = { version = "1.0.0", features = [ "with-serde" ] }
 serde = { version = "1", features = [ "derive", "rc" ] }
 serde_bytes = "0.11.7"
-sodoken = "=0.0.5"
+sodoken = "=0.0.6"
 
 [dev-dependencies]
 base64 = "0.13"
