@@ -219,8 +219,8 @@ where
 
         // sealed initiator message
         let mut message: [u8; 64] = [0; 64];
-        message[..32].copy_from_slice(&*eph_cbox_pub.read_lock());
-        message[32..].copy_from_slice(&*eph_kx_pub.read_lock());
+        message[..32].copy_from_slice(&eph_cbox_pub.read_lock());
+        message[32..].copy_from_slice(&eph_kx_pub.read_lock());
         let message = sodoken::BufReadSized::from(message);
         let cipher =
             <sodoken::BufWriteSized<{ 64 + cbox::SEALBYTES }>>::new_no_lock();

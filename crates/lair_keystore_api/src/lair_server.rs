@@ -231,7 +231,7 @@ impl FallbackCmd {
                         lock.pending.insert(req.msg_id.clone(), res);
                     }
                     let pub_key = base64::encode_config(
-                        &*req.pub_key.0,
+                        *req.pub_key.0,
                         base64::URL_SAFE_NO_PAD,
                     );
                     let data = base64::encode(req.data);

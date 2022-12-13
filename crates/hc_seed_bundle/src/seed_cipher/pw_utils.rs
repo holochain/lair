@@ -23,9 +23,9 @@ where
 
     // careful not to move any bytes out of protected memory
     // convert to utf8 so we can use the rust trim / lcase functions.
-    let a1 = std::str::from_utf8(&*a1).map_err(OneErr::new)?;
-    let a2 = std::str::from_utf8(&*a2).map_err(OneErr::new)?;
-    let a3 = std::str::from_utf8(&*a3).map_err(OneErr::new)?;
+    let a1 = std::str::from_utf8(&a1).map_err(OneErr::new)?;
+    let a2 = std::str::from_utf8(&a2).map_err(OneErr::new)?;
+    let a3 = std::str::from_utf8(&a3).map_err(OneErr::new)?;
 
     // trim
     let a1 = a1.trim();
@@ -52,7 +52,7 @@ where
             .copy_from_slice(a3);
 
         // we forced utf8 above, so safe to unwrap here
-        let out = std::str::from_utf8_mut(&mut *out).unwrap();
+        let out = std::str::from_utf8_mut(&mut out).unwrap();
 
         // this needs a mutable buffer, so we have to do this in out memory
         out.make_ascii_lowercase();

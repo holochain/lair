@@ -63,7 +63,7 @@ impl std::ops::Deref for BinData {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
-        &*self.0
+        &self.0
     }
 }
 
@@ -95,14 +95,14 @@ pub struct BinDataSized<const N: usize>(pub Arc<[u8; N]>);
 
 impl<const N: usize> std::fmt::Debug for BinDataSized<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = to_base64_url(&*self.0);
+        let s = to_base64_url(*self.0);
         write!(f, "BinDataSized<{}>({})", N, s)
     }
 }
 
 impl<const N: usize> std::fmt::Display for BinDataSized<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = to_base64_url(&*self.0);
+        let s = to_base64_url(*self.0);
         f.write_str(&s)
     }
 }
@@ -144,7 +144,7 @@ impl<const N: usize> std::ops::Deref for BinDataSized<N> {
     type Target = [u8; N];
 
     fn deref(&self) -> &Self::Target {
-        &*self.0
+        &self.0
     }
 }
 
@@ -153,7 +153,7 @@ impl<const N: usize> serde::Serialize for BinDataSized<N> {
     where
         S: serde::Serializer,
     {
-        let s = to_base64_url(&*self.0);
+        let s = to_base64_url(*self.0);
         serializer.serialize_str(&s)
     }
 }

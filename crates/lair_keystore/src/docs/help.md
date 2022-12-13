@@ -1,6 +1,6 @@
 ### `lair-keystore --help`
 ```text
-lair_keystore 0.2.2
+lair_keystore 0.2.3
 secret lair private keystore
 
 USAGE:

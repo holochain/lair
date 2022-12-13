@@ -16,7 +16,7 @@ pub(crate) async fn exec(
         // careful not to move any bytes out of protected memory
         // convert to utf8 so we can use the rust split.
         let multi =
-            std::str::from_utf8(&*multi).map_err(one_err::OneErr::new)?;
+            std::str::from_utf8(&multi).map_err(one_err::OneErr::new)?;
         let mut pass_list = multi
             .split('\n')
             .filter_map(|s| {

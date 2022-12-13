@@ -491,7 +491,7 @@ fn set_pragmas(
         .map_err(one_err::OneErr::new)?;
 
     con.execute_optional(
-        std::str::from_utf8(&*key_pragma.read_lock()).unwrap(),
+        std::str::from_utf8(&key_pragma.read_lock()).unwrap(),
         [],
     )?;
 

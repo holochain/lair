@@ -117,9 +117,15 @@ impl Srv {
                 // we could end up storing 384 entries at once...
                 // the entries themselves are Arc<>'s so putting them
                 // in multiple caches doesn't increase memory overhead much.
-                entries_by_tag: lru::LruCache::new(128),
-                entries_by_ed: lru::LruCache::new(128),
-                entries_by_x: lru::LruCache::new(128),
+                entries_by_tag: lru::LruCache::new(
+                    std::num::NonZeroUsize::new(128).unwrap(),
+                ),
+                entries_by_ed: lru::LruCache::new(
+                    std::num::NonZeroUsize::new(128).unwrap(),
+                ),
+                entries_by_x: lru::LruCache::new(
+                    std::num::NonZeroUsize::new(128).unwrap(),
+                ),
                 fallback_cmd,
             }))))
         }

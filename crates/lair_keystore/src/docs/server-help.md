@@ -1,6 +1,6 @@
 ### `lair-keystore server --help`
 ```text
-lair-keystore-server 0.2.2
+lair-keystore-server 0.2.3
 Run a lair keystore server instance. Note you must
 have initialized a config file first with
 'lair-keystore init'.
