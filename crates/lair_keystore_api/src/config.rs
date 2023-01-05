@@ -292,7 +292,9 @@ pub fn get_connection_path(url: &url::Url) -> std::path::PathBuf {
 
     #[cfg(not(windows))]
     {
-        url.to_file_path().expect("can decode as file path")
+        url.to_file_path().expect("The connection url is invalid, as it does not decode to
+an absolute file path. The likely cause is that a relative path was used instead of an absolute one.
+If that's the case, try using an absolute one instead.")
     }
 }
 
