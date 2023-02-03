@@ -415,8 +415,6 @@ pub(crate) fn priv_req_sign_by_pub_key<'a>(
                     ) => {
                         // generate the deep lock key from the passphrase
                         let passphrase = passphrase.decrypt(dec_ctx_key.clone()).await?;
-                        // let pw_hash = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-                        // sodoken::hash::blake2b::hash(pw_hash.clone(), passphrase).await?;
 
                         let deep_key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
                         sodoken::hash::argon2id::hash(
@@ -587,7 +585,7 @@ pub(crate) fn priv_req_new_wka_tls_cert<'a>(
     }
 }
 
-pub async fn derive_ed(
+pub(crate) async fn derive_ed(
     seed: &BufReadSized<32>,
 ) -> LairResult<(Ed25519PubKey, BufReadSized<64>)> {
     // get the signature keypair
@@ -602,7 +600,7 @@ pub async fn derive_ed(
     Ok((ed_pk, ed_sk))
 }
 
-pub async fn derive_x(
+pub(crate) async fn derive_x(
     seed: &BufReadSized<32>,
 ) -> LairResult<(X25519PubKey, BufReadSized<32>)> {
     // get the encryption keypair
