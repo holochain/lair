@@ -10,7 +10,7 @@ pub struct LairApiReqSignByPubKey {
     /// The pub key side of the private key to sign the data with.
     pub pub_key: Ed25519PubKey,
 
-    /// If this new seed is to be deep_locked, the passphrase for that.
+    /// If the seed is deep_locked, the passphrase for that.
     #[serde(skip_serializing_if = "Option::is_none", default)]
     pub deep_lock_passphrase: Option<SecretDataSized<64, 81>>,
 

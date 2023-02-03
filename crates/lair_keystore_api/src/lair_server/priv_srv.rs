@@ -1,11 +1,17 @@
 use super::*;
 
+/// A [`LairEntry`], including some precomputed values if the entry corresponds to a non-deep-locked seed.
 #[derive(Clone)]
 pub(crate) struct FullLairEntry {
+    /// The entry, containing a seed or cert.
     pub(crate) entry: LairEntry,
+    /// Copied from the entry's seed. If false, an error will be produced when attempting to export this seed
     pub(crate) exportable: bool,
+    /// If the entry is for a non-deep-locked seed, this is Some clone of it.
     pub(crate) seed: Option<sodoken::BufReadSized<32>>,
+    /// If the entry is for a non-deep-locked seed, this is the signing private key derived from the seed
     pub(crate) ed_sk: Option<sodoken::BufReadSized<64>>,
+    /// If the entry is for a non-deep-locked seed, this is the decryption private key derived from the seed
     pub(crate) x_sk: Option<sodoken::BufReadSized<32>>,
 }
 
@@ -262,7 +268,7 @@ pub(crate) fn priv_dispatch_incoming<'a>(
                     .await
             }
             LairApiEnum::ReqSignByPubKey(req) => {
-                priv_req_sign_by_pub_key(inner, send, unlocked, req).await
+                priv_req_sign_by_pub_key(inner, send, dec_ctx_key, unlocked, req).await
             }
             LairApiEnum::ReqCryptoBoxXSalsaByPubKey(req) => {
                 priv_req_crypto_box_xsalsa_by_pub_key(

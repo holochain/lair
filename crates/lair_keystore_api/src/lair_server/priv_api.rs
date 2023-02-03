@@ -1,3 +1,5 @@
+use hc_seed_bundle::dependencies::sodoken::BufReadSized;
+
 use super::*;
 
 pub(crate) fn priv_req_hello<'a>(
@@ -377,6 +379,7 @@ pub(crate) fn priv_req_import_seed<'a>(
 pub(crate) fn priv_req_sign_by_pub_key<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    dec_ctx_key: &'a sodoken::BufReadSized<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqSignByPubKey,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
@@ -386,43 +389,71 @@ pub(crate) fn priv_req_sign_by_pub_key<'a>(
         }
 
         // get cached full entry
-        let res =
-            match priv_get_full_entry_by_ed_pub_key(inner, req.pub_key.clone())
-                .await
-            {
-                Ok((full_entry, _)) => {
-                    // sign the data
-                    let signature = if let Some(ed_sk) = full_entry.ed_sk {
-                        let signature = sodoken::BufWriteSized::new_no_lock();
-                        sodoken::sign::detached(
-                            signature.clone(),
-                            req.data,
-                            ed_sk,
+        let res = match priv_get_full_entry_by_ed_pub_key(
+            inner,
+            req.pub_key.clone(),
+        )
+        .await
+        {
+            Ok((full_entry, _)) => {
+                let signature = sodoken::BufWriteSized::new_no_lock();
+
+                // get the signing private key
+                let ed_sk = match (&*full_entry.entry, full_entry.ed_sk, req.deep_lock_passphrase) {
+                    (LairEntryInner::Seed { .. }, Some(ed_sk), _) => { ed_sk }
+                    (
+                        LairEntryInner::DeepLockedSeed {
+                            tag: _,
+                            seed_info: _,
+                            salt,
+                            ops_limit,
+                            mem_limit,
+                            seed,
+                        },
+                        _,
+                        Some(passphrase)
+                    ) => {
+                        // generate the deep lock key from the passphrase
+                        let passphrase = passphrase.decrypt(dec_ctx_key.clone()).await?;
+                        // let pw_hash = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+                        // sodoken::hash::blake2b::hash(pw_hash.clone(), passphrase).await?;
+
+                        let deep_key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+                        sodoken::hash::argon2id::hash(
+                            deep_key.clone(),
+                            passphrase,
+                            BufReadSized::from(salt.clone().cloned_inner()),
+                            *ops_limit,
+                            *mem_limit,
                         )
                         .await?;
-                        signature.try_unwrap_sized().unwrap().into()
-                    } else {
-                        return Err(
-                            "deep_seed signing not yet implemented".into()
-                        );
-                    };
+                        let seed = seed.decrypt(deep_key.into()).await?;
+                        let (_, ed_sk) = derive_ed(&seed).await?;
+                        ed_sk
+                    }
+                    _ => return Err("The entry for this key is not a seed which can produce a signature".into())
+                };
 
-                    LairApiResSignByPubKey {
-                        msg_id: req.msg_id,
-                        signature,
-                    }
+                sodoken::sign::detached(signature.clone(), req.data, ed_sk)
+                    .await?;
+                let signature = signature.try_unwrap_sized().unwrap().into();
+
+                LairApiResSignByPubKey {
+                    msg_id: req.msg_id,
+                    signature,
                 }
-                Err(e) => {
-                    // we don't have this key, let's see if we should invoke
-                    // a signature fallback command
-                    let fallback_cmd = inner.read().fallback_cmd.clone();
-                    if let Some(fallback_cmd) = fallback_cmd {
-                        fallback_cmd.sign_by_pub_key(req).await?
-                    } else {
-                        return Err(e);
-                    }
+            }
+            Err(e) => {
+                // we don't have this key, let's see if we should invoke
+                // a signature fallback command
+                let fallback_cmd = inner.read().fallback_cmd.clone();
+                if let Some(fallback_cmd) = fallback_cmd {
+                    fallback_cmd.sign_by_pub_key(req).await?
+                } else {
+                    return Err(e);
                 }
-            };
+            }
+        };
 
         // send the response
         send.send(res.into_api_enum()).await?;
@@ -556,6 +587,40 @@ pub(crate) fn priv_req_new_wka_tls_cert<'a>(
     }
 }
 
+pub async fn derive_ed(
+    seed: &BufReadSized<32>,
+) -> LairResult<(Ed25519PubKey, BufReadSized<64>)> {
+    // get the signature keypair
+    let ed_pk = sodoken::BufWriteSized::new_no_lock();
+    let ed_sk = sodoken::BufWriteSized::new_mem_locked()?;
+    sodoken::sign::seed_keypair(ed_pk.clone(), ed_sk.clone(), seed.clone())
+        .await?;
+
+    let ed_pk: Ed25519PubKey = ed_pk.try_unwrap_sized().unwrap().into();
+    let ed_sk = ed_sk.to_read_sized();
+
+    Ok((ed_pk, ed_sk))
+}
+
+pub async fn derive_x(
+    seed: &BufReadSized<32>,
+) -> LairResult<(X25519PubKey, BufReadSized<32>)> {
+    // get the encryption keypair
+    let x_pk = sodoken::BufWriteSized::new_no_lock();
+    let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
+    sodoken::crypto_box::curve25519xchacha20poly1305::seed_keypair(
+        x_pk.clone(),
+        x_sk.clone(),
+        seed.clone(),
+    )
+    .await?;
+
+    let x_pk: X25519PubKey = x_pk.try_unwrap_sized().unwrap().into();
+    let x_sk = x_sk.to_read_sized();
+
+    Ok((x_pk, x_sk))
+}
+
 pub(crate) fn priv_gen_and_register_entry<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     store: &'a LairStore,
@@ -569,34 +634,28 @@ pub(crate) fn priv_gen_and_register_entry<'a>(
             } => {
                 // read the seed
                 let seed = seed.decrypt(store.get_bidi_ctx_key()).await?;
+                let (ed_pk, ed_sk) = derive_ed(&seed).await?;
+                let (x_pk, x_sk) = derive_x(&seed).await?;
 
-                // get the signature keypair
-                let ed_pk = sodoken::BufWriteSized::new_no_lock();
-                let ed_sk = sodoken::BufWriteSized::new_mem_locked()?;
-                sodoken::sign::seed_keypair(
-                    ed_pk.clone(),
-                    ed_sk.clone(),
-                    seed.clone(),
-                )
-                .await?;
-
-                // get the encryption keypair
-                let x_pk = sodoken::BufWriteSized::new_no_lock();
-                let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
-                sodoken::crypto_box::curve25519xchacha20poly1305::seed_keypair(
-                    x_pk.clone(),
-                    x_sk.clone(),
-                    seed.clone(),
-                )
-                .await?;
-
+                if ed_pk != seed_info.ed25519_pub_key {
+                    return Err(
+                        "Ed25519 pub key generated from seed does not match"
+                            .into(),
+                    );
+                }
+                if x_pk != seed_info.x25519_pub_key {
+                    return Err(
+                        "X25519 pub key generated from seed does not match"
+                            .into(),
+                    );
+                }
                 (
                     Some(seed),
                     seed_info.exportable,
-                    Some(ed_pk.try_unwrap_sized().unwrap().into()),
-                    Some(ed_sk.to_read_sized()),
-                    Some(x_pk.try_unwrap_sized().unwrap().into()),
-                    Some(x_sk.to_read_sized()),
+                    Some(seed_info.ed25519_pub_key.clone()),
+                    Some(ed_sk),
+                    Some(seed_info.x25519_pub_key.clone()),
+                    Some(x_sk),
                 )
             }
             _ => (None, false, None, None, None, None),
