@@ -141,7 +141,7 @@ mod tests {
         .unwrap();
 
         let config = keystore.get_config();
-        println!("{}", config);
+        println!("{config}");
 
         // create a client connection to the keystore
         let client = keystore.new_client().await.unwrap();

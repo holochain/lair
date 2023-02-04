@@ -83,7 +83,7 @@ impl<'de> serde::Deserialize<'de> for BinData {
         D: serde::Deserializer<'de>,
     {
         let tmp: String = serde::Deserialize::deserialize(deserializer)?;
-        from_base64_url(&tmp)
+        from_base64_url(tmp)
             .map_err(serde::de::Error::custom)
             .map(Self)
     }
@@ -96,7 +96,7 @@ pub struct BinDataSized<const N: usize>(pub Arc<[u8; N]>);
 impl<const N: usize> std::fmt::Debug for BinDataSized<N> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = to_base64_url(*self.0);
-        write!(f, "BinDataSized<{}>({})", N, s)
+        write!(f, "BinDataSized<{N}>({s})")
     }
 }
 
@@ -164,7 +164,7 @@ impl<'de, const N: usize> serde::Deserialize<'de> for BinDataSized<N> {
         D: serde::Deserializer<'de>,
     {
         let tmp: String = serde::Deserialize::deserialize(deserializer)?;
-        let tmp = from_base64_url(&tmp).map_err(serde::de::Error::custom)?;
+        let tmp = from_base64_url(tmp).map_err(serde::de::Error::custom)?;
         if tmp.len() != N {
             return Err(serde::de::Error::custom("invalid buffer length"));
         }

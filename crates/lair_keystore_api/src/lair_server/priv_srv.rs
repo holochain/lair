@@ -314,7 +314,7 @@ pub(crate) fn priv_dispatch_incoming<'a>(
             | LairApiEnum::ResGetWkaTlsCertPrivKey(_)
             | LairApiEnum::ResSecretBoxXSalsaByTag(_)
             | LairApiEnum::ResSecretBoxXSalsaOpenByTag(_) => {
-                Err(format!("invalid request: {:?}", incoming).into())
+                Err(format!("invalid request: {incoming:?}").into())
             }
         }
     }
