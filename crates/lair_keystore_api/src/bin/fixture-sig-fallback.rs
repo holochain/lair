@@ -8,13 +8,12 @@
 //! - `never_3` - takes 3 requests without responding and closes
 
 fn print_err(msg_id: &str, err: &str) {
-    println!(r#"{{"msgId":"{}","error":"{}"}}"#, msg_id, err);
+    println!(r#"{{"msgId":"{msg_id}","error":"{err}"}}"#);
 }
 
 fn print_sig(msg_id: &str) {
     println!(
-        r#"{{"msgId":"{}","signature":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="}}"#,
-        msg_id
+        r#"{{"msgId":"{msg_id}","signature":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="}}"#
     );
 }
 

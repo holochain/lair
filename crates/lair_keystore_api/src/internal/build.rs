@@ -6,8 +6,8 @@ const BUILD_RS_PATH: &str = "./build.rs";
 pub fn build_ver() {
     let out_dir = std::env::var_os("OUT_DIR").unwrap();
     let ver_file = std::path::Path::new(&out_dir).join(VER_FILE_PATH);
-    println!("cargo:rerun-if-changed={}", BUILD_RS_PATH);
-    println!("cargo:rerun-if-changed={}", CARGO_TOML_PATH);
+    println!("cargo:rerun-if-changed={BUILD_RS_PATH}");
+    println!("cargo:rerun-if-changed={CARGO_TOML_PATH}");
 
     let cargo_toml: toml::Value =
         toml::from_slice(&std::fs::read(CARGO_TOML_PATH).unwrap()).unwrap();
@@ -24,10 +24,9 @@ pub fn build_ver() {
         .unwrap();
 
     std::fs::write(
-        &ver_file,
+        ver_file,
         format!(
-            "/// Lair Version\npub const LAIR_VER: &str = \"{}\";\n",
-            ver,
+            "/// Lair Version\npub const LAIR_VER: &str = \"{ver}\";\n",
         ),
     )
     .unwrap();

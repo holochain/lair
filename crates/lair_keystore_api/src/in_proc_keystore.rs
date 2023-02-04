@@ -141,7 +141,7 @@ mod tests {
         .unwrap();
 
         let config = keystore.get_config();
-        println!("{}", config);
+        println!("{config}");
 
         // create a client connection to the keystore
         let client = keystore.new_client().await.unwrap();
@@ -205,7 +205,7 @@ mod tests {
 
         assert_eq!(b"hello", &*msg);
 
-        let data = Arc::new([1, 2, 3 as u8]);
+        let data = Arc::new([1, 2, 3_u8]);
         let signature = client
             .sign_by_pub_key(
                 seed_info_ref_deep.ed25519_pub_key.clone(),

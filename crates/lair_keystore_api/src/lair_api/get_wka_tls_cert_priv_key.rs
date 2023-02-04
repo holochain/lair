@@ -28,7 +28,7 @@ impl std::convert::TryFrom<LairApiEnum> for LairApiReqGetWkaTlsCertPrivKey {
         if let LairApiEnum::ReqGetWkaTlsCertPrivKey(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }
@@ -58,7 +58,7 @@ impl std::convert::TryFrom<LairApiEnum> for LairApiResGetWkaTlsCertPrivKey {
         if let LairApiEnum::ResGetWkaTlsCertPrivKey(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }

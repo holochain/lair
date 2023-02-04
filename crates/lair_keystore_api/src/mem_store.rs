@@ -225,10 +225,10 @@ mod tests {
 
         let seed_info =
             store.new_seed("test-seed".into(), false).await.unwrap();
-        println!("generated new seed: {:#?}", seed_info);
+        println!("generated new seed: {seed_info:#?}");
 
         let list = store.list_entries().await.unwrap();
-        println!("list_entries: {:#?}", list);
+        println!("list_entries: {list:#?}");
         assert_eq!(1, list.len());
 
         println!(
