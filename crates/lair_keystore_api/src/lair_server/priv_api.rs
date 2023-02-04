@@ -606,6 +606,8 @@ pub(crate) async fn derive_x(
     // get the encryption keypair
     let x_pk = sodoken::BufWriteSized::new_no_lock();
     let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
+    // we're using the chacha sodium keypair api here, but the
+    // keypairs are valid also for salsa.
     sodoken::crypto_box::curve25519xchacha20poly1305::seed_keypair(
         x_pk.clone(),
         x_sk.clone(),
