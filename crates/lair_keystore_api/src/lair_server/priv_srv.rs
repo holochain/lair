@@ -268,7 +268,14 @@ pub(crate) fn priv_dispatch_incoming<'a>(
                     .await
             }
             LairApiEnum::ReqSignByPubKey(req) => {
-                priv_req_sign_by_pub_key(inner, send, dec_ctx_key, unlocked, req).await
+                priv_req_sign_by_pub_key(
+                    inner,
+                    send,
+                    dec_ctx_key,
+                    unlocked,
+                    req,
+                )
+                .await
             }
             LairApiEnum::ReqCryptoBoxXSalsaByPubKey(req) => {
                 priv_req_crypto_box_xsalsa_by_pub_key(
