@@ -93,9 +93,7 @@ impl Test {
                         .answer_list
                         .as_ref()
                         .unwrap();
-                    println!(
-                        "{cipher:?} with answer_list - {answer_list:?}"
-                    );
+                    println!("{cipher:?} with answer_list - {answer_list:?}");
                     // ensure the trimming / lcasing works
                     let a1 = sodoken::BufRead::from(
                         format!(

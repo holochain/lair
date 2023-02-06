@@ -25,9 +25,7 @@ pub fn build_ver() {
 
     std::fs::write(
         ver_file,
-        format!(
-            "/// Lair Version\npub const LAIR_VER: &str = \"{ver}\";\n",
-        ),
+        format!("/// Lair Version\npub const LAIR_VER: &str = \"{ver}\";\n",),
     )
     .unwrap();
 }
