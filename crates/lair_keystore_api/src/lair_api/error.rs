@@ -18,7 +18,7 @@ impl std::convert::TryFrom<LairApiEnum> for LairApiResError {
         if let LairApiEnum::ResError(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }

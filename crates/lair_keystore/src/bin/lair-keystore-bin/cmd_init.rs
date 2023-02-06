@@ -15,8 +15,7 @@ pub(crate) async fn exec(
 
     if tokio::fs::metadata(&config_n).await.is_ok() {
         return Err(format!(
-            "{:?} already exists - refusing to overwrite existing store",
-            config_n
+            "{config_n:?} already exists - refusing to overwrite existing store"
         )
         .into());
     }
@@ -41,7 +40,7 @@ pub(crate) async fn exec(
     config_f.shutdown().await?;
     drop(config_f);
 
-    println!("\n# lair-keystore init config:\n{:?}", config_n);
+    println!("\n# lair-keystore init config:\n{config_n:?}");
     println!(
         "\n# lair-keystore init connection_url:\n{}",
         config.connection_url

@@ -193,7 +193,7 @@ mod tests {
         .unwrap();
 
         let config = keystore.get_config();
-        println!("{}", config);
+        println!("{config}");
 
         // create a client connection
         ipc_keystore_connect(config.connection_url.clone(), passphrase)
@@ -267,7 +267,7 @@ mod tests {
         // create a new tls certificate
         let cert_info =
             client.new_wka_tls_cert("test-cert".into()).await.unwrap();
-        println!("{:#?}", cert_info);
+        println!("{cert_info:#?}");
 
         let priv_key = client
             .get_wka_tls_cert_priv_key("test-cert".into())

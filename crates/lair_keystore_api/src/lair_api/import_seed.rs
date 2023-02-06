@@ -61,7 +61,7 @@ impl std::convert::TryFrom<LairApiEnum> for LairApiReqImportSeed {
         if let LairApiEnum::ReqImportSeed(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }
@@ -94,7 +94,7 @@ impl std::convert::TryFrom<LairApiEnum> for LairApiResImportSeed {
         if let LairApiEnum::ResImportSeed(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }

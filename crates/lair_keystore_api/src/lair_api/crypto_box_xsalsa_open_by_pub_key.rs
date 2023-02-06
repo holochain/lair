@@ -53,7 +53,7 @@ impl std::convert::TryFrom<LairApiEnum>
         if let LairApiEnum::ReqCryptoBoxXSalsaOpenByPubKey(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }
@@ -85,7 +85,7 @@ impl std::convert::TryFrom<LairApiEnum>
         if let LairApiEnum::ResCryptoBoxXSalsaOpenByPubKey(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }

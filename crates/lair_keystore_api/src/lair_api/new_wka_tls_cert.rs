@@ -29,7 +29,7 @@ impl std::convert::TryFrom<LairApiEnum> for LairApiReqNewWkaTlsCert {
         if let LairApiEnum::ReqNewWkaTlsCert(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }
@@ -63,7 +63,7 @@ impl std::convert::TryFrom<LairApiEnum> for LairApiResNewWkaTlsCert {
         if let LairApiEnum::ResNewWkaTlsCert(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }

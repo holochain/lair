@@ -476,7 +476,7 @@ fn secure_write_key_pragma(
         key_pragma.copy_from_slice(KEY_PRAGMA);
         let mut c = std::io::Cursor::new(&mut key_pragma[16..80]);
         for b in &*key.read_lock() {
-            write!(c, "{:02X}", b).map_err(one_err::OneErr::new)?;
+            write!(c, "{b:02X}").map_err(one_err::OneErr::new)?;
         }
     }
 
@@ -495,10 +495,10 @@ fn set_pragmas(
         [],
     )?;
 
-    con.pragma_update(None, "trusted_schema", &"0".to_string())
+    con.pragma_update(None, "trusted_schema", "0".to_string())
         .map_err(one_err::OneErr::new)?;
 
-    con.pragma_update(None, "synchronous", &"1".to_string())
+    con.pragma_update(None, "synchronous", "1".to_string())
         .map_err(one_err::OneErr::new)?;
 
     Ok(())
