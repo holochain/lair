@@ -181,9 +181,7 @@ async fn get_config(
     let bytes = match tokio::fs::read(&config_n).await {
         Err(e) => {
             return Err(format!(
-                "Could not read config file {:?}, did you initialize the keystore? - {}",
-                config_n,
-                e,
+                "Could not read config file {config_n:?}, did you initialize the keystore? - {e}",
             ).into());
         }
         Ok(b) => b,
@@ -218,6 +216,6 @@ async fn exec() -> LairResult<()> {
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     if let Err(e) = exec().await {
-        eprintln!("{}", e);
+        eprintln!("{e}");
     }
 }

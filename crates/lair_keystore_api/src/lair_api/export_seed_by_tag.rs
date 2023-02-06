@@ -46,7 +46,7 @@ impl std::convert::TryFrom<LairApiEnum> for LairApiReqExportSeedByTag {
         if let LairApiEnum::ReqExportSeedByTag(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }
@@ -79,7 +79,7 @@ impl std::convert::TryFrom<LairApiEnum> for LairApiResExportSeedByTag {
         if let LairApiEnum::ResExportSeedByTag(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }

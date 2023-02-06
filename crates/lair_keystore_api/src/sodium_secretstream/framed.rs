@@ -63,7 +63,7 @@ impl PrivFramedRecv {
             if ltag > MAX_FRAME {
                 return Err(OneErr::with_message(
                     "FrameOverflow",
-                    format!("{} > {}", ltag, MAX_FRAME),
+                    format!("{ltag} > {MAX_FRAME}"),
                 ));
             }
 

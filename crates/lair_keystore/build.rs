@@ -64,7 +64,7 @@ fn check_fmt(path: &std::path::Path) {
 
     if fix_sql_fmt() {
         if src_sql != fmt_sql {
-            std::fs::write(path, format!("{}\n", fmt_sql)).unwrap();
+            std::fs::write(path, format!("{fmt_sql}\n")).unwrap();
             println!(
                 "cargo:warning=FIX_SQL_FMT--fixing: {}",
                 path.to_string_lossy()

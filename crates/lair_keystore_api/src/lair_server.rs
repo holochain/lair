@@ -160,8 +160,7 @@ impl FallbackCmd {
                     }
                     oth => {
                         return Err(format!(
-                            "invalid signature_fallback type: {:?}",
-                            oth,
+                            "invalid signature_fallback type: {oth:?}",
                         )
                         .into());
                     }
@@ -247,7 +246,7 @@ impl FallbackCmd {
                     use tokio::io::AsyncWriteExt;
                     if let Err(e) = stdin.write_all(output.as_bytes()).await {
                         let e =
-                            format!("signature_fallback write error: {:?}", e);
+                            format!("signature_fallback write error: {e:?}");
                         tracing::error!("@sig_fb@ {}", e);
                         let respond =
                             pending2.lock().pending.remove(&req.msg_id);
@@ -306,8 +305,7 @@ impl FallbackCmd {
                                 Ok(s) => s,
                                 Err(e) => {
                                     let e = format!(
-                                        "signature_fallback read error: {:?}",
-                                        e
+                                        "signature_fallback read error: {e:?}"
                                     );
                                     tracing::error!("@sig_fb@ {}", e);
                                     let _ = respond.send(Err(e.into()));

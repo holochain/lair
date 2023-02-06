@@ -77,12 +77,12 @@ impl Test {
                         .passphrase
                         .as_ref()
                         .unwrap();
-                    println!("{:?} with passphrase - {}", cipher, passphrase);
+                    println!("{cipher:?} with passphrase - {passphrase}");
                     let passphrase =
                         sodoken::BufRead::from(passphrase.as_bytes().to_vec());
                     let seed = cipher.unlock(passphrase).await.unwrap();
                     let pub_key = seed.get_sign_pub_key();
-                    assert_eq_b64(&self.sign_pub_key, &*pub_key.read_lock());
+                    assert_eq_b64(&self.sign_pub_key, &pub_key.read_lock());
                     out = Some(seed);
                 }
                 LockedSeedCipher::SecurityQuestions(cipher) => {
@@ -94,8 +94,7 @@ impl Test {
                         .as_ref()
                         .unwrap();
                     println!(
-                        "{:?} with answer_list - {:?}",
-                        cipher, answer_list
+                        "{cipher:?} with answer_list - {answer_list:?}"
                     );
                     // ensure the trimming / lcasing works
                     let a1 = sodoken::BufRead::from(
@@ -114,7 +113,7 @@ impl Test {
                     );
                     let seed = cipher.unlock((a1, a2, a3)).await.unwrap();
                     let pub_key = seed.get_sign_pub_key();
-                    assert_eq_b64(&self.sign_pub_key, &*pub_key.read_lock());
+                    assert_eq_b64(&self.sign_pub_key, &pub_key.read_lock());
                     out = Some(seed);
                 }
                 LockedSeedCipher::UnsupportedCipher(name) => {
@@ -133,12 +132,12 @@ impl Test {
             let mut cur = seed.clone();
 
             let d_path = d_path.split('/').skip(1).collect::<Vec<_>>();
-            println!("deriving subseed by path: {:?}", d_path);
+            println!("deriving subseed by path: {d_path:?}");
             for subkey_id in d_path {
                 cur = cur.derive(subkey_id.parse().unwrap()).await.unwrap();
             }
 
-            assert_eq_b64(&**target, &*cur.get_sign_pub_key().read_lock());
+            assert_eq_b64(target, &cur.get_sign_pub_key().read_lock());
         }
     }
 }

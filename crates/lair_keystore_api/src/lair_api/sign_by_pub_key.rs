@@ -41,7 +41,7 @@ impl std::convert::TryFrom<LairApiEnum> for LairApiReqSignByPubKey {
         if let LairApiEnum::ReqSignByPubKey(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }
@@ -71,7 +71,7 @@ impl std::convert::TryFrom<LairApiEnum> for LairApiResSignByPubKey {
         if let LairApiEnum::ResSignByPubKey(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }
