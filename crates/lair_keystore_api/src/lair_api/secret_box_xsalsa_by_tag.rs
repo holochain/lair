@@ -42,7 +42,7 @@ impl std::convert::TryFrom<LairApiEnum> for LairApiReqSecretBoxXSalsaByTag {
         if let LairApiEnum::ReqSecretBoxXSalsaByTag(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }
@@ -75,7 +75,7 @@ impl std::convert::TryFrom<LairApiEnum> for LairApiResSecretBoxXSalsaByTag {
         if let LairApiEnum::ResSecretBoxXSalsaByTag(s) = e {
             Ok(s)
         } else {
-            Err(format!("Invalid response type: {:?}", e).into())
+            Err(format!("Invalid response type: {e:?}").into())
         }
     }
 }

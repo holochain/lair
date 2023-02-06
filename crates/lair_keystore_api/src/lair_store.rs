@@ -127,6 +127,9 @@ pub enum LairEntryInfo {
     },
 }
 
+/// Data type for secret seed
+pub type Seed = SecretDataSized<32, 49>;
+
 /// The raw lair entry inner types that can be stored. This is generally
 /// wrapped by an `Arc`. See the typedef [LairEntry].
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -147,7 +150,7 @@ pub enum LairEntryInner {
         seed_info: SeedInfo,
 
         /// The actual seed, encrypted with context key.
-        seed: SecretDataSized<32, 49>,
+        seed: Seed,
     },
 
     /// As 'Seed' but requires an additional access-time passphrase.
@@ -168,7 +171,7 @@ pub enum LairEntryInner {
         mem_limit: u32,
 
         /// The actual seed, encrypted with deep passphrase.
-        seed: SecretDataSized<32, 49>,
+        seed: Seed,
     },
 
     /// This tls cert and private key can be used to establish tls cryptography

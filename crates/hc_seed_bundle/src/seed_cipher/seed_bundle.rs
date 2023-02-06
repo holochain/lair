@@ -225,8 +225,7 @@ impl<'de> serde::Deserialize<'de> for SeedCipher {
                         })
                     }
                     oth => Err(serde::de::Error::custom(format!(
-                        "unsupported cipher type: {}",
-                        oth
+                        "unsupported cipher type: {oth}"
                     ))),
                 }
             }

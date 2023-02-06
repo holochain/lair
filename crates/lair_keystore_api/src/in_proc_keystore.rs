@@ -141,7 +141,7 @@ mod tests {
         .unwrap();
 
         let config = keystore.get_config();
-        println!("{}", config);
+        println!("{config}");
 
         // create a client connection to the keystore
         let client = keystore.new_client().await.unwrap();
@@ -164,14 +164,13 @@ mod tests {
             oth => panic!("unexpected: {:?}", oth),
         }
 
+        let tag = "test-tag-deep";
+        let passphrase = sodoken::BufRead::from(&b"deep"[..]);
+
         // create a new deep-locked seed
-        let _seed_info_ref_deep = hc_seed_bundle::PwHashLimits::Interactive
+        let seed_info_ref_deep = hc_seed_bundle::PwHashLimits::Interactive
             .with_exec(|| {
-                client.new_seed(
-                    "test-tag-deep".into(),
-                    Some(sodoken::BufRead::from(&b"deep"[..])),
-                    false,
-                )
+                client.new_seed(tag.into(), Some(passphrase.clone()), false)
             })
             .await
             .unwrap();
@@ -205,5 +204,20 @@ mod tests {
             .unwrap();
 
         assert_eq!(b"hello", &*msg);
+
+        let data = Arc::new([1, 2, 3_u8]);
+        let signature = client
+            .sign_by_pub_key(
+                seed_info_ref_deep.ed25519_pub_key.clone(),
+                Some(passphrase),
+                data.clone(),
+            )
+            .await
+            .unwrap();
+        assert!(seed_info_ref_deep
+            .ed25519_pub_key
+            .verify_detached(signature, sodoken::BufRead::from(&data[..]))
+            .await
+            .unwrap());
     }
 }
