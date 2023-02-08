@@ -243,11 +243,15 @@ pub(crate) fn priv_req_derive_seed<'a>(
     async move {
         let store = priv_get_store(inner, unlocked)?;
 
+        dbg!();
         let entry = store.get_entry_by_tag(req.src_tag.clone()).await?;
+        dbg!();
 
         let (src_seed, src_seed_info, src_dlp) = match (&*entry, req.src_deep_lock_passphrase) {
             (LairEntryInner::Seed { seed, seed_info, .. }, None) => {
-                let seed = seed.decrypt(dec_ctx_key.clone()).await?;
+                dbg!();
+                let seed = seed.decrypt(store.get_bidi_ctx_key()).await?;
+                dbg!();
                 (seed, seed_info, None)
             }
             (
@@ -261,18 +265,22 @@ pub(crate) fn priv_req_derive_seed<'a>(
                 },
                 Some(passphrase),
             ) => {
+                dbg!();
                 let dlp = DeepLockPassphrase {
                     ops_limit: *ops_limit,
                     mem_limit: *mem_limit,
                     passphrase,
                 };
+                dbg!();
                 let deep_key = deep_unlock_key_from_passphrase(
                     &dlp,
                     dec_ctx_key,
                     BufReadSized::from(salt.clone().cloned_inner()),
                 )
                 .await?;
+                dbg!();
                 let seed = seed.decrypt(deep_key.into()).await?;
+                dbg!();
                 (seed, seed_info, Some(dlp))
             },
             (LairEntryInner::WkaTlsCert { .. }, _) => return Err("The tag provided is for a Cert, which cannot be derived. You must specify the tag for a Seed.".into()),
@@ -280,8 +288,10 @@ pub(crate) fn priv_req_derive_seed<'a>(
             (LairEntryInner::DeepLockedSeed { .. }, None) => return Err("A `src_passphrase` is needed to unlock the source seed which is deep-locked.".into()),
         };
 
+        dbg!();
         let mut parent = src_seed;
         let derived = BufWriteSized::new_mem_locked()?;
+        dbg!();
 
         // let (pk, sk) = derive_ed(&src_seed).await?;
 
@@ -293,6 +303,7 @@ pub(crate) fn priv_req_derive_seed<'a>(
         // };
 
         for index in req.derivation_path.into_iter() {
+            dbg!();
             sodoken::kdf::derive_from_key(
                 derived.clone(),
                 *index as u64,
@@ -301,8 +312,10 @@ pub(crate) fn priv_req_derive_seed<'a>(
             )?;
             parent = derived.clone().into();
         }
+        dbg!();
 
         let dst_seed = derived.into();
+        dbg!();
         let dst_dlp = req.dst_deep_lock_passphrase.and_then(|passphrase| {
             src_dlp.map(|dlp| DeepLockPassphrase {
                 ops_limit: dlp.ops_limit,
@@ -310,12 +323,15 @@ pub(crate) fn priv_req_derive_seed<'a>(
                 passphrase,
             })
         });
+        dbg!();
 
         let dst_seed_info = match dst_dlp {
             Some(secret) => {
+                dbg!();
                 // if deep locked, decrypt the deep lock passphrase
                 let deep_lock_passphrase =
                     secret.passphrase.decrypt(dec_ctx_key.clone()).await?;
+                dbg!();
 
                 store
                     .insert_deep_locked_seed(
@@ -355,6 +371,7 @@ pub(crate) fn priv_req_derive_seed<'a>(
                     .await?
             }
         };
+        dbg!();
         // send the response
         send.send(
             LairApiResDeriveSeed {

@@ -220,4 +220,77 @@ mod tests {
             .await
             .unwrap());
     }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn in_proc_derive_seed_happy_path() {
+        // set up a passphrase
+        let passphrase1 = sodoken::BufRead::from(&b"passphrase1"[..]);
+        let passphrase2 = sodoken::BufRead::from(&b"passphrase2"[..]);
+
+        // create the config for the test server
+        // the path is immaterial since we'll be using an in-memory store
+        let config = Arc::new(
+            hc_seed_bundle::PwHashLimits::Interactive
+                .with_exec(|| {
+                    LairServerConfigInner::new("/", passphrase1.clone())
+                })
+                .await
+                .unwrap(),
+        );
+
+        // create an in-process keystore with an in-memory store
+        let keystore = InProcKeystore::new(
+            config,
+            crate::mem_store::create_mem_store_factory(),
+            passphrase1.clone(),
+        )
+        .await
+        .unwrap();
+
+        let config = keystore.get_config();
+        println!("{config}");
+
+        // create a client connection to the keystore
+        let client = keystore.new_client().await.unwrap();
+
+        // create a new seed
+        let _ = client.new_seed("seed-0".into(), None, false).await.unwrap();
+
+        // create a new seed
+        let _ = client
+            .new_seed("deepseed-0".into(), Some(passphrase1.clone()), false)
+            .await
+            .unwrap();
+
+        client
+            .derive_seed(
+                "seed-0".into(),
+                None,
+                "deepseed-1".into(),
+                Some(passphrase2),
+                Box::new([1, 2]),
+            )
+            .await
+            .unwrap();
+
+        client
+            .derive_seed(
+                "deepseed-0".into(),
+                Some(passphrase1),
+                "seed-1".into(),
+                None,
+                Box::new([1, 2, 3, 5, 8]),
+            )
+            .await
+            .unwrap();
+
+        assert!(matches!(
+            client.get_entry("seed-1".into()).await.unwrap(),
+            LairEntryInfo::Seed { .. }
+        ));
+        assert!(matches!(
+            client.get_entry("deepseed-1".into()).await.unwrap(),
+            LairEntryInfo::DeepLockedSeed { .. }
+        ));
+    }
 }
