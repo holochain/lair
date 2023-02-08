@@ -316,13 +316,23 @@ pub(crate) fn priv_req_derive_seed<'a>(
 
         let dst_seed = parent.into();
         dbg!();
-        let dst_dlp = req.dst_deep_lock_passphrase.and_then(|passphrase| {
-            src_dlp.map(|dlp| DeepLockPassphrase {
-                ops_limit: dlp.ops_limit,
-                mem_limit: dlp.mem_limit,
-                passphrase,
-            })
-        });
+
+        // TODO: do we want to take the limits from the source passphrase if possible?
+        // TODO: do we even want to allow a destination passphrase if there is no source passphrase?
+        let (ops_limit, mem_limit) = if let Some(dlp) = src_dlp {
+            (dlp.ops_limit, dlp.mem_limit)
+        } else {
+            let limits = PwHashLimits::current();
+            (limits.as_ops_limit(), limits.as_mem_limit())
+        };
+
+        let dst_dlp =
+            req.dst_deep_lock_passphrase
+                .map(|passphrase| DeepLockPassphrase {
+                    ops_limit,
+                    mem_limit,
+                    passphrase,
+                });
         dbg!();
 
         let dst_seed_info = match dst_dlp {

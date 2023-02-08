@@ -284,13 +284,13 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(matches!(
-            client.get_entry("seed-1".into()).await.unwrap(),
-            LairEntryInfo::Seed { .. }
-        ));
-        assert!(matches!(
-            client.get_entry("deepseed-1".into()).await.unwrap(),
-            LairEntryInfo::DeepLockedSeed { .. }
-        ));
+        let seed = client.get_entry("seed-1".into()).await.unwrap();
+        let deepseed = client.get_entry("deepseed-1".into()).await.unwrap();
+
+        dbg!(&seed);
+        dbg!(&deepseed);
+
+        assert!(matches!(seed, LairEntryInfo::Seed { .. }));
+        assert!(matches!(deepseed, LairEntryInfo::DeepLockedSeed { .. }));
     }
 }
