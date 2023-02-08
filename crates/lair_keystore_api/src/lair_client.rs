@@ -319,23 +319,18 @@ impl LairClient {
         derivation_path: Box<[u32]>,
         // ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
     ) -> LairResult<SeedInfo> {
-        dbg!();
         let src_deep_lock_passphrase = if let Some(p) = src_deep_lock_passphrase
         {
-            dbg!();
             Some(encrypt_passphrase(p, self.get_enc_ctx_key()).await?)
         } else {
             None
         };
-        dbg!();
         let dst_deep_lock_passphrase = if let Some(p) = dst_deep_lock_passphrase
         {
-            dbg!();
             Some(encrypt_passphrase(p, self.get_enc_ctx_key()).await?)
         } else {
             None
         };
-        dbg!();
         let req = LairApiReqDeriveSeed::new(
             src_tag,
             src_deep_lock_passphrase,
@@ -343,9 +338,7 @@ impl LairClient {
             dst_deep_lock_passphrase,
             derivation_path,
         );
-        dbg!();
         let res = priv_lair_api_request(&*self.0, req).await?;
-        dbg!();
         Ok(res.seed_info)
     }
 
