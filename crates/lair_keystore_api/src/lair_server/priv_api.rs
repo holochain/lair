@@ -290,7 +290,6 @@ pub(crate) fn priv_req_derive_seed<'a>(
 
         dbg!();
         let mut parent = src_seed;
-        let derived = BufWriteSized::new_mem_locked()?;
         dbg!();
 
         // let (pk, sk) = derive_ed(&src_seed).await?;
@@ -304,6 +303,7 @@ pub(crate) fn priv_req_derive_seed<'a>(
 
         for index in req.derivation_path.into_iter() {
             dbg!();
+            let derived = BufWriteSized::new_mem_locked()?;
             sodoken::kdf::derive_from_key(
                 derived.clone(),
                 *index as u64,
@@ -314,7 +314,7 @@ pub(crate) fn priv_req_derive_seed<'a>(
         }
         dbg!();
 
-        let dst_seed = derived.into();
+        let dst_seed = parent.into();
         dbg!();
         let dst_dlp = req.dst_deep_lock_passphrase.and_then(|passphrase| {
             src_dlp.map(|dlp| DeepLockPassphrase {

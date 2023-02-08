@@ -268,7 +268,7 @@ mod tests {
                 None,
                 "deepseed-1".into(),
                 Some(passphrase2),
-                Box::new([1, 2]),
+                Box::new([1, 1]),
             )
             .await
             .unwrap();
