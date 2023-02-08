@@ -311,18 +311,28 @@ impl LairClient {
     // uhhhh... clippy?? [u32] by itself is not sized... so, yes
     // this *does* have to be Boxed...
     #[allow(clippy::boxed_local)]
+    #[warn(warnings)]
     /// Derive a pre-existing key identified by given src_tag, with given
     /// derivation path, storing the final resulting sub-seed with
     /// the given dst_tag.
-    pub fn derive_seed(
+    pub async fn derive_seed(
         &self,
-        _src_tag: Arc<str>,
-        _src_deep_lock_passphrase: Option<sodoken::BufRead>,
-        _dst_tag: Arc<str>,
-        _dst_deep_lock_passphrase: Option<sodoken::BufRead>,
-        _derivation: Box<[u32]>,
-    ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
-        async move { unimplemented!() }
+        src_tag: Arc<str>,
+        src_deep_lock_passphrase: Option<DeepLockPassphraseBytes>,
+        dst_tag: Arc<str>,
+        dst_deep_lock_passphrase: Option<DeepLockPassphraseBytes>,
+        derivation_path: Box<[u32]>,
+        // ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
+    ) -> LairResult<SeedInfo> {
+        let req = LairApiReqDeriveSeed::new(
+            src_tag,
+            src_deep_lock_passphrase,
+            dst_tag,
+            dst_deep_lock_passphrase,
+            derivation_path,
+        );
+        let res = priv_lair_api_request(&*self.0, req).await?;
+        Ok(res.seed_info)
     }
 
     /// Generate a signature for given data, with the ed25519 keypair

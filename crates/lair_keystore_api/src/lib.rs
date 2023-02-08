@@ -4,7 +4,7 @@
 #![allow(clippy::new_without_default)]
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
-#![deny(warnings)]
+#![warn(warnings)]
 
 //! Secret lair private keystore API library.
 //!

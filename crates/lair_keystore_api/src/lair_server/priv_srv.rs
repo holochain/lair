@@ -267,6 +267,10 @@ pub(crate) fn priv_dispatch_incoming<'a>(
                 priv_req_import_seed(inner, send, dec_ctx_key, unlocked, req)
                     .await
             }
+            LairApiEnum::ReqDeriveSeed(req) => {
+                priv_req_derive_seed(inner, send, dec_ctx_key, unlocked, req)
+                    .await
+            }
             LairApiEnum::ReqSignByPubKey(req) => {
                 priv_req_sign_by_pub_key(
                     inner,
@@ -320,6 +324,7 @@ pub(crate) fn priv_dispatch_incoming<'a>(
             | LairApiEnum::ResNewSeed(_)
             | LairApiEnum::ResExportSeedByTag(_)
             | LairApiEnum::ResImportSeed(_)
+            | LairApiEnum::ResDeriveSeed(_)
             | LairApiEnum::ResSignByPubKey(_)
             | LairApiEnum::ResCryptoBoxXSalsaByPubKey(_)
             | LairApiEnum::ResCryptoBoxXSalsaOpenByPubKey(_)
