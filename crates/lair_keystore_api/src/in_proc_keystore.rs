@@ -247,9 +247,6 @@ mod tests {
         .await
         .unwrap();
 
-        let config = keystore.get_config();
-        println!("{config}");
-
         // create a client connection to the keystore
         let client = keystore.new_client().await.unwrap();
 
@@ -286,9 +283,6 @@ mod tests {
 
         let seed = client.get_entry("seed-1".into()).await.unwrap();
         let deepseed = client.get_entry("deepseed-1".into()).await.unwrap();
-
-        dbg!(&seed);
-        dbg!(&deepseed);
 
         assert!(matches!(seed, LairEntryInfo::Seed { .. }));
         assert!(matches!(deepseed, LairEntryInfo::DeepLockedSeed { .. }));

@@ -282,15 +282,6 @@ pub(crate) fn priv_req_derive_seed<'a>(
 
         let mut parent = src_seed;
 
-        // let (pk, sk) = derive_ed(&src_seed).await?;
-
-        // let mut bundle = UnlockedSeedBundle {
-        //     seed: src_seed,
-        //     sign_pub_key: pk.cloned_inner().into(),
-        //     sign_sec_key: sk,
-        //     app_data: Arc::new([]),
-        // };
-
         for index in req.derivation_path.into_iter() {
             let derived = BufWriteSized::new_mem_locked()?;
             sodoken::kdf::derive_from_key(
@@ -337,22 +328,6 @@ pub(crate) fn priv_req_derive_seed<'a>(
                         src_seed_info.exportable,
                     )
                     .await?
-                // let (ed_pk, _) = derive_ed(&dst_seed).await?;
-                // let (x_pk, _) = derive_x(&dst_seed).await?;
-                // let dst_seed_info = SeedInfo { ed25519_pub_key: ed_pk, x25519_pub_key: x_pk, exportable: src_seed_info.exportable };
-                // let salt = salt;
-
-                // LairEntry::new(LairEntryInner::DeepLockedSeed { tag: req.dst_tag.clone(), seed_info: dst_seed_info, salt: (), ops_limit: (), mem_limit: (), seed: () })
-                // create a new deep locked seed
-                // store
-                //     .write(
-                //         req.dst_tag.clone(),
-                //         secret.ops_limit,
-                //         secret.mem_limit,
-                //         deep_lock_passphrase,
-                //         src_seed_info.exportable,
-                //     )
-                //     .await?
             }
             // create a new seed
             None => {
