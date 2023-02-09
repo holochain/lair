@@ -310,36 +310,38 @@ impl LairClient {
     /// Derive a pre-existing key identified by given src_tag, with given
     /// derivation path, storing the final resulting sub-seed with
     /// the given dst_tag.
-    pub async fn derive_seed(
+    pub fn derive_seed(
         &self,
         src_tag: Arc<str>,
         src_deep_lock_passphrase: Option<BufRead>,
         dst_tag: Arc<str>,
         dst_deep_lock_passphrase: Option<BufRead>,
         derivation_path: Box<[u32]>,
-        // ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
-    ) -> LairResult<SeedInfo> {
-        let src_deep_lock_passphrase = if let Some(p) = src_deep_lock_passphrase
-        {
-            Some(encrypt_passphrase(p, self.get_enc_ctx_key()).await?)
-        } else {
-            None
-        };
-        let dst_deep_lock_passphrase = if let Some(p) = dst_deep_lock_passphrase
-        {
-            Some(encrypt_passphrase(p, self.get_enc_ctx_key()).await?)
-        } else {
-            None
-        };
-        let req = LairApiReqDeriveSeed::new(
-            src_tag,
-            src_deep_lock_passphrase,
-            dst_tag,
-            dst_deep_lock_passphrase,
-            derivation_path,
-        );
-        let res = priv_lair_api_request(&*self.0, req).await?;
-        Ok(res.seed_info)
+    ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
+        let inner = self.0.clone();
+        async move {
+            let src_deep_lock_passphrase =
+                if let Some(p) = src_deep_lock_passphrase {
+                    Some(encrypt_passphrase(p, inner.get_enc_ctx_key()).await?)
+                } else {
+                    None
+                };
+            let dst_deep_lock_passphrase =
+                if let Some(p) = dst_deep_lock_passphrase {
+                    Some(encrypt_passphrase(p, inner.get_enc_ctx_key()).await?)
+                } else {
+                    None
+                };
+            let req = LairApiReqDeriveSeed::new(
+                src_tag,
+                src_deep_lock_passphrase,
+                dst_tag,
+                dst_deep_lock_passphrase,
+                derivation_path,
+            );
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok(res.seed_info)
+        }
     }
 
     /// Generate a signature for given data, with the ed25519 keypair

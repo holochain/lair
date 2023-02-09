@@ -272,7 +272,7 @@ pub(crate) fn priv_req_derive_seed<'a>(
                     BufReadSized::from(salt.clone().cloned_inner()),
                 )
                 .await?;
-                let seed = seed.decrypt(deep_key.into()).await?;
+                let seed = seed.decrypt(deep_key).await?;
                 (seed, seed_info, Some(dlp))
             },
             (LairEntryInner::WkaTlsCert { .. }, _) => return Err("The tag provided is for a Cert, which cannot be derived. You must specify the tag for a Seed.".into()),
@@ -282,7 +282,7 @@ pub(crate) fn priv_req_derive_seed<'a>(
 
         let mut parent = src_seed;
 
-        for index in req.derivation_path.into_iter() {
+        for index in req.derivation_path.iter() {
             let derived = BufWriteSized::new_mem_locked()?;
             sodoken::kdf::derive_from_key(
                 derived.clone(),
@@ -293,7 +293,7 @@ pub(crate) fn priv_req_derive_seed<'a>(
             parent = derived.clone().into();
         }
 
-        let dst_seed = parent.into();
+        let dst_seed = parent;
 
         // TODO: do we want to take the limits from the source passphrase if possible?
         // TODO: do we even want to allow a destination passphrase if there is no source passphrase?
@@ -556,7 +556,7 @@ pub(crate) fn priv_req_sign_by_pub_key<'a>(
                     ) => {
                         // generate the deep lock key from the passphrase
                         let deep_key = deep_unlock_key_from_passphrase(&DeepLockPassphrase { ops_limit: *ops_limit, mem_limit: *mem_limit, passphrase }, dec_ctx_key, BufReadSized::from(salt.clone().cloned_inner())).await?;
-                        let seed = seed.decrypt(deep_key.into()).await?;
+                        let seed = seed.decrypt(deep_key).await?;
                         let (_, ed_sk) = derive_ed(&seed).await?;
                         ed_sk
                     }
