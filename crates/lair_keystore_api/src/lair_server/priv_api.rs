@@ -240,6 +240,7 @@ pub(crate) fn priv_req_derive_seed<'a>(
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqDeriveSeed,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    let limits = PwHashLimits::current();
     async move {
         let store = priv_get_store(inner, unlocked)?;
 
@@ -300,7 +301,6 @@ pub(crate) fn priv_req_derive_seed<'a>(
         let (ops_limit, mem_limit) = if let Some(dlp) = src_dlp {
             (dlp.ops_limit, dlp.mem_limit)
         } else {
-            let limits = PwHashLimits::current();
             (limits.as_ops_limit(), limits.as_mem_limit())
         };
 

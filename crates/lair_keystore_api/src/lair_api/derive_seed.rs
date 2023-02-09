@@ -1,6 +1,6 @@
 use super::*;
 
-/// Get entry_info for an entry by tag from lair.
+/// Derive a new lair seed from an existing seed.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LairApiReqDeriveSeed {
@@ -22,8 +22,8 @@ pub struct LairApiReqDeriveSeed {
     pub dst_deep_lock_passphrase: Option<DeepLockPassphraseBytes>,
 
     /// The hierarchy of nested derivations.
-    /// For instance, [0, 2, 1] would specify that the destination seed is the
-    /// 2nd derivation of the 3rd derivation of the 1st derivation of the source seed.
+    /// For instance, [99, 1, 42] would specify that the destination seed is the
+    /// 42nd derivation of the 1st derivation of the 99th derivation of the source seed.    
     pub derivation_path: Box<[u32]>,
 }
 
@@ -65,7 +65,7 @@ impl AsLairCodec for LairApiReqDeriveSeed {
     }
 }
 
-/// Response to a GetEntry request.
+/// Response to a ReqDeriveSeed request.
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LairApiResDeriveSeed {
