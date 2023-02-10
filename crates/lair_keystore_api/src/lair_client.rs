@@ -197,11 +197,7 @@ impl LairClient {
                     let passphrase =
                         encrypt_passphrase(pass, inner.get_enc_ctx_key())
                             .await?;
-                    Some(DeepLockPassphrase {
-                        ops_limit: limits.as_ops_limit(),
-                        mem_limit: limits.as_mem_limit(),
-                        passphrase,
-                    })
+                    Some(DeepLockPassphrase::new(passphrase, limits))
                 }
             };
             let req = LairApiReqNewSeed::new(tag, secret, exportable);

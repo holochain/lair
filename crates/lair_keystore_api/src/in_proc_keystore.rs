@@ -230,7 +230,7 @@ mod tests {
         // create the config for the test server
         // the path is immaterial since we'll be using an in-memory store
         let config = Arc::new(
-            hc_seed_bundle::PwHashLimits::Interactive
+            hc_seed_bundle::PwHashLimits::Minimum
                 .with_exec(|| {
                     LairServerConfigInner::new("/", passphrase1.clone())
                 })
