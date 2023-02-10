@@ -48,6 +48,20 @@ pub struct DeepLockPassphrase {
     pub passphrase: DeepLockPassphraseBytes,
 }
 
+impl DeepLockPassphrase {
+    /// Constructor
+    pub fn new(
+        passphrase: DeepLockPassphraseBytes,
+        limits: PwHashLimits,
+    ) -> Self {
+        Self {
+            passphrase,
+            ops_limit: limits.as_ops_limit(),
+            mem_limit: limits.as_mem_limit(),
+        }
+    }
+}
+
 /// The secret bytes of the passphrase
 pub type DeepLockPassphraseBytes = SecretDataSized<64, 81>;
 

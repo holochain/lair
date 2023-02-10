@@ -240,42 +240,36 @@ pub(crate) fn priv_req_derive_seed<'a>(
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqDeriveSeed,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
-    let limits = PwHashLimits::current();
     async move {
         let store = priv_get_store(inner, unlocked)?;
 
         let entry = store.get_entry_by_tag(req.src_tag.clone()).await?;
 
-        let (src_seed, src_seed_info, src_dlp) = match (&*entry, req.src_deep_lock_passphrase) {
+        let (src_seed, src_seed_info) = match (&*entry, req.src_deep_lock_passphrase) {
             (LairEntryInner::Seed { seed, seed_info, .. }, None) => {
                 let seed = seed.decrypt(store.get_bidi_ctx_key()).await?;
-                (seed, seed_info, None)
+                (seed, seed_info)
             }
+
             (
                 LairEntryInner::DeepLockedSeed {
                     seed,
                     seed_info,
-                    ops_limit,
-                    mem_limit,
                     salt,
                     ..
                 },
-                Some(passphrase),
+                Some(secret),
             ) => {
-                let dlp = DeepLockPassphrase {
-                    ops_limit: *ops_limit,
-                    mem_limit: *mem_limit,
-                    passphrase,
-                };
                 let deep_key = deep_unlock_key_from_passphrase(
-                    &dlp,
+                    &secret,
                     dec_ctx_key,
                     BufReadSized::from(salt.clone().cloned_inner()),
                 )
                 .await?;
                 let seed = seed.decrypt(deep_key).await?;
-                (seed, seed_info, Some(dlp))
+                (seed, seed_info)
             },
+
             (LairEntryInner::WkaTlsCert { .. }, _) => return Err("The tag provided is for a Cert, which cannot be derived. You must specify the tag for a Seed.".into()),
             (LairEntryInner::Seed { .. }, Some(_)) => return Err("A passphrase was provided for a seed which is not deep-locked. Make the request without a `src_passphrase`.".into()),
             (LairEntryInner::DeepLockedSeed { .. }, None) => return Err("A `src_passphrase` is needed to unlock the source seed which is deep-locked.".into()),
@@ -295,22 +289,7 @@ pub(crate) fn priv_req_derive_seed<'a>(
         }
 
         let dst_seed = parent;
-
-        // TODO: do we want to take the limits from the source passphrase if possible?
-        // TODO: do we even want to allow a destination passphrase if there is no source passphrase?
-        let (ops_limit, mem_limit) = if let Some(dlp) = src_dlp {
-            (dlp.ops_limit, dlp.mem_limit)
-        } else {
-            (limits.as_ops_limit(), limits.as_mem_limit())
-        };
-
-        let dst_dlp =
-            req.dst_deep_lock_passphrase
-                .map(|passphrase| DeepLockPassphrase {
-                    ops_limit,
-                    mem_limit,
-                    passphrase,
-                });
+        let dst_dlp = req.dst_deep_lock_passphrase;
 
         let dst_seed_info = match dst_dlp {
             Some(secret) => {

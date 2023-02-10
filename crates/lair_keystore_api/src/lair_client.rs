@@ -282,11 +282,7 @@ impl LairClient {
                     let secret =
                         SecretDataSized::encrypt(key, pw_hash.to_read_sized())
                             .await?;
-                    Some(DeepLockPassphrase {
-                        ops_limit: limits.as_ops_limit(),
-                        mem_limit: limits.as_mem_limit(),
-                        passphrase: secret,
-                    })
+                    Some(DeepLockPassphrase::new(secret, limits))
                 }
             };
             let req = LairApiReqImportSeed::new(
@@ -306,7 +302,6 @@ impl LairClient {
     // uhhhh... clippy?? [u32] by itself is not sized... so, yes
     // this *does* have to be Boxed...
     #[allow(clippy::boxed_local)]
-    #[warn(warnings)]
     /// Derive a pre-existing key identified by given src_tag, with given
     /// derivation path, storing the final resulting sub-seed with
     /// the given dst_tag.
@@ -319,16 +314,24 @@ impl LairClient {
         derivation_path: Box<[u32]>,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let inner = self.0.clone();
+        let limits = PwHashLimits::current();
+
         async move {
             let src_deep_lock_passphrase =
                 if let Some(p) = src_deep_lock_passphrase {
-                    Some(encrypt_passphrase(p, inner.get_enc_ctx_key()).await?)
+                    Some(DeepLockPassphrase::new(
+                        encrypt_passphrase(p, inner.get_enc_ctx_key()).await?,
+                        limits,
+                    ))
                 } else {
                     None
                 };
             let dst_deep_lock_passphrase =
                 if let Some(p) = dst_deep_lock_passphrase {
-                    Some(encrypt_passphrase(p, inner.get_enc_ctx_key()).await?)
+                    Some(DeepLockPassphrase::new(
+                        encrypt_passphrase(p, inner.get_enc_ctx_key()).await?,
+                        limits,
+                    ))
                 } else {
                     None
                 };

@@ -12,14 +12,14 @@ pub struct LairApiReqDeriveSeed {
 
     /// If source seed is deep-locked, this passphrase will unlock it.
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub src_deep_lock_passphrase: Option<DeepLockPassphraseBytes>,
+    pub src_deep_lock_passphrase: Option<DeepLockPassphrase>,
 
     /// Tag under which to store derived seed.
     pub dst_tag: Arc<str>,
 
     /// Optional passphrase with which to deep-lock derived seed.
     #[serde(skip_serializing_if = "Option::is_none", default)]
-    pub dst_deep_lock_passphrase: Option<DeepLockPassphraseBytes>,
+    pub dst_deep_lock_passphrase: Option<DeepLockPassphrase>,
 
     /// The hierarchy of nested derivations.
     /// For instance, [99, 1, 42] would specify that the destination seed is the
@@ -31,9 +31,9 @@ impl LairApiReqDeriveSeed {
     /// Make a new list entries request.
     pub fn new(
         src_tag: Arc<str>,
-        src_deep_lock_passphrase: Option<DeepLockPassphraseBytes>,
+        src_deep_lock_passphrase: Option<DeepLockPassphrase>,
         dst_tag: Arc<str>,
-        dst_deep_lock_passphrase: Option<DeepLockPassphraseBytes>,
+        dst_deep_lock_passphrase: Option<DeepLockPassphrase>,
         derivation_path: Box<[u32]>,
     ) -> Self {
         Self {
