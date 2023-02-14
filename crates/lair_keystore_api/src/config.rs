@@ -113,7 +113,7 @@ impl std::fmt::Display for LairServerConfigInner {
                 } else if line.starts_with("runtimeSecretsSalt:") {
                     lines.push("");
                     lines.push("# -- cryptographic secrets --");
-                    lines.push("# If you modify the data below, you risk loosing access to your keys.");
+                    lines.push("# If you modify the data below, you risk losing access to your keys.");
                 }
             }
             lines.push(line);

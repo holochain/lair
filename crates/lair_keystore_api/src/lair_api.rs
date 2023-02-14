@@ -45,8 +45,25 @@ pub struct DeepLockPassphrase {
     /// argon2id mem_limit for decrypting runtime data
     pub mem_limit: u32,
     /// if this new seed is to be deep_locked, the passphrase for that.
-    pub passphrase: SecretDataSized<64, 81>,
+    pub passphrase: DeepLockPassphraseBytes,
 }
+
+impl DeepLockPassphrase {
+    /// Constructor
+    pub fn new(
+        passphrase: DeepLockPassphraseBytes,
+        limits: PwHashLimits,
+    ) -> Self {
+        Self {
+            passphrase,
+            ops_limit: limits.as_ops_limit(),
+            mem_limit: limits.as_mem_limit(),
+        }
+    }
+}
+
+/// The secret bytes of the passphrase
+pub type DeepLockPassphraseBytes = SecretDataSized<64, 81>;
 
 fn new_msg_id() -> Arc<str> {
     nanoid::nanoid!().into()
@@ -76,6 +93,9 @@ pub use new_seed::*;
 
 mod export_seed_by_tag;
 pub use export_seed_by_tag::*;
+
+mod derive_seed;
+pub use derive_seed::*;
 
 mod import_seed;
 pub use import_seed::*;
@@ -154,6 +174,12 @@ pub enum LairApiEnum {
 
     /// Response for import seed.
     ResImportSeed(LairApiResImportSeed),
+
+    /// Derive a new seed from an existing one according to a specified derivation path.
+    ReqDeriveSeed(LairApiReqDeriveSeed),
+
+    /// Response for drive seed.
+    ResDeriveSeed(LairApiResDeriveSeed),
 
     /// Request a signature.
     ReqSignByPubKey(LairApiReqSignByPubKey),
@@ -239,6 +265,12 @@ impl LairApiEnum {
                 msg_id.clone()
             }
             Self::ResImportSeed(LairApiResImportSeed { msg_id, .. }) => {
+                msg_id.clone()
+            }
+            Self::ReqDeriveSeed(LairApiReqDeriveSeed { msg_id, .. }) => {
+                msg_id.clone()
+            }
+            Self::ResDeriveSeed(LairApiResDeriveSeed { msg_id, .. }) => {
                 msg_id.clone()
             }
             Self::ReqSignByPubKey(LairApiReqSignByPubKey {

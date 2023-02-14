@@ -1,4 +1,4 @@
-use hc_seed_bundle::dependencies::sodoken::BufReadSized;
+use hc_seed_bundle::dependencies::sodoken::{BufReadSized, BufWriteSized};
 
 use super::*;
 
@@ -233,6 +233,106 @@ pub(crate) fn priv_req_new_seed<'a>(
         Ok(())
     }
 }
+pub(crate) fn priv_req_derive_seed<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    dec_ctx_key: &'a sodoken::BufReadSized<32>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqDeriveSeed,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        let store = priv_get_store(inner, unlocked)?;
+
+        let entry = store.get_entry_by_tag(req.src_tag.clone()).await?;
+
+        let (src_seed, src_seed_info) = match (&*entry, req.src_deep_lock_passphrase) {
+            (LairEntryInner::Seed { seed, seed_info, .. }, None) => {
+                let seed = seed.decrypt(store.get_bidi_ctx_key()).await?;
+                (seed, seed_info)
+            }
+
+            (
+                LairEntryInner::DeepLockedSeed {
+                    seed,
+                    seed_info,
+                    salt,
+                    ..
+                },
+                Some(secret),
+            ) => {
+                let deep_key = deep_unlock_key_from_passphrase(
+                    &secret,
+                    dec_ctx_key,
+                    BufReadSized::from(salt.clone().cloned_inner()),
+                )
+                .await?;
+                let seed = seed.decrypt(deep_key).await?;
+                (seed, seed_info)
+            },
+
+            (LairEntryInner::WkaTlsCert { .. }, _) => return Err("The tag provided is for a Cert, which cannot be derived. You must specify the tag for a Seed.".into()),
+            (LairEntryInner::Seed { .. }, Some(_)) => return Err("A passphrase was provided for a seed which is not deep-locked. Make the request without a `src_passphrase`.".into()),
+            (LairEntryInner::DeepLockedSeed { .. }, None) => return Err("A `src_passphrase` is needed to unlock the source seed which is deep-locked.".into()),
+        };
+
+        let mut parent = src_seed;
+
+        for index in req.derivation_path.iter() {
+            let derived = BufWriteSized::new_mem_locked()?;
+            sodoken::kdf::derive_from_key(
+                derived.clone(),
+                *index as u64,
+                *b"SeedBndl",
+                parent,
+            )?;
+            parent = derived.clone().into();
+        }
+
+        let dst_seed = parent;
+        let dst_dlp = req.dst_deep_lock_passphrase;
+
+        let dst_seed_info = match dst_dlp {
+            Some(secret) => {
+                // if deep locked, decrypt the deep lock passphrase
+                let deep_lock_passphrase =
+                    secret.passphrase.decrypt(dec_ctx_key.clone()).await?;
+
+                store
+                    .insert_deep_locked_seed(
+                        dst_seed,
+                        req.dst_tag.clone(),
+                        secret.ops_limit,
+                        secret.mem_limit,
+                        deep_lock_passphrase,
+                        src_seed_info.exportable,
+                    )
+                    .await?
+            }
+            // create a new seed
+            None => {
+                store
+                    .insert_seed(
+                        dst_seed,
+                        req.dst_tag.clone(),
+                        src_seed_info.exportable,
+                    )
+                    .await?
+            }
+        };
+        // send the response
+        send.send(
+            LairApiResDeriveSeed {
+                msg_id: req.msg_id,
+                // tag: req.tag.clone(),
+                seed_info: dst_seed_info,
+            }
+            .into_api_enum(),
+        )
+        .await?;
+
+        Ok(())
+    }
+}
 
 pub(crate) fn priv_req_export_seed_by_tag<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
@@ -376,6 +476,26 @@ pub(crate) fn priv_req_import_seed<'a>(
     }
 }
 
+async fn deep_unlock_key_from_passphrase(
+    dlp: &DeepLockPassphrase,
+    dec_ctx_key: &sodoken::BufReadSized<32>,
+    salt: BufReadSized<16>,
+) -> LairResult<BufReadSized<32>> {
+    // generate the deep lock key from the passphrase
+    let passphrase = dlp.passphrase.decrypt(dec_ctx_key.clone()).await?;
+
+    let deep_key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+    sodoken::hash::argon2id::hash(
+        deep_key.clone(),
+        passphrase,
+        salt,
+        dlp.ops_limit,
+        dlp.mem_limit,
+    )
+    .await?;
+    Ok(deep_key.into())
+}
+
 pub(crate) fn priv_req_sign_by_pub_key<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
@@ -414,18 +534,8 @@ pub(crate) fn priv_req_sign_by_pub_key<'a>(
                         Some(passphrase)
                     ) => {
                         // generate the deep lock key from the passphrase
-                        let passphrase = passphrase.decrypt(dec_ctx_key.clone()).await?;
-
-                        let deep_key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-                        sodoken::hash::argon2id::hash(
-                            deep_key.clone(),
-                            passphrase,
-                            BufReadSized::from(salt.clone().cloned_inner()),
-                            *ops_limit,
-                            *mem_limit,
-                        )
-                        .await?;
-                        let seed = seed.decrypt(deep_key.into()).await?;
+                        let deep_key = deep_unlock_key_from_passphrase(&DeepLockPassphrase { ops_limit: *ops_limit, mem_limit: *mem_limit, passphrase }, dec_ctx_key, BufReadSized::from(salt.clone().cloned_inner())).await?;
+                        let seed = seed.decrypt(deep_key).await?;
                         let (_, ed_sk) = derive_ed(&seed).await?;
                         ed_sk
                     }

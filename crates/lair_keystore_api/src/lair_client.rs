@@ -4,6 +4,7 @@ use crate::lair_api::traits::*;
 use crate::*;
 use futures::future::{BoxFuture, FutureExt};
 use futures::stream::StreamExt;
+use hc_seed_bundle::dependencies::sodoken::{BufRead, BufReadSized};
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::future::Future;
@@ -193,20 +194,10 @@ impl LairClient {
             let secret = match deep_lock_passphrase {
                 None => None,
                 Some(pass) => {
-                    // pre-hash the passphrase
-                    let pw_hash =
-                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
-
-                    let key = inner.get_enc_ctx_key();
-                    let secret =
-                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
+                    let passphrase =
+                        encrypt_passphrase(pass, inner.get_enc_ctx_key())
                             .await?;
-                    Some(DeepLockPassphrase {
-                        ops_limit: limits.as_ops_limit(),
-                        mem_limit: limits.as_mem_limit(),
-                        passphrase: secret,
-                    })
+                    Some(DeepLockPassphrase::new(passphrase, limits))
                 }
             };
             let req = LairApiReqNewSeed::new(tag, secret, exportable);
@@ -287,11 +278,7 @@ impl LairClient {
                     let secret =
                         SecretDataSized::encrypt(key, pw_hash.to_read_sized())
                             .await?;
-                    Some(DeepLockPassphrase {
-                        ops_limit: limits.as_ops_limit(),
-                        mem_limit: limits.as_mem_limit(),
-                        passphrase: secret,
-                    })
+                    Some(DeepLockPassphrase::new(secret, limits))
                 }
             };
             let req = LairApiReqImportSeed::new(
@@ -316,13 +303,44 @@ impl LairClient {
     /// the given dst_tag.
     pub fn derive_seed(
         &self,
-        _src_tag: Arc<str>,
-        _src_deep_lock_passphrase: Option<sodoken::BufRead>,
-        _dst_tag: Arc<str>,
-        _dst_deep_lock_passphrase: Option<sodoken::BufRead>,
-        _derivation: Box<[u32]>,
+        src_tag: Arc<str>,
+        src_deep_lock_passphrase: Option<BufRead>,
+        dst_tag: Arc<str>,
+        dst_deep_lock_passphrase: Option<BufRead>,
+        derivation_path: Box<[u32]>,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
-        async move { unimplemented!() }
+        let inner = self.0.clone();
+        let limits = PwHashLimits::current();
+
+        async move {
+            let src_deep_lock_passphrase =
+                if let Some(p) = src_deep_lock_passphrase {
+                    Some(DeepLockPassphrase::new(
+                        encrypt_passphrase(p, inner.get_enc_ctx_key()).await?,
+                        limits,
+                    ))
+                } else {
+                    None
+                };
+            let dst_deep_lock_passphrase =
+                if let Some(p) = dst_deep_lock_passphrase {
+                    Some(DeepLockPassphrase::new(
+                        encrypt_passphrase(p, inner.get_enc_ctx_key()).await?,
+                        limits,
+                    ))
+                } else {
+                    None
+                };
+            let req = LairApiReqDeriveSeed::new(
+                src_tag,
+                src_deep_lock_passphrase,
+                dst_tag,
+                dst_deep_lock_passphrase,
+                derivation_path,
+            );
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok(res.seed_info)
+        }
     }
 
     /// Generate a signature for given data, with the ed25519 keypair
@@ -544,3 +562,15 @@ impl LairClient {
 }
 
 pub mod async_io;
+
+async fn encrypt_passphrase(
+    pass: BufRead,
+    key: BufReadSized<32>,
+) -> LairResult<DeepLockPassphraseBytes> {
+    // pre-hash the passphrase
+    let pw_hash = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
+    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
+
+    let secret = SecretDataSized::encrypt(key, pw_hash.to_read_sized()).await?;
+    Ok(secret)
+}
