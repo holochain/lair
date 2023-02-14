@@ -282,7 +282,7 @@ pub(crate) fn priv_req_derive_seed<'a>(
             sodoken::kdf::derive_from_key(
                 derived.clone(),
                 *index as u64,
-                *b"IdnSecKy",
+                *b"SeedBndl",
                 parent,
             )?;
             parent = derived.clone().into();
