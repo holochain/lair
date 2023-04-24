@@ -9,8 +9,10 @@ pub fn build_ver() {
     println!("cargo:rerun-if-changed={BUILD_RS_PATH}");
     println!("cargo:rerun-if-changed={CARGO_TOML_PATH}");
 
-    let cargo_toml: toml::Value =
-        toml::from_slice(&std::fs::read(CARGO_TOML_PATH).unwrap()).unwrap();
+    let cargo_toml: toml::Value = toml::from_str(&String::from_utf8_lossy(
+        &std::fs::read(CARGO_TOML_PATH).unwrap(),
+    ))
+    .unwrap();
     let ver = cargo_toml
         .as_table()
         .unwrap()
