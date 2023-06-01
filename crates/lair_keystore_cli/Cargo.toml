@@ -1,0 +1,26 @@
+[package]
+name = "lair_keystore_cli"
+version = "0.2.4"
+description = "secret lair private keystore command line utility"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/holochain/lair"
+documentation = "https://docs.rs/lair_keystore_cli"
+authors = [ "Holochain Core Dev Team <devcore@holochain.org>" ]
+keywords = [ "holochain", "holo", "keystore", "secret", "cryptography" ]
+categories = [ "cryptography" ]
+edition = "2018"
+
+[dependencies]
+clap = { version = "4.3.0", features = [ "derive" ] }
+# lair_keystore_api must be pinned to enable strict version checks
+lair_keystore_api = { version = "=0.2.4", path = "../lair_keystore_api" }
+rand = "0.8.5"
+rand-utf8 = "0.0.1"
+rpassword = "7.2.0"
+
+[build-dependencies]
+lair_keystore_api = { version = "0.2.4", path = "../lair_keystore_api" }
+
+[[bin]]
+name = "lair-keystore-cli"
+path = "src/main.rs"
