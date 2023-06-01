@@ -114,7 +114,7 @@ async fn main_err() -> LairResult<()> {
 
             let seed_info = client.import_seed(pk_imp.clone(), pk_imp, None, nonce, cipher, rand_utf8::rand_utf8(&mut rand::thread_rng(), 32).into(), false).await?;
 
-            println!("Imported: {:?}", seed_info.ed25519_pub_key);
+            println!("{}", seed_info.ed25519_pub_key);
         }
     }
     Ok(())
