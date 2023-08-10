@@ -1,6 +1,6 @@
 //! Items for acting as a lair keystore server.
 
-use crate::lair_api::traits::AsLairCodec;
+use crate::lair_api::api_traits::AsLairCodec;
 use crate::*;
 use futures::future::{BoxFuture, FutureExt};
 use futures::stream::StreamExt;
@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 /// Traits related to LairServer. Unless you're writing a new
 /// implementation, you probably don't need these.
-pub mod traits {
+pub mod server_traits {
     use super::*;
 
     /// Trait object type for AsyncWrite instance.
@@ -35,7 +35,7 @@ pub mod traits {
         fn store(&self) -> BoxFuture<'static, LairResult<LairStore>>;
     }
 }
-use traits::*;
+use server_traits::*;
 
 /// A lair keystore server handle.
 /// Use this to handle incoming client connections.
