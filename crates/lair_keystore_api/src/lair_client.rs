@@ -1,6 +1,6 @@
 //! Items for connecting and interacting with a lair keystore as a client.
 
-use crate::lair_api::traits::*;
+use crate::lair_api::api_traits::*;
 use crate::*;
 use futures::future::{BoxFuture, FutureExt};
 use futures::stream::StreamExt;
@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 /// Traits related to LairClient. Unless you're writing a new
 /// implementation, you probably don't need these.
-pub mod traits {
+pub mod client_traits {
     use super::*;
 
     /// Object-safe lair client trait. Implement this to provide a new
@@ -34,7 +34,7 @@ pub mod traits {
         ) -> BoxFuture<'static, LairResult<LairApiEnum>>;
     }
 }
-use traits::*;
+use client_traits::*;
 
 /// A lair keystore client handle. Use this to make requests of the keystore.
 #[derive(Clone)]

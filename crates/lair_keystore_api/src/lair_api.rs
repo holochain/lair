@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 /// Helper traits for core types - you probably don't need these unless
 /// you are implementing new lair core instance logic.
-pub mod traits {
+pub mod api_traits {
     use super::*;
 
     /// Defines a lair serialization object.
@@ -33,7 +33,7 @@ pub mod traits {
         type Request: AsLairCodec;
     }
 }
-use traits::*;
+use api_traits::*;
 
 /// Instructions for how to argon2id pwhash a passphrase
 /// for use in deep locking a seed.
