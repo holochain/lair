@@ -31,7 +31,7 @@ url = { version = "2.3.1", features = [ "serde" ] }
 zeroize = "1.6.0"
 
 [target.'cfg(windows)'.dependencies]
-winapi = "0.3.9"
+winapi = { version = "0.3.9", features = ["winerror"] }
 
 [dev-dependencies]
 assert_cmd = "2.0.11"
