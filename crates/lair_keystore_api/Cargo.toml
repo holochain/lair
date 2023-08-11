@@ -15,12 +15,13 @@ base64 = "0.13.1"
 dunce = "1.0.4"
 # this doesn't strictly need to be pinned, but it supports the
 # determinism of the strict client/server version checks
-hc_seed_bundle = { version = "=0.1.6", path = "../hc_seed_bundle" }
+hc_seed_bundle = { version = "=0.1.7", path = "../hc_seed_bundle" }
 lru = "0.10.0"
 nanoid = "0.4.0"
 once_cell = "1.17.1"
 parking_lot = "0.12.1"
 rcgen = { version = "0.10.0", features = [ "zeroize" ] }
+time = "=0.3.23" # Pinned to prevent rvgen pulling in ^0.2.25 which doesn't build on Rust 1.66.1
 serde = { version = "1", features = [ "derive", "rc" ] }
 serde_json = "1"
 serde_yaml = "0.9.21"
