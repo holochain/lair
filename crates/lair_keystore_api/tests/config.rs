@@ -1,28 +1,33 @@
 use hc_seed_bundle::dependencies::sodoken;
 use lair_keystore_api::prelude::*;
 use std::{env::current_dir, path::PathBuf};
+use tempdir::TempDir;
 
 #[cfg(not(windows))]
 #[tokio::test(flavor = "multi_thread")]
 async fn lair_config_connection_url_relative_root() {
-    use std::fs::{create_dir, remove_dir};
+    // Lair config should use an absolute path for 'connection_url'
+    // when passed an relative path for 'lair_root'
 
     let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
 
-    let _ = create_dir("./config-root-path-test");
+    let dir = TempDir::new_in(".", "example").unwrap();
+
+    let mut relative_lair_root = PathBuf::from(".");
+    relative_lair_root.push(dir.path().components().last().unwrap());
+
     let config = hc_seed_bundle::PwHashLimits::Minimum
         .with_exec(|| {
             LairServerConfigInner::new(
-                "./config-root-path-test",
+                relative_lair_root,
                 passphrase.clone(),
             )
         })
         .await
         .unwrap();
-    let _ = remove_dir("./config-root-path-test");
 
-    let mut expected_path: PathBuf = current_dir().unwrap();
-    expected_path.push("config-root-path-test");
+    let mut expected_path = current_dir().unwrap();
+    expected_path.push(dir.path().components().last().unwrap());
     let expected_path_str = expected_path.to_str().unwrap();
 
     assert_eq!(
@@ -34,24 +39,25 @@ async fn lair_config_connection_url_relative_root() {
 #[cfg(not(windows))]
 #[tokio::test(flavor = "multi_thread")]
 async fn lair_config_connection_url_absolute_root() {
-    use std::fs::{create_dir, remove_dir};
-
+    // Lair config should use an absolute path for 'connection_url'
+    // when passed an absolute path for 'lair_root'
+    
     let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
 
-    let _ = create_dir("./config-root-path-test");
-    let mut lair_root = current_dir().unwrap();
-    lair_root.push("config-root-path-test");
+    let dir = TempDir::new_in(".", "example").unwrap();
+    let mut absolute_lair_root = current_dir().unwrap();
+    absolute_lair_root.push(dir.path().components().last().unwrap());
+
     let config = hc_seed_bundle::PwHashLimits::Minimum
         .with_exec(|| {
-            LairServerConfigInner::new(lair_root.clone(), passphrase.clone())
+            LairServerConfigInner::new(absolute_lair_root.clone(), passphrase.clone())
         })
         .await
         .unwrap();
-    let _ = remove_dir("./config-root-path-test");
 
-    let mut expected_path: PathBuf = current_dir().unwrap();
-    expected_path.push("config-root-path-test");
-    let expected_path_str = lair_root.to_str().unwrap();
+    let mut expected_path = current_dir().unwrap();
+    expected_path.push(dir.path().components().last().unwrap());
+    let expected_path_str = expected_path.to_str().unwrap();
 
     assert_eq!(
         true,
