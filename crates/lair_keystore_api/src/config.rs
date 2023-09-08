@@ -322,7 +322,7 @@ mod tests {
         let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
         let mut srv = hc_seed_bundle::PwHashLimits::Minimum
             .with_exec(|| {
-                LairServerConfigInner::new("/tmp/my/path", passphrase)
+                LairServerConfigInner::new("/", passphrase)
             })
             .await
             .unwrap();
