@@ -18,10 +18,7 @@ async fn lair_config_connection_url_relative_root() {
 
     let config = hc_seed_bundle::PwHashLimits::Minimum
         .with_exec(|| {
-            LairServerConfigInner::new(
-                relative_lair_root,
-                passphrase.clone(),
-            )
+            LairServerConfigInner::new(relative_lair_root, passphrase.clone())
         })
         .await
         .unwrap();
@@ -41,7 +38,7 @@ async fn lair_config_connection_url_relative_root() {
 async fn lair_config_connection_url_absolute_root() {
     // Lair config should use an absolute path for 'connection_url'
     // when passed an absolute path for 'lair_root'
-    
+
     let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
 
     let dir = TempDir::new_in(".", "example").unwrap();
@@ -50,7 +47,10 @@ async fn lair_config_connection_url_absolute_root() {
 
     let config = hc_seed_bundle::PwHashLimits::Minimum
         .with_exec(|| {
-            LairServerConfigInner::new(absolute_lair_root.clone(), passphrase.clone())
+            LairServerConfigInner::new(
+                absolute_lair_root.clone(),
+                passphrase.clone(),
+            )
         })
         .await
         .unwrap();

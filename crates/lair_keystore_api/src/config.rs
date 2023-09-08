@@ -331,10 +331,7 @@ mod tests {
         println!("-- server config start --");
         println!("{}", &srv);
         println!("-- server config end --");
-        assert_eq!(
-            tempdir.path(),
-            srv.pid_file.parent().unwrap(),
-        );
+        assert_eq!(tempdir.path(), srv.pid_file.parent().unwrap(),);
 
         srv.signature_fallback = LairServerSignatureFallback::Command {
             program: std::path::Path::new("./my-executable").into(),
