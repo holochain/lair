@@ -238,7 +238,7 @@ impl LairServerConfigInner {
             // on not-windows, we default to using unix domain sockets
             #[cfg(not(windows))]
             let connection_url = {
-                let mut con_path = root_path.clone();
+                let mut con_path = dunce::canonicalize(root_path)?;
                 con_path.push("socket");
                 url::Url::parse(&format!(
                     "unix://{}?k={}",
@@ -319,10 +319,11 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_config_yaml() {
+        let tempdir = tempdir::TempDir::new("example").unwrap();
         let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
         let mut srv = hc_seed_bundle::PwHashLimits::Minimum
             .with_exec(|| {
-                LairServerConfigInner::new("/tmp/my/path", passphrase)
+                LairServerConfigInner::new(tempdir.path(), passphrase)
             })
             .await
             .unwrap();
@@ -330,10 +331,7 @@ mod tests {
         println!("-- server config start --");
         println!("{}", &srv);
         println!("-- server config end --");
-        assert_eq!(
-            std::path::PathBuf::from("/tmp/my/path").as_path(),
-            srv.pid_file.parent().unwrap(),
-        );
+        assert_eq!(tempdir.path(), srv.pid_file.parent().unwrap(),);
 
         srv.signature_fallback = LairServerSignatureFallback::Command {
             program: std::path::Path::new("./my-executable").into(),
