@@ -319,10 +319,11 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_config_yaml() {
+        let tempdir = tempdir::TempDir::new("example").unwrap();
         let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
         let mut srv = hc_seed_bundle::PwHashLimits::Minimum
             .with_exec(|| {
-                LairServerConfigInner::new("/", passphrase)
+                LairServerConfigInner::new(tempdir.path(), passphrase)
             })
             .await
             .unwrap();
@@ -331,7 +332,7 @@ mod tests {
         println!("{}", &srv);
         println!("-- server config end --");
         assert_eq!(
-            std::path::PathBuf::from("/tmp/my/path").as_path(),
+            tempdir.path(),
             srv.pid_file.parent().unwrap(),
         );
 
