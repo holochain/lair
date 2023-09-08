@@ -238,7 +238,7 @@ impl LairServerConfigInner {
             // on not-windows, we default to using unix domain sockets
             #[cfg(not(windows))]
             let connection_url = {
-                let mut con_path = root_path.clone().canonicalize().unwrap();
+                let mut con_path = dunce::canonicalize(root_path)?;
                 con_path.push("socket");
                 url::Url::parse(&format!(
                     "unix://{}?k={}",
