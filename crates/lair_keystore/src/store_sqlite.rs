@@ -179,7 +179,7 @@ impl SqlPool {
         // only set WAL mode on the first write connection
         // it's a slow operation, and not needed on subsequent connections.
         write_con
-            .pragma_update(None, "journal_mode", &"WAL".to_string())
+            .pragma_update(None, "journal_mode", "WAL".to_string())
             .map_err(one_err::OneErr::new)?;
 
         // initialize tables if they don't already exist
