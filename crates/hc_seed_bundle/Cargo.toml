@@ -13,7 +13,7 @@ edition = "2018"
 [dependencies]
 futures = "0.3.28"
 one_err = "0.0.8"
-rmp-serde = "1.1.1"
+rmp-serde = "0.15"
 rmpv = { version = "=1.0.0", features = [ "with-serde" ] } # Version 1.0.1 requires Rust 1.70.0
 serde = { version = "1", features = [ "derive", "rc" ] }
 serde_bytes = "0.11.9"
