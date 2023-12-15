@@ -1,6 +1,6 @@
 [package]
 name = "lair_keystore_api"
-version = "0.3.0"
+version = "0.4.0"
 description = "secret lair private keystore API library"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/holochain/lair"
@@ -15,7 +15,7 @@ base64 = "0.13.1"
 dunce = "1.0.4"
 # this doesn't strictly need to be pinned, but it supports the
 # determinism of the strict client/server version checks
-hc_seed_bundle = { version = "=0.1.7", path = "../hc_seed_bundle" }
+hc_seed_bundle = { version = "=0.2.0", path = "../hc_seed_bundle" }
 lru = "0.10.0"
 nanoid = "0.4.0"
 once_cell = "1.17.1"
