@@ -111,20 +111,19 @@ impl SqlCon {
 
 /// extension trait for execute that we don't care about results
 trait ExecExt {
-    fn execute_optional<P>(&self, sql: &str, params: P) -> LairResult<()>
+    fn execute_optional<P>(&self, sql: &str, params: P) -> rusqlite::Result<()>
     where
         P: rusqlite::Params;
 }
 
 impl ExecExt for rusqlite::Connection {
-    fn execute_optional<P>(&self, sql: &str, params: P) -> LairResult<()>
+    fn execute_optional<P>(&self, sql: &str, params: P) -> rusqlite::Result<()>
     where
         P: rusqlite::Params,
     {
         use rusqlite::OptionalExtension;
         self.query_row(sql, params, |_| Ok(()))
-            .optional()
-            .map_err(one_err::OneErr::new)?;
+            .optional()?;
         Ok(())
     }
 }
@@ -166,31 +165,28 @@ impl SqlPool {
         let mut write_con =
             match create_configured_db_connection(&path, key_pragma.clone()) {
                 Ok(con) => con,
-                Err(e) => {
+                Err(err @ rusqlite::Error::SqliteFailure(rusqlite::ffi::Error {
+                    code: rusqlite::ffi::ErrorCode::NotADatabase,
+                    ..
+                }, ..)) => {
                     if "true"
                         == std::env::var("LAIR_MIGRATE_UNENCRYPTED")
                             .unwrap_or_default()
                             .as_str()
                     {
-                        // Known SQLite error when the database is not encrypted, try to encrypt it and retry starting the server
-                        if let Some("file is not a database") =
-                            e.get_field::<&str, &str>("error")
-                        {
-                            encrypt_unencrypted_database(
-                                &path,
-                                key_pragma.clone(),
-                            )?;
-                            create_configured_db_connection(
-                                &path,
-                                key_pragma.clone(),
-                            )?
-                        } else {
-                            return Err(e);
-                        }
+                        encrypt_unencrypted_database(
+                            &path,
+                            key_pragma.clone(),
+                        )?;
+                        create_configured_db_connection(
+                            &path,
+                            key_pragma.clone(),
+                        ).map_err(one_err::OneErr::new)?
                     } else {
-                        return Err(e);
+                        return Err(one_err::OneErr::new(err));
                     }
                 }
+                Err(e) => return Err(one_err::OneErr::new(e)),
             };
 
         // only set WAL mode on the first write connection
@@ -230,7 +226,7 @@ impl SqlPool {
             .map_err(one_err::OneErr::new)?;
 
             // set generic pragmas
-            set_pragmas(&read_con, key_pragma.clone())?;
+            set_pragmas(&read_con, key_pragma.clone()).map_err(one_err::OneErr::new)?;
 
             *rc_mut = Some(read_con);
         }
@@ -309,7 +305,7 @@ impl SqlPool {
 fn create_configured_db_connection(
     path: &std::path::PathBuf,
     key_pragma: BufRead,
-) -> LairResult<rusqlite::Connection> {
+) -> rusqlite::Result<rusqlite::Connection> {
     use rusqlite::OpenFlags;
 
     // open a single write connection to the database
@@ -319,8 +315,7 @@ fn create_configured_db_connection(
             | OpenFlags::SQLITE_OPEN_CREATE
             | OpenFlags::SQLITE_OPEN_NO_MUTEX
             | OpenFlags::SQLITE_OPEN_URI,
-    )
-    .map_err(one_err::OneErr::new)?;
+    )?;
 
     // set generic pragmas
     set_pragmas(&write_con, key_pragma)?;
@@ -525,20 +520,17 @@ fn secure_write_key_pragma(
 fn set_pragmas(
     con: &rusqlite::Connection,
     key_pragma: BufRead,
-) -> LairResult<()> {
-    con.busy_timeout(std::time::Duration::from_millis(30_000))
-        .map_err(one_err::OneErr::new)?;
+) -> rusqlite::Result<()> {
+    con.busy_timeout(std::time::Duration::from_millis(30_000))?;
 
     con.execute_optional(
         std::str::from_utf8(&key_pragma.read_lock()).unwrap(),
         [],
     )?;
 
-    con.pragma_update(None, "trusted_schema", "0".to_string())
-        .map_err(one_err::OneErr::new)?;
+    con.pragma_update(None, "trusted_schema", "0".to_string())?;
 
-    con.pragma_update(None, "synchronous", "1".to_string())
-        .map_err(one_err::OneErr::new)?;
+    con.pragma_update(None, "synchronous", "1".to_string())?;
 
     Ok(())
 }
