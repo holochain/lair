@@ -46,7 +46,7 @@ jobs:
         env:
           SODIUM_USE_PKG_CONFIG: "true"
         run: |-
-          SODIUM_LIB_DIR=${{ steps.vcpkg.outputs.lib_dir }}
+          $env:SODIUM_LIB_DIR="$(pwd)\packages\libsodium_x64-windows\lib"
           make test
 
       - name: Make Test
