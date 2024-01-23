@@ -314,7 +314,7 @@ fn create_configured_db_connection(
 
     // open a single write connection to the database
     let write_con = rusqlite::Connection::open_with_flags(
-        &path,
+        path,
         OpenFlags::SQLITE_OPEN_READ_WRITE
             | OpenFlags::SQLITE_OPEN_CREATE
             | OpenFlags::SQLITE_OPEN_NO_MUTEX
