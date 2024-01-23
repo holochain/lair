@@ -42,6 +42,13 @@ jobs:
           github-binarycache: true
 
       - name: Make Test
+        if: matrix.os == 'windows-latest'
         env:
           SODIUM_USE_PKG_CONFIG: "true"
+        run: |-
+          SODIUM_LIB_DIR=${{ steps.vcpkg.outputs.lib_dir }}
+          make test
+
+      - name: Make Test
+        if: matrix.os != 'windows-latest'
         run: make test
