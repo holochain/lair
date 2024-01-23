@@ -44,12 +44,12 @@ jobs:
       - name: Make Test
         if: matrix.os == 'windows-latest'
         run: |-
-          $env:SODIUM_LIB_DIR="$(pwd)\vcpkg\packages\libsodium_x64-windows\lib"
+          $env:SODIUM_LIB_DIR="$(pwd)\vcpkg\packages\libsodium_x64-windows-release\lib"
           ls
           ls .\vcpkg
           ls .\vcpkg\packages
-          ls .\vcpkg\packages\libsodium_x64-windows
-          ls .\vcpkg\packages\libsodium_x64-windows\lib
+          ls .\vcpkg\packages\libsodium_x64-windows-release
+          ls .\vcpkg\packages\libsodium_x64-windows-release\lib
           ls $SODIUM_LIB_DIR
           make test
 
