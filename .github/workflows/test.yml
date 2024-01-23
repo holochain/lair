@@ -46,6 +46,10 @@ jobs:
         run: |-
           $env:SODIUM_LIB_DIR="$(pwd)\vcpkg\packages\libsodium_x64-windows\lib"
           ls
+          ls .\vcpkg
+          ls .\vcpkg\packages
+          ls .\vcpkg\packages\libsodium_x64-windows
+          ls .\vcpkg\packages\libsodium_x64-windows\lib
           ls $SODIUM_LIB_DIR
           make test
 
