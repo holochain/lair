@@ -1,6 +1,6 @@
+use common::connect;
 use lair_keystore::dependencies::*;
 use lair_keystore_api::prelude::*;
-use common::connect;
 
 mod common;
 

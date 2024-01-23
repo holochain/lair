@@ -1,5 +1,5 @@
+use common::{connect_with_config, create_config};
 use lair_keystore_api::dependencies::{sodoken, tokio};
-use common::{create_config, connect_with_config};
 
 mod common;
 
@@ -10,9 +10,9 @@ async fn migrate_unencrypted() {
     let tmpdir = tempdir::TempDir::new("lair keystore test").unwrap();
 
     let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
-    
+
     let config = create_config(&tmpdir, passphrase.clone()).await;
-    
+
     // Set up an unencrypted database, by not setting a key on the connection
     {
         let conn = Connection::open(&config.store_file).unwrap();
@@ -32,13 +32,15 @@ async fn migrate_unencrypted() {
     match connect_with_config(config.clone(), passphrase.clone()).await {
         Ok(_) => {
             panic!("Shouldn't have been able to spawn lair-keystore");
-        },
+        }
         Err(_) => {
-            // That's good, we shouldn't have been able to connect because the database won't auto-migrate without `LAIR_MIGRATE_UNENCRYPTED` 
+            // That's good, we shouldn't have been able to connect because the database won't auto-migrate without `LAIR_MIGRATE_UNENCRYPTED`
         }
     }
 
     std::env::set_var("LAIR_MIGRATE_UNENCRYPTED", "true");
 
-    connect_with_config(config.clone(), passphrase.clone()).await.unwrap();
+    connect_with_config(config.clone(), passphrase.clone())
+        .await
+        .unwrap();
 }

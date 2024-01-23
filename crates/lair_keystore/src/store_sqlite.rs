@@ -163,22 +163,35 @@ impl SqlPool {
         // initialize the sqlcipher key pragma
         let key_pragma = secure_write_key_pragma(dbk_secret)?;
 
-        let mut write_con = match create_configured_db_connection(&path, key_pragma.clone()) {
-            Ok(con) => con,
-            Err(e) => {
-                if "true" == std::env::var("LAIR_MIGRATE_UNENCRYPTED").unwrap_or_default().as_str() {
-                    // Known SQLite error when the database is not encrypted, try to encrypt it and retry starting the server
-                    if let Some("file is not a database") = e.get_field::<&str, &str>("error") {
-                        encrypt_unencrypted_database(&path, key_pragma.clone())?;
-                        create_configured_db_connection(&path, key_pragma.clone())?
+        let mut write_con =
+            match create_configured_db_connection(&path, key_pragma.clone()) {
+                Ok(con) => con,
+                Err(e) => {
+                    if "true"
+                        == std::env::var("LAIR_MIGRATE_UNENCRYPTED")
+                            .unwrap_or_default()
+                            .as_str()
+                    {
+                        // Known SQLite error when the database is not encrypted, try to encrypt it and retry starting the server
+                        if let Some("file is not a database") =
+                            e.get_field::<&str, &str>("error")
+                        {
+                            encrypt_unencrypted_database(
+                                &path,
+                                key_pragma.clone(),
+                            )?;
+                            create_configured_db_connection(
+                                &path,
+                                key_pragma.clone(),
+                            )?
+                        } else {
+                            return Err(e);
+                        }
                     } else {
                         return Err(e);
                     }
-                } else {
-                    return Err(e);
                 }
-            }
-        };
+            };
 
         // only set WAL mode on the first write connection
         // it's a slow operation, and not needed on subsequent connections.
@@ -293,7 +306,10 @@ impl SqlPool {
     }
 }
 
-fn create_configured_db_connection(path: &std::path::PathBuf, key_pragma: BufRead) -> LairResult<rusqlite::Connection> {
+fn create_configured_db_connection(
+    path: &std::path::PathBuf,
+    key_pragma: BufRead,
+) -> LairResult<rusqlite::Connection> {
     use rusqlite::OpenFlags;
 
     // open a single write connection to the database
@@ -527,7 +543,10 @@ fn set_pragmas(
     Ok(())
 }
 
-fn encrypt_unencrypted_database(path: &std::path::PathBuf, key_pragma: BufRead) -> LairResult<()> {
+fn encrypt_unencrypted_database(
+    path: &std::path::PathBuf,
+    key_pragma: BufRead,
+) -> LairResult<()> {
     // e.g. keystore/store_file -> keystore/store_file-encrypted
     let encrypted_path = path
         .parent()
@@ -557,13 +576,15 @@ fn encrypt_unencrypted_database(path: &std::path::PathBuf, key_pragma: BufRead) 
 
     // Migrate the database
     {
-        let conn = rusqlite::Connection::open(path).map_err(one_err::OneErr::new)?;
+        let conn =
+            rusqlite::Connection::open(path).map_err(one_err::OneErr::new)?;
 
         // Ensure everything in the WAL is written to the main database
         conn.execute("VACUUM", ()).map_err(one_err::OneErr::new)?;
 
         // Start an exclusive transaction to avoid anybody writing to the database while we're migrating it
-        conn.execute("BEGIN EXCLUSIVE", ()).map_err(one_err::OneErr::new)?;
+        conn.execute("BEGIN EXCLUSIVE", ())
+            .map_err(one_err::OneErr::new)?;
 
         let lock = key_pragma.read_lock();
         conn.execute(
@@ -572,14 +593,19 @@ fn encrypt_unencrypted_database(path: &std::path::PathBuf, key_pragma: BufRead) 
                 ":db_name": encrypted_path.to_str(),
                 ":key": &lock[14..81],
             },
-        ).map_err(one_err::OneErr::new)?;
+        )
+        .map_err(one_err::OneErr::new)?;
 
-        conn.query_row("SELECT sqlcipher_export('encrypted')", (), |_| Ok(0)).map_err(one_err::OneErr::new)?;
+        conn.query_row("SELECT sqlcipher_export('encrypted')", (), |_| Ok(0))
+            .map_err(one_err::OneErr::new)?;
 
         conn.execute("COMMIT", ()).map_err(one_err::OneErr::new)?;
 
-        conn.execute("DETACH DATABASE encrypted", ()).map_err(one_err::OneErr::new)?;
-        conn.close().map_err(|(_, err)| err).map_err(one_err::OneErr::new)?;
+        conn.execute("DETACH DATABASE encrypted", ())
+            .map_err(one_err::OneErr::new)?;
+        conn.close()
+            .map_err(|(_, err)| err)
+            .map_err(one_err::OneErr::new)?;
     }
 
     // Swap the databases over

@@ -2,7 +2,10 @@ use lair_keystore::dependencies::*;
 use lair_keystore_api::prelude::*;
 use std::sync::Arc;
 
-pub async fn create_config(tmpdir: &tempdir::TempDir, passphrase: sodoken::BufRead) -> Arc<LairServerConfigInner> {
+pub async fn create_config(
+    tmpdir: &tempdir::TempDir,
+    passphrase: sodoken::BufRead,
+) -> Arc<LairServerConfigInner> {
     // create the config for the test server
     Arc::new(
         hc_seed_bundle::PwHashLimits::Minimum
@@ -14,7 +17,10 @@ pub async fn create_config(tmpdir: &tempdir::TempDir, passphrase: sodoken::BufRe
     )
 }
 
-pub async fn connect_with_config(config: Arc<LairServerConfigInner>, passphrase: sodoken::BufRead) -> LairResult<lair_keystore_api::LairClient> {
+pub async fn connect_with_config(
+    config: Arc<LairServerConfigInner>,
+    passphrase: sodoken::BufRead,
+) -> LairResult<lair_keystore_api::LairClient> {
     // execute the server
     lair_keystore::server::StandaloneServer::new(config.clone())
         .await?
@@ -30,7 +36,9 @@ pub async fn connect_with_config(config: Arc<LairServerConfigInner>, passphrase:
 }
 
 #[allow(dead_code)]
-pub async fn connect(tmpdir: &tempdir::TempDir) -> lair_keystore_api::LairClient {
+pub async fn connect(
+    tmpdir: &tempdir::TempDir,
+) -> lair_keystore_api::LairClient {
     // set up a passphrase
     let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
 
