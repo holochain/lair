@@ -31,6 +31,16 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
 
+      - name: vcpkg build
+        if: matrix.os == 'windows-latest'
+        uses: johnwason/vcpkg-action@v6
+        id: vcpkg
+        with:
+          pkgs: libsodium
+          triplet: x64-windows-release
+          token: ${{ github.token }}
+          github-binarycache: true
+
       - name: Make Test
         env:
           SODIUM_USE_PKG_CONFIG: "true"
