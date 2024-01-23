@@ -3,6 +3,7 @@ use lair_keystore_api::dependencies::{sodoken, tokio};
 
 mod common;
 
+#[cfg(not(windows))] // No encryption on Windows, ignore this test
 #[tokio::test(flavor = "multi_thread")]
 async fn migrate_unencrypted() {
     use rusqlite::Connection;
