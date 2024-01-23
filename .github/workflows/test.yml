@@ -41,16 +41,10 @@ jobs:
           token: ${{ github.token }}
           github-binarycache: true
 
-      - name: Make Test
+      - name: Make Test Windows
         if: matrix.os == 'windows-latest'
         run: |-
           $env:SODIUM_LIB_DIR="$(pwd)\vcpkg\packages\libsodium_x64-windows-release\lib"
-          ls
-          ls .\vcpkg
-          ls .\vcpkg\packages
-          ls .\vcpkg\packages\libsodium_x64-windows-release
-          ls .\vcpkg\packages\libsodium_x64-windows-release\lib
-          ls $SODIUM_LIB_DIR
           make test
 
       - name: Make Test
