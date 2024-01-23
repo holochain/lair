@@ -122,8 +122,7 @@ impl ExecExt for rusqlite::Connection {
         P: rusqlite::Params,
     {
         use rusqlite::OptionalExtension;
-        self.query_row(sql, params, |_| Ok(()))
-            .optional()?;
+        self.query_row(sql, params, |_| Ok(())).optional()?;
         Ok(())
     }
 }
@@ -165,10 +164,15 @@ impl SqlPool {
         let mut write_con =
             match create_configured_db_connection(&path, key_pragma.clone()) {
                 Ok(con) => con,
-                Err(err @ rusqlite::Error::SqliteFailure(rusqlite::ffi::Error {
-                    code: rusqlite::ffi::ErrorCode::NotADatabase,
-                    ..
-                }, ..)) => {
+                Err(
+                    err @ rusqlite::Error::SqliteFailure(
+                        rusqlite::ffi::Error {
+                            code: rusqlite::ffi::ErrorCode::NotADatabase,
+                            ..
+                        },
+                        ..,
+                    ),
+                ) => {
                     if "true"
                         == std::env::var("LAIR_MIGRATE_UNENCRYPTED")
                             .unwrap_or_default()
@@ -181,7 +185,8 @@ impl SqlPool {
                         create_configured_db_connection(
                             &path,
                             key_pragma.clone(),
-                        ).map_err(one_err::OneErr::new)?
+                        )
+                        .map_err(one_err::OneErr::new)?
                     } else {
                         return Err(one_err::OneErr::new(err));
                     }
@@ -226,7 +231,8 @@ impl SqlPool {
             .map_err(one_err::OneErr::new)?;
 
             // set generic pragmas
-            set_pragmas(&read_con, key_pragma.clone()).map_err(one_err::OneErr::new)?;
+            set_pragmas(&read_con, key_pragma.clone())
+                .map_err(one_err::OneErr::new)?;
 
             *rc_mut = Some(read_con);
         }
