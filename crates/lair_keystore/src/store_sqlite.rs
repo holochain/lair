@@ -111,20 +111,18 @@ impl SqlCon {
 
 /// extension trait for execute that we don't care about results
 trait ExecExt {
-    fn execute_optional<P>(&self, sql: &str, params: P) -> LairResult<()>
+    fn execute_optional<P>(&self, sql: &str, params: P) -> rusqlite::Result<()>
     where
         P: rusqlite::Params;
 }
 
 impl ExecExt for rusqlite::Connection {
-    fn execute_optional<P>(&self, sql: &str, params: P) -> LairResult<()>
+    fn execute_optional<P>(&self, sql: &str, params: P) -> rusqlite::Result<()>
     where
         P: rusqlite::Params,
     {
         use rusqlite::OptionalExtension;
-        self.query_row(sql, params, |_| Ok(()))
-            .optional()
-            .map_err(one_err::OneErr::new)?;
+        self.query_row(sql, params, |_| Ok(())).optional()?;
         Ok(())
     }
 }
@@ -163,18 +161,38 @@ impl SqlPool {
         // initialize the sqlcipher key pragma
         let key_pragma = secure_write_key_pragma(dbk_secret)?;
 
-        // open a single write connection to the database
-        let mut write_con = rusqlite::Connection::open_with_flags(
-            &path,
-            OpenFlags::SQLITE_OPEN_READ_WRITE
-                | OpenFlags::SQLITE_OPEN_CREATE
-                | OpenFlags::SQLITE_OPEN_NO_MUTEX
-                | OpenFlags::SQLITE_OPEN_URI,
-        )
-        .map_err(one_err::OneErr::new)?;
-
-        // set generic pragmas
-        set_pragmas(&write_con, key_pragma.clone())?;
+        let mut write_con =
+            match create_configured_db_connection(&path, key_pragma.clone()) {
+                Ok(con) => con,
+                Err(
+                    err @ rusqlite::Error::SqliteFailure(
+                        rusqlite::ffi::Error {
+                            code: rusqlite::ffi::ErrorCode::NotADatabase,
+                            ..
+                        },
+                        ..,
+                    ),
+                ) => {
+                    if "true"
+                        == std::env::var("LAIR_MIGRATE_UNENCRYPTED")
+                            .unwrap_or_default()
+                            .as_str()
+                    {
+                        encrypt_unencrypted_database(
+                            &path,
+                            key_pragma.clone(),
+                        )?;
+                        create_configured_db_connection(
+                            &path,
+                            key_pragma.clone(),
+                        )
+                        .map_err(one_err::OneErr::new)?
+                    } else {
+                        return Err(one_err::OneErr::new(err));
+                    }
+                }
+                Err(e) => return Err(one_err::OneErr::new(e)),
+            };
 
         // only set WAL mode on the first write connection
         // it's a slow operation, and not needed on subsequent connections.
@@ -213,7 +231,8 @@ impl SqlPool {
             .map_err(one_err::OneErr::new)?;
 
             // set generic pragmas
-            set_pragmas(&read_con, key_pragma.clone())?;
+            set_pragmas(&read_con, key_pragma.clone())
+                .map_err(one_err::OneErr::new)?;
 
             *rc_mut = Some(read_con);
         }
@@ -287,6 +306,27 @@ impl SqlPool {
             }
         }
     }
+}
+
+fn create_configured_db_connection(
+    path: &std::path::PathBuf,
+    key_pragma: BufRead,
+) -> rusqlite::Result<rusqlite::Connection> {
+    use rusqlite::OpenFlags;
+
+    // open a single write connection to the database
+    let write_con = rusqlite::Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_WRITE
+            | OpenFlags::SQLITE_OPEN_CREATE
+            | OpenFlags::SQLITE_OPEN_NO_MUTEX
+            | OpenFlags::SQLITE_OPEN_URI,
+    )?;
+
+    // set generic pragmas
+    set_pragmas(&write_con, key_pragma)?;
+
+    Ok(write_con)
 }
 
 impl AsLairStore for SqlPool {
@@ -486,20 +526,89 @@ fn secure_write_key_pragma(
 fn set_pragmas(
     con: &rusqlite::Connection,
     key_pragma: BufRead,
-) -> LairResult<()> {
-    con.busy_timeout(std::time::Duration::from_millis(30_000))
-        .map_err(one_err::OneErr::new)?;
+) -> rusqlite::Result<()> {
+    con.busy_timeout(std::time::Duration::from_millis(30_000))?;
 
     con.execute_optional(
         std::str::from_utf8(&key_pragma.read_lock()).unwrap(),
         [],
     )?;
 
-    con.pragma_update(None, "trusted_schema", "0".to_string())
+    con.pragma_update(None, "trusted_schema", "0".to_string())?;
+
+    con.pragma_update(None, "synchronous", "1".to_string())?;
+
+    Ok(())
+}
+
+fn encrypt_unencrypted_database(
+    path: &std::path::PathBuf,
+    key_pragma: BufRead,
+) -> LairResult<()> {
+    // e.g. keystore/store_file -> keystore/store_file-encrypted
+    let encrypted_path = path
+        .parent()
+        .ok_or_else(|| -> one_err::OneErr {
+            format!("Database file path has no parent: {:?}", path).into()
+        })?
+        .join(
+            path.file_stem()
+                .and_then(|s| s.to_str())
+                .ok_or_else(|| -> one_err::OneErr {
+                    format!("Database file path has no name: {:?}", path).into()
+                })?
+                .to_string()
+                + "-encrypted"
+                + &path
+                    .extension()
+                    .and_then(|s| s.to_str())
+                    .map(|p| ".".to_string() + p)
+                    .unwrap_or_default(),
+        );
+
+    tracing::warn!(
+        "Attempting encryption of unencrypted database: {:?} -> {:?}",
+        path,
+        encrypted_path
+    );
+
+    // Migrate the database
+    {
+        let conn =
+            rusqlite::Connection::open(path).map_err(one_err::OneErr::new)?;
+
+        // Ensure everything in the WAL is written to the main database
+        conn.execute("VACUUM", ()).map_err(one_err::OneErr::new)?;
+
+        // Start an exclusive transaction to avoid anybody writing to the database while we're migrating it
+        conn.execute("BEGIN EXCLUSIVE", ())
+            .map_err(one_err::OneErr::new)?;
+
+        let lock = key_pragma.read_lock();
+        conn.execute(
+            "ATTACH DATABASE :db_name AS encrypted KEY :key",
+            rusqlite::named_params! {
+                ":db_name": encrypted_path.to_str(),
+                ":key": &lock[14..81],
+            },
+        )
         .map_err(one_err::OneErr::new)?;
 
-    con.pragma_update(None, "synchronous", "1".to_string())
-        .map_err(one_err::OneErr::new)?;
+        conn.query_row("SELECT sqlcipher_export('encrypted')", (), |_| Ok(0))
+            .map_err(one_err::OneErr::new)?;
+
+        conn.execute("COMMIT", ()).map_err(one_err::OneErr::new)?;
+
+        conn.execute("DETACH DATABASE encrypted", ())
+            .map_err(one_err::OneErr::new)?;
+        conn.close()
+            .map_err(|(_, err)| err)
+            .map_err(one_err::OneErr::new)?;
+    }
+
+    // Swap the databases over
+    std::fs::remove_file(path)?;
+    std::fs::rename(encrypted_path, path)?;
 
     Ok(())
 }

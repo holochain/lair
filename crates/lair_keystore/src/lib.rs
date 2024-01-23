@@ -54,6 +54,8 @@ include!(concat!(env!("OUT_DIR"), "/ver.rs"));
 
 /// Re-exported dependencies.
 pub mod dependencies {
+    // Not sure why Clippy picks this up as unused, it's exported to be used elsewhere
+    #[allow(unused_imports)]
     pub use hc_seed_bundle::dependencies::*;
     pub use lair_keystore_api;
     pub use lair_keystore_api::dependencies::*;
@@ -75,6 +77,3 @@ pub mod store_sqlite;
 
 #[doc(inline)]
 pub use store_sqlite::create_sql_pool_factory;
-
-#[cfg(test)]
-mod server_test;
