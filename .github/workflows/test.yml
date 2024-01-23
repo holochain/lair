@@ -32,4 +32,6 @@ jobs:
           toolchain: ${{ matrix.toolchain }}
 
       - name: Make Test
+        env:
+          SODIUM_USE_PKG_CONFIG: "true"
         run: make test
