@@ -1,36 +1,8 @@
-use crate::*;
-use std::sync::Arc;
+use lair_keystore::dependencies::*;
+use lair_keystore_api::prelude::*;
+use common::connect;
 
-async fn connect(tmpdir: &tempdir::TempDir) -> lair_keystore_api::LairClient {
-    // set up a passphrase
-    let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
-
-    // create the config for the test server
-    let config = Arc::new(
-        hc_seed_bundle::PwHashLimits::Minimum
-            .with_exec(|| {
-                LairServerConfigInner::new(tmpdir.path(), passphrase.clone())
-            })
-            .await
-            .unwrap(),
-    );
-
-    // execute the server
-    crate::server::StandaloneServer::new(config.clone())
-        .await
-        .unwrap()
-        .run(passphrase.clone())
-        .await
-        .unwrap();
-
-    // create a client connection
-    lair_keystore_api::ipc_keystore::ipc_keystore_connect(
-        config.connection_url.clone(),
-        passphrase,
-    )
-    .await
-    .unwrap()
-}
+mod common;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn server_test_happy_path() {

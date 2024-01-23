@@ -75,6 +75,3 @@ pub mod store_sqlite;
 
 #[doc(inline)]
 pub use store_sqlite::create_sql_pool_factory;
-
-#[cfg(test)]
-mod server_test;
