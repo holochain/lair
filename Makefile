@@ -46,7 +46,7 @@ release: tools
 
 static: tools docs
 	cargo fmt -- --check
-	cargo clippy $(FEATURES)
+	cargo clippy $(FEATURES) -- -Dwarnings
 
 docs: tools
 	printf '### `lair-keystore --help`\n```text\n' > crates/lair_keystore/src/docs/help.md.tmp
