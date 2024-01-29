@@ -589,7 +589,7 @@ dependencies = [
 
 [[package]]
 name = "hc_seed_bundle"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "base64 0.13.1",
  "futures",
@@ -692,7 +692,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "criterion",
  "lair_keystore_api",
@@ -708,7 +708,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_api"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "assert_cmd",
  "base64 0.13.1",
@@ -725,8 +725,7 @@ dependencies = [
  "tempdir",
  "time",
  "tokio",
- "toml 0.5.11",
- "toml 0.7.8",
+ "toml",
  "tracing",
  "tracing-subscriber",
  "url",
@@ -1622,9 +1621,9 @@ dependencies = [
 
 [[package]]
 name = "sodoken"
-version = "0.0.9"
+version = "0.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ebd7d30290221181652f7a08112f5e7871e3deffde718dfa621025aa0e9c290"
+checksum = "308b58141d2ddac517b5e606e6f94d72e7a64c1383c9439c4acc712267f2be52"
 dependencies = [
  "libc",
  "libsodium-sys-stable",
@@ -1846,15 +1845,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.48",
-]
-
-[[package]]
-name = "toml"
-version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f4f7f0dd8d50a853a531c426359045b1998f04219d88799810762cd4ad314234"
-dependencies = [
- "serde",
 ]
 
 [[package]]
