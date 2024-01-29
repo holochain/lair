@@ -4,7 +4,7 @@
 #![allow(clippy::new_without_default)]
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
-#![deny(warnings)]
+
 //! SeedBundle parsing and generation library.
 //!
 //! [![Project](https://img.shields.io/badge/project-holochain-blue.svg?style=flat-square)](http://holochain.org/)

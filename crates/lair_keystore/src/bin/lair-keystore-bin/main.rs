@@ -4,7 +4,6 @@
 #![allow(clippy::new_without_default)]
 #![deny(missing_docs)]
 #![deny(unsafe_code)]
-#![deny(warnings)]
 
 //! sqlite/sqlcipher backed LairKeystore server control binary
 
