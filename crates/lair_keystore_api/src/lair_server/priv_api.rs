@@ -669,6 +669,109 @@ pub(crate) fn priv_req_crypto_box_xsalsa_open_by_pub_key<'a>(
     }
 }
 
+pub(crate) fn priv_req_crypto_box_xsalsa_by_sign_pub_key<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqCryptoBoxXSalsaBySignPubKey,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("KeystoreLocked".into());
+        }
+
+        // get cached full entry
+        let (full_entry, _) = priv_get_full_entry_by_ed_pub_key(
+            inner,
+            req.sender_pub_key.clone(),
+        )
+        .await?;
+
+        let nonce = sodoken::BufWriteSized::new_no_lock();
+        sodoken::random::bytes_buf(nonce.clone()).await?;
+
+        use sodoken::crypto_box::curve25519xsalsa20poly1305::*;
+        let cipher = if let Some(ed_sk) = full_entry.ed_sk {
+            let x_pk = sodoken::BufWriteSized::new_no_lock();
+            sodoken::sign::ed25519_pk_to_curve25519(
+                x_pk.clone(),
+                req.recipient_pub_key.cloned_inner(),
+            )?;
+            let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
+            sodoken::sign::ed25519_sk_to_curve25519(x_sk.clone(), ed_sk)?;
+            easy(nonce.clone(), req.data, x_pk, x_sk).await?
+        } else {
+            return Err("deep_seed crypto_box not yet implemented".into());
+        };
+
+        send.send(
+            LairApiResCryptoBoxXSalsaBySignPubKey {
+                msg_id: req.msg_id,
+                nonce: nonce.try_unwrap_sized().unwrap(),
+                cipher: cipher.try_unwrap().unwrap().into(),
+            }
+            .into_api_enum(),
+        )
+        .await?;
+
+        Ok(())
+    }
+}
+
+pub(crate) fn priv_req_crypto_box_xsalsa_open_by_sign_pub_key<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqCryptoBoxXSalsaOpenBySignPubKey,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("KeystoreLocked".into());
+        }
+
+        // get cached full entry
+        let (full_entry, _) = priv_get_full_entry_by_ed_pub_key(
+            inner,
+            req.recipient_pub_key.clone(),
+        )
+        .await?;
+
+        use sodoken::crypto_box::curve25519xsalsa20poly1305::*;
+
+        if req.cipher.len() < MACBYTES {
+            return Err("InvalidCipherLength".into());
+        }
+
+        let message =
+            sodoken::BufWrite::new_no_lock(req.cipher.len() - MACBYTES);
+
+        if let Some(ed_sk) = full_entry.ed_sk {
+            let x_pk = sodoken::BufWriteSized::new_no_lock();
+            sodoken::sign::ed25519_pk_to_curve25519(
+                x_pk.clone(),
+                req.sender_pub_key.cloned_inner(),
+            )?;
+            let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
+            sodoken::sign::ed25519_sk_to_curve25519(x_sk.clone(), ed_sk)?;
+            open_easy(req.nonce, message.clone(), req.cipher, x_pk, x_sk)
+                .await?;
+        } else {
+            return Err("deep_seed crypto_box not yet implemented".into());
+        }
+
+        send.send(
+            LairApiResCryptoBoxXSalsaOpenBySignPubKey {
+                msg_id: req.msg_id,
+                message: message.try_unwrap().unwrap().into(),
+            }
+            .into_api_enum(),
+        )
+        .await?;
+
+        Ok(())
+    }
+}
+
 pub(crate) fn priv_req_new_wka_tls_cert<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,

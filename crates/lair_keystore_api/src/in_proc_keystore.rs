@@ -205,6 +205,29 @@ mod tests {
 
         assert_eq!(b"hello", &*msg);
 
+        let (nonce, cipher) = client
+            .crypto_box_xsalsa_by_sign_pub_key(
+                seed_info_ref.ed25519_pub_key.clone(),
+                seed_info_ref2.ed25519_pub_key.clone(),
+                None,
+                b"world"[..].into(),
+            )
+            .await
+            .unwrap();
+
+        let msg = client
+            .crypto_box_xsalsa_open_by_sign_pub_key(
+                seed_info_ref.ed25519_pub_key,
+                seed_info_ref2.ed25519_pub_key,
+                None,
+                nonce,
+                cipher,
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(b"world", &*msg);
+
         let data = Arc::new([1, 2, 3_u8]);
         let signature = client
             .sign_by_pub_key(

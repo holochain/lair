@@ -138,13 +138,8 @@ impl LairClient {
     ) -> impl Future<Output = LairResult<()>> + 'static + Send {
         let inner = self.0.clone();
         async move {
-            // pre-hash the passphrase
-            let pw_hash = sodoken::BufWriteSized::new_mem_locked()?;
-            sodoken::hash::blake2b::hash(pw_hash.clone(), passphrase).await?;
-
-            let key = inner.get_enc_ctx_key();
             let passphrase =
-                SecretDataSized::encrypt(key, pw_hash.to_read_sized()).await?;
+                encrypt_passphrase(passphrase, inner.get_enc_ctx_key()).await?;
             let req = LairApiReqUnlock::new(passphrase);
             let _res = priv_lair_api_request(&*inner, req).await?;
             Ok(())
@@ -208,7 +203,6 @@ impl LairClient {
 
     /// Export seeds (that are marked "exportable") by using the
     /// x25519xsalsa20poly1305 "crypto_box" algorithm.
-    /// Respects hc_seed_bundle::PwHashLimits.
     pub fn export_seed_by_tag(
         &self,
         tag: Arc<str>,
@@ -222,18 +216,9 @@ impl LairClient {
             // if this is a deep locked seed, we need to encrypt the passphrase
             let secret = match deep_lock_passphrase {
                 None => None,
-                Some(pass) => {
-                    // pre-hash the passphrase
-                    let pw_hash =
-                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
-
-                    let key = inner.get_enc_ctx_key();
-                    let secret =
-                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
-                            .await?;
-                    Some(secret)
-                }
+                Some(pass) => Some(
+                    encrypt_passphrase(pass, inner.get_enc_ctx_key()).await?,
+                ),
             };
             let req = LairApiReqExportSeedByTag::new(
                 tag,
@@ -269,14 +254,8 @@ impl LairClient {
             let secret = match deep_lock_passphrase {
                 None => None,
                 Some(pass) => {
-                    // pre-hash the passphrase
-                    let pw_hash =
-                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
-
-                    let key = inner.get_enc_ctx_key();
                     let secret =
-                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
+                        encrypt_passphrase(pass, inner.get_enc_ctx_key())
                             .await?;
                     Some(DeepLockPassphrase::new(secret, limits))
                 }
@@ -301,6 +280,7 @@ impl LairClient {
     /// Derive a pre-existing key identified by given src_tag, with given
     /// derivation path, storing the final resulting sub-seed with
     /// the given dst_tag.
+    /// Respects hc_seed_bundle::PwHashLimits.
     pub fn derive_seed(
         &self,
         src_tag: Arc<str>,
@@ -345,7 +325,6 @@ impl LairClient {
 
     /// Generate a signature for given data, with the ed25519 keypair
     /// derived from seed identified by the given ed25519 pubkey.
-    /// Respects hc_seed_bundle::PwHashLimits.
     pub fn sign_by_pub_key(
         &self,
         pub_key: Ed25519PubKey,
@@ -358,18 +337,9 @@ impl LairClient {
             // if this is a deep locked seed, we need to encrypt the passphrase
             let secret = match deep_lock_passphrase {
                 None => None,
-                Some(pass) => {
-                    // pre-hash the passphrase
-                    let pw_hash =
-                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
-
-                    let key = inner.get_enc_ctx_key();
-                    let secret =
-                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
-                            .await?;
-                    Some(secret)
-                }
+                Some(pass) => Some(
+                    encrypt_passphrase(pass, inner.get_enc_ctx_key()).await?,
+                ),
             };
             let req = LairApiReqSignByPubKey::new(pub_key, secret, data);
             let res = priv_lair_api_request(&*inner, req).await?;
@@ -379,7 +349,6 @@ impl LairClient {
 
     /// Encrypt data for a target recipient using the
     /// x25519xsalsa20poly1305 "crypto_box" algorithm.
-    /// Respects hc_seed_bundle::PwHashLimits.
     pub fn crypto_box_xsalsa_by_pub_key(
         &self,
         sender_pub_key: X25519PubKey,
@@ -393,18 +362,9 @@ impl LairClient {
             // if this is a deep locked seed, we need to encrypt the passphrase
             let secret = match deep_lock_passphrase {
                 None => None,
-                Some(pass) => {
-                    // pre-hash the passphrase
-                    let pw_hash =
-                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
-
-                    let key = inner.get_enc_ctx_key();
-                    let secret =
-                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
-                            .await?;
-                    Some(secret)
-                }
+                Some(pass) => Some(
+                    encrypt_passphrase(pass, inner.get_enc_ctx_key()).await?,
+                ),
             };
             let req = LairApiReqCryptoBoxXSalsaByPubKey::new(
                 sender_pub_key,
@@ -419,7 +379,6 @@ impl LairClient {
 
     /// Decrypt data from a target sender using the
     /// x25519xsalsa20poly1305 "crypto_box_open" algorithm.
-    /// Respects hc_seed_bundle::PwHashLimits.
     pub fn crypto_box_xsalsa_open_by_pub_key(
         &self,
         sender_pub_key: X25519PubKey,
@@ -433,20 +392,80 @@ impl LairClient {
             // if this is a deep locked seed, we need to encrypt the passphrase
             let secret = match deep_lock_passphrase {
                 None => None,
-                Some(pass) => {
-                    // pre-hash the passphrase
-                    let pw_hash =
-                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
-
-                    let key = inner.get_enc_ctx_key();
-                    let secret =
-                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
-                            .await?;
-                    Some(secret)
-                }
+                Some(pass) => Some(
+                    encrypt_passphrase(pass, inner.get_enc_ctx_key()).await?,
+                ),
             };
             let req = LairApiReqCryptoBoxXSalsaOpenByPubKey::new(
+                sender_pub_key,
+                recipient_pub_key,
+                secret,
+                nonce,
+                cipher,
+            );
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok(res.message)
+        }
+    }
+
+    /// Encrypt data for a target recipient using the
+    /// x25519xsalsa20poly1305 "crypto_box" algorithm.
+    /// WARNING: This function actually translates the ed25519 signing
+    /// keys into encryption keys. Please understand the downsides of
+    /// doing this before using this function:
+    /// <https://doc.libsodium.org/advanced/ed25519-curve25519>
+    pub fn crypto_box_xsalsa_by_sign_pub_key(
+        &self,
+        sender_pub_key: Ed25519PubKey,
+        recipient_pub_key: Ed25519PubKey,
+        deep_lock_passphrase: Option<sodoken::BufRead>,
+        data: Arc<[u8]>,
+    ) -> impl Future<Output = LairResult<([u8; 24], Arc<[u8]>)>> + 'static + Send
+    {
+        let inner = self.0.clone();
+        async move {
+            // if this is a deep locked seed, we need to encrypt the passphrase
+            let secret = match deep_lock_passphrase {
+                None => None,
+                Some(pass) => Some(
+                    encrypt_passphrase(pass, inner.get_enc_ctx_key()).await?,
+                ),
+            };
+            let req = LairApiReqCryptoBoxXSalsaBySignPubKey::new(
+                sender_pub_key,
+                recipient_pub_key,
+                secret,
+                data,
+            );
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok((res.nonce, res.cipher))
+        }
+    }
+
+    /// Decrypt data from a target sender using the
+    /// x25519xsalsa20poly1305 "crypto_box_open" algorithm.
+    /// WARNING: This function actually translates the ed25519 signing
+    /// keys into encryption keys. Please understand the downsides of
+    /// doing this before using this function:
+    /// <https://doc.libsodium.org/advanced/ed25519-curve25519>
+    pub fn crypto_box_xsalsa_open_by_sign_pub_key(
+        &self,
+        sender_pub_key: Ed25519PubKey,
+        recipient_pub_key: Ed25519PubKey,
+        deep_lock_passphrase: Option<sodoken::BufRead>,
+        nonce: [u8; 24],
+        cipher: Arc<[u8]>,
+    ) -> impl Future<Output = LairResult<Arc<[u8]>>> + 'static + Send {
+        let inner = self.0.clone();
+        async move {
+            // if this is a deep locked seed, we need to encrypt the passphrase
+            let secret = match deep_lock_passphrase {
+                None => None,
+                Some(pass) => Some(
+                    encrypt_passphrase(pass, inner.get_enc_ctx_key()).await?,
+                ),
+            };
+            let req = LairApiReqCryptoBoxXSalsaOpenBySignPubKey::new(
                 sender_pub_key,
                 recipient_pub_key,
                 secret,
@@ -492,7 +511,6 @@ impl LairClient {
 
     /// Shared secret encryption using the libsodium
     /// xsalsa20poly1305 "secretbox" algorithm.
-    /// Respects hc_seed_bundle::PwHashLimits.
     pub fn secretbox_xsalsa_by_tag(
         &self,
         tag: Arc<str>,
@@ -505,18 +523,9 @@ impl LairClient {
             // if this is a deep locked seed, we need to encrypt the passphrase
             let secret = match deep_lock_passphrase {
                 None => None,
-                Some(pass) => {
-                    // pre-hash the passphrase
-                    let pw_hash =
-                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
-
-                    let key = inner.get_enc_ctx_key();
-                    let secret =
-                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
-                            .await?;
-                    Some(secret)
-                }
+                Some(pass) => Some(
+                    encrypt_passphrase(pass, inner.get_enc_ctx_key()).await?,
+                ),
             };
             let req = LairApiReqSecretBoxXSalsaByTag::new(tag, secret, data);
             let res = priv_lair_api_request(&*inner, req).await?;
@@ -526,7 +535,6 @@ impl LairClient {
 
     /// Shared secret decryption using the libsodium
     /// xsalsa20poly1305 "secretbox_open" algorithm.
-    /// Respects hc_seed_bundle::PwHashLimits.
     pub fn secretbox_xsalsa_open_by_tag(
         &self,
         tag: Arc<str>,
@@ -539,18 +547,9 @@ impl LairClient {
             // if this is a deep locked seed, we need to encrypt the passphrase
             let secret = match deep_lock_passphrase {
                 None => None,
-                Some(pass) => {
-                    // pre-hash the passphrase
-                    let pw_hash =
-                        <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-                    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
-
-                    let key = inner.get_enc_ctx_key();
-                    let secret =
-                        SecretDataSized::encrypt(key, pw_hash.to_read_sized())
-                            .await?;
-                    Some(secret)
-                }
+                Some(pass) => Some(
+                    encrypt_passphrase(pass, inner.get_enc_ctx_key()).await?,
+                ),
             };
             let req = LairApiReqSecretBoxXSalsaOpenByTag::new(
                 tag, secret, nonce, cipher,
