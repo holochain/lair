@@ -692,7 +692,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "criterion",
  "lair_keystore_api",
@@ -708,7 +708,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_api"
-version = "0.4.3"
+version = "0.4.4"
 dependencies = [
  "assert_cmd",
  "base64 0.13.1",
@@ -1621,9 +1621,9 @@ dependencies = [
 
 [[package]]
 name = "sodoken"
-version = "0.0.10"
+version = "0.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "308b58141d2ddac517b5e606e6f94d72e7a64c1383c9439c4acc712267f2be52"
+checksum = "907e0ea9699b846c2586ea5685e9abf5963fca64a5179a406e6ac02b94564e30"
 dependencies = [
  "libc",
  "libsodium-sys-stable",

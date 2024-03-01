@@ -109,6 +109,12 @@ pub use crypto_box_xsalsa_by_pub_key::*;
 mod crypto_box_xsalsa_open_by_pub_key;
 pub use crypto_box_xsalsa_open_by_pub_key::*;
 
+mod crypto_box_xsalsa_by_sign_pub_key;
+pub use crypto_box_xsalsa_by_sign_pub_key::*;
+
+mod crypto_box_xsalsa_open_by_sign_pub_key;
+pub use crypto_box_xsalsa_open_by_sign_pub_key::*;
+
 mod new_wka_tls_cert;
 pub use new_wka_tls_cert::*;
 
@@ -198,6 +204,22 @@ pub enum LairApiEnum {
 
     /// A "crypto_box_open" decryption response.
     ResCryptoBoxXSalsaOpenByPubKey(LairApiResCryptoBoxXSalsaOpenByPubKey),
+
+    /// Request "crypto_box" encryption.
+    ReqCryptoBoxXSalsaBySignPubKey(LairApiReqCryptoBoxXSalsaBySignPubKey),
+
+    /// A "crypto_box" encryption response.
+    ResCryptoBoxXSalsaBySignPubKey(LairApiResCryptoBoxXSalsaBySignPubKey),
+
+    /// Request "crypto_box_open" decryption.
+    ReqCryptoBoxXSalsaOpenBySignPubKey(
+        LairApiReqCryptoBoxXSalsaOpenBySignPubKey,
+    ),
+
+    /// A "crypto_box_open" decryption response.
+    ResCryptoBoxXSalsaOpenBySignPubKey(
+        LairApiResCryptoBoxXSalsaOpenBySignPubKey,
+    ),
 
     /// Instruct lair to generate a new wka tls certificate
     /// from cryptographically secure random data with given tag.
@@ -290,6 +312,18 @@ impl LairApiEnum {
             ) => msg_id.clone(),
             Self::ResCryptoBoxXSalsaOpenByPubKey(
                 LairApiResCryptoBoxXSalsaOpenByPubKey { msg_id, .. },
+            ) => msg_id.clone(),
+            Self::ReqCryptoBoxXSalsaBySignPubKey(
+                LairApiReqCryptoBoxXSalsaBySignPubKey { msg_id, .. },
+            ) => msg_id.clone(),
+            Self::ResCryptoBoxXSalsaBySignPubKey(
+                LairApiResCryptoBoxXSalsaBySignPubKey { msg_id, .. },
+            ) => msg_id.clone(),
+            Self::ReqCryptoBoxXSalsaOpenBySignPubKey(
+                LairApiReqCryptoBoxXSalsaOpenBySignPubKey { msg_id, .. },
+            ) => msg_id.clone(),
+            Self::ResCryptoBoxXSalsaOpenBySignPubKey(
+                LairApiResCryptoBoxXSalsaOpenBySignPubKey { msg_id, .. },
             ) => msg_id.clone(),
             Self::ReqNewWkaTlsCert(LairApiReqNewWkaTlsCert {
                 msg_id, ..

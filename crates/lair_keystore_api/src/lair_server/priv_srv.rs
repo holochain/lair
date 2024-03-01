@@ -293,6 +293,18 @@ pub(crate) fn priv_dispatch_incoming<'a>(
                 )
                 .await
             }
+            LairApiEnum::ReqCryptoBoxXSalsaBySignPubKey(req) => {
+                priv_req_crypto_box_xsalsa_by_sign_pub_key(
+                    inner, send, unlocked, req,
+                )
+                .await
+            }
+            LairApiEnum::ReqCryptoBoxXSalsaOpenBySignPubKey(req) => {
+                priv_req_crypto_box_xsalsa_open_by_sign_pub_key(
+                    inner, send, unlocked, req,
+                )
+                .await
+            }
             LairApiEnum::ReqNewWkaTlsCert(req) => {
                 priv_req_new_wka_tls_cert(inner, send, unlocked, req).await
             }
@@ -328,6 +340,8 @@ pub(crate) fn priv_dispatch_incoming<'a>(
             | LairApiEnum::ResSignByPubKey(_)
             | LairApiEnum::ResCryptoBoxXSalsaByPubKey(_)
             | LairApiEnum::ResCryptoBoxXSalsaOpenByPubKey(_)
+            | LairApiEnum::ResCryptoBoxXSalsaBySignPubKey(_)
+            | LairApiEnum::ResCryptoBoxXSalsaOpenBySignPubKey(_)
             | LairApiEnum::ResNewWkaTlsCert(_)
             | LairApiEnum::ResGetWkaTlsCertPrivKey(_)
             | LairApiEnum::ResSecretBoxXSalsaByTag(_)
