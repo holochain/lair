@@ -43,3 +43,4 @@ path = "src/lib.rs"
 name = "lair-keystore"
 path = "src/bin/lair-keystore-bin/main.rs"
 doc = false
+
