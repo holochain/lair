@@ -18,7 +18,7 @@ jobs:
         ]
         toolchain: [
           stable,
-          "1.71.1", # Check the version used by Holochain
+          "1.77.2", # Check the version used by Holochain
         ]
     steps:
       - name: Checkout

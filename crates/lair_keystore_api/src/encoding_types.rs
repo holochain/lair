@@ -1,15 +1,17 @@
 //! Helper types for dealing with serialization.
 
 use crate::*;
+use base64::Engine;
 use sodoken::secretstream::xchacha20poly1305 as sss;
 use std::sync::Arc;
 
 fn to_base64_url<B: AsRef<[u8]>>(b: B) -> String {
-    base64::encode_config(b.as_ref(), base64::URL_SAFE_NO_PAD)
+    base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(b.as_ref())
 }
 
 fn from_base64_url<S: AsRef<str>>(s: S) -> LairResult<Arc<[u8]>> {
-    base64::decode_config(s.as_ref(), base64::URL_SAFE_NO_PAD)
+    base64::prelude::BASE64_URL_SAFE_NO_PAD
+        .decode(s.as_ref())
         .map_err(one_err::OneErr::new)
         .map(|b| b.into())
 }

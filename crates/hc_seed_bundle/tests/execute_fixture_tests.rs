@@ -1,5 +1,6 @@
 use hc_seed_bundle::*;
 
+use base64::Engine;
 use std::collections::HashMap;
 
 const FIXTURES: &str = include_str!("fixtures/seed_bundle_test_fixtures.json");
@@ -23,7 +24,7 @@ struct Test {
 }
 
 fn assert_eq_b64(a: &str, b: &[u8]) {
-    let b = base64::encode_config(b, base64::URL_SAFE_NO_PAD);
+    let b = base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(b);
     assert_eq!(a, &b);
 }
 
@@ -59,7 +60,7 @@ impl Test {
             }
         }
         let cipher = cipher.lock().await.unwrap();
-        base64::encode_config(cipher, base64::URL_SAFE_NO_PAD)
+        base64::prelude::BASE64_URL_SAFE_NO_PAD.encode(cipher)
     }
 
     async fn check_unlocks(
@@ -155,11 +156,9 @@ async fn fixture_tests() {
             let cipher = test.generate().await;
             panic!("cipher required, like: ({})", cipher);
         }
-        let cipher = base64::decode_config(
-            test.cipher.as_ref().unwrap().as_bytes(),
-            base64::URL_SAFE_NO_PAD,
-        )
-        .unwrap();
+        let cipher = base64::prelude::BASE64_URL_SAFE_NO_PAD
+            .decode(test.cipher.as_ref().unwrap().as_bytes())
+            .unwrap();
         let cipher_list =
             UnlockedSeedBundle::from_locked(&cipher).await.unwrap();
         let seed = test.check_unlocks(cipher_list).await;
