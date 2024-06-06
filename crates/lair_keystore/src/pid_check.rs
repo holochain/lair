@@ -5,7 +5,6 @@ use std::{
     io::{Read, Write},
     str::FromStr,
 };
-use sysinfo::{ProcessExt, SystemExt};
 
 /// Execute lair pid_check verifying we are the one true Lair process
 /// with access to given store / pidfile.

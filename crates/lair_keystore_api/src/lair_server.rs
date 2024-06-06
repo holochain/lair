@@ -2,6 +2,7 @@
 
 use crate::lair_api::api_traits::AsLairCodec;
 use crate::*;
+use base64::Engine;
 use futures::future::{BoxFuture, FutureExt};
 use futures::stream::StreamExt;
 use parking_lot::RwLock;
@@ -229,11 +230,10 @@ impl FallbackCmd {
                         }
                         lock.pending.insert(req.msg_id.clone(), res);
                     }
-                    let pub_key = base64::encode_config(
-                        *req.pub_key.0,
-                        base64::URL_SAFE_NO_PAD,
-                    );
-                    let data = base64::encode(req.data);
+                    let pub_key = base64::prelude::BASE64_URL_SAFE_NO_PAD
+                        .encode(*req.pub_key.0);
+                    let data =
+                        base64::prelude::BASE64_STANDARD.encode(req.data);
                     let output = format!(
                         "{}\n",
                         serde_json::to_string(&serde_json::json!({
@@ -301,17 +301,20 @@ impl FallbackCmd {
                         if let Some(error) = res.error {
                             let _ = respond.send(Err(error.into()));
                         } else if let Some(signature) = res.signature {
-                            let signature = match base64::decode(&signature) {
-                                Ok(s) => s,
-                                Err(e) => {
-                                    let e = format!(
+                            let signature =
+                                match base64::prelude::BASE64_STANDARD
+                                    .decode(&signature)
+                                {
+                                    Ok(s) => s,
+                                    Err(e) => {
+                                        let e = format!(
                                         "signature_fallback read error: {e:?}"
                                     );
-                                    tracing::error!("@sig_fb@ {}", e);
-                                    let _ = respond.send(Err(e.into()));
-                                    break;
-                                }
-                            };
+                                        tracing::error!("@sig_fb@ {}", e);
+                                        let _ = respond.send(Err(e.into()));
+                                        break;
+                                    }
+                                };
                             if signature.len() != 64 {
                                 let e =
                                     "signature_fallback read error: invalid signature size";

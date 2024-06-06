@@ -1,4 +1,5 @@
 use super::*;
+use lair_keystore_api::dependencies::base64::Engine;
 
 pub(crate) async fn exec(
     config: LairServerConfig,
@@ -70,9 +71,9 @@ pub(crate) async fn exec(
     server.run(store_pass).await?;
 
     // load the bundle
-    let bundle_bytes =
-        base64::decode_config(&opt.seed_bundle_base64, base64::URL_SAFE_NO_PAD)
-            .map_err(one_err::OneErr::new)?;
+    let bundle_bytes = base64::prelude::BASE64_URL_SAFE_NO_PAD
+        .decode(&opt.seed_bundle_base64)
+        .map_err(one_err::OneErr::new)?;
     let cipher_list =
         hc_seed_bundle::UnlockedSeedBundle::from_locked(&bundle_bytes).await?;
 

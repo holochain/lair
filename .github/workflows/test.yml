@@ -20,7 +20,7 @@ jobs:
         ]
         toolchain: [
           stable,
-          "1.71.1", # Check the version used by Holochain
+          "1.77.2", # Check the version used by Holochain
         ]
     steps:
       - name: Checkout
@@ -31,14 +31,14 @@ jobs:
         with:
           toolchain: ${{ matrix.toolchain }}
 
-      - name: Install vcpkg Packages
+      - name: Install vcpkg packages
         if: matrix.os == 'windows-latest'
         uses: johnwason/vcpkg-action@v6
         id: vcpkg
         with:
-          pkgs: libsodium
           triplet: x64-windows-release
           token: ${{ github.token }}
+          manifest-dir: ${{ github.workspace }}/.github/manifest
           github-binarycache: true
 
       - name: Make Test Windows

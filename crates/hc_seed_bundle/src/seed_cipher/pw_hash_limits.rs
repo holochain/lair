@@ -27,7 +27,7 @@ pub enum PwHashLimits {
 }
 
 thread_local! {
-    static PWHASH_LIMITS: std::cell::RefCell<PwHashLimits> = std::cell::RefCell::new(PwHashLimits::Moderate);
+    static PWHASH_LIMITS: std::cell::RefCell<PwHashLimits> = const { std::cell::RefCell::new(PwHashLimits::Moderate) };
 }
 
 impl PwHashLimits {
