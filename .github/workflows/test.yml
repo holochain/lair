@@ -42,12 +42,17 @@ jobs:
           github-binarycache: true
 
       - name: Set vcpkg env
+        id: set-vcpkg-env
         if: matrix.os == 'windows-latest'
-        run: echo "SODIUM_LIB_DIR=\"$(pwd)\\vcpkg\\packages\\libsodium_x64-windows-release\\lib\"" >> $GITHUB_ENV
+        run: |
+          echo "SODIUM_LIB_DIR=\"$(pwd)\\vcpkg\\packages\\libsodium_x64-windows-release\\lib\"" >> $GITHUB_ENV
+          echo "SODIUM_LIB_DIR=\"$(pwd)\\vcpkg\\packages\\libsodium_x64-windows-release\\lib\"" >> $GITHUB_OUTPUT
 
       - name: Install lair-keystore-0.4.4 for fwd compat test
         shell: bash
         run: |
+          echo "FROM ENV: $SODIUM_LIB_DIR"
+          echo "FROM OUTPUT: ${{ steps.set-vcpkg-env.output.SODIUM_LIB_DIR }}"
           cargo install lair_keystore@0.4.4 --debug
           mv $(which lair-keystore){,-0.4.4}
 
