@@ -43,10 +43,8 @@ jobs:
 
       - name: Install lair-keystore-0.4.4 for fwd compat test
         run: |
-          cargo install names
-          which names
-          cargo install --root . lair-keystore@0.4.4
-          mv ./bin/lair-keystore .cargo/bin/lair-keystore-0.4.4
+          cargo install lair_keystore@0.4.4
+          mv $(which lair-keystore){,-0.4.4}
 
       - name: Make Test Windows
         if: matrix.os == 'windows-latest'
