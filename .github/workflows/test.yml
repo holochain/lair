@@ -41,21 +41,26 @@ jobs:
           manifest-dir: ${{ github.workspace }}/.github/manifest
           github-binarycache: true
 
-      - name: Set vcpkg env
-        shell: bash
+      - name: Install lair-keystore-0.4.4 for fwd compat test Windows
         if: matrix.os == 'windows-latest'
-        run: |
-          touch "$GITHUB_WORKSPACE\\vcpkg\\.vcpkg-root"
-          echo "SODIUM_USE_PKG_CONFIG=\"1\"" >> "$GITHUB_ENV"
-          echo "VCPKG_ROOT=\"$GITHUB_WORKSPACE\\vcpkg\"" >> "$GITHUB_ENV"
-          #run: echo "SODIUM_LIB_DIR=\"$GITHUB_WORKSPACE\\vcpkg\\packages\\libsodium_x64-windows-release\\lib\"" >> "$GITHUB_ENV"
+        run: |-
+          $env:SODIUM_LIB_DIR="$(pwd)\vcpkg\packages\libsodium_x64-windows-release\lib"
+          cargo install lair_keystore@0.4.4 --debug
 
       - name: Install lair-keystore-0.4.4 for fwd compat test
+        if: matrix.os != 'windows-latest'
         run: cargo install lair_keystore@0.4.4 --debug
 
       - name: Rename lair-keystore to include version
         shell: bash
         run: mv $(which lair-keystore){,-0.4.4}
 
+      - name: Make Test Windows
+        if: matrix.os == 'windows-latest'
+        run: |-
+          $env:SODIUM_LIB_DIR="$(pwd)\vcpkg\packages\libsodium_x64-windows-release\lib"
+          make test
+
       - name: Make Test
+        if: matrix.os != 'windows-latest'
         run: make test
