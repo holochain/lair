@@ -42,6 +42,7 @@ jobs:
           github-binarycache: true
 
       - name: Set vcpkg env
+        shell: bash
         id: set-vcpkg-env
         if: matrix.os == 'windows-latest'
         run: |
