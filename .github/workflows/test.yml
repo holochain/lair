@@ -42,8 +42,9 @@ jobs:
           github-binarycache: true
 
       - name: Install lair-keystore-0.4.4 for fwd compat test
+        shell: bash
         run: |
-          cargo install lair_keystore@0.4.4
+          cargo install lair_keystore@0.4.4 --debug
           mv $(which lair-keystore){,-0.4.4}
 
       - name: Make Test Windows
