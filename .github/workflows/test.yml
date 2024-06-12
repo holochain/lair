@@ -45,8 +45,8 @@ jobs:
         id: set-vcpkg-env
         if: matrix.os == 'windows-latest'
         run: |
-          echo "SODIUM_LIB_DIR=\"$(pwd)\\vcpkg\\packages\\libsodium_x64-windows-release\\lib\"" >> $GITHUB_ENV
-          echo "SODIUM_LIB_DIR=\"$(pwd)\\vcpkg\\packages\\libsodium_x64-windows-release\\lib\"" >> $GITHUB_OUTPUT
+          echo "SODIUM_LIB_DIR=\"$(pwd)\\vcpkg\\packages\\libsodium_x64-windows-release\\lib\"" >> "$GITHUB_ENV"
+          echo "SODIUM_LIB_DIR=\"$(pwd)\\vcpkg\\packages\\libsodium_x64-windows-release\\lib\"" >> "$GITHUB_OUTPUT"
 
       - name: Install lair-keystore-0.4.4 for fwd compat test
         shell: bash
