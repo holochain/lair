@@ -24,7 +24,7 @@ async fn fwd_compat_0_4_4() {
 
     let mut cmd = tokio::process::Command::new(NAME);
 
-    cmd.arg("--version");
+    cmd.kill_on_drop(true).arg("--version");
 
     eprintln!("{cmd:?}");
 
@@ -40,7 +40,8 @@ async fn fwd_compat_0_4_4() {
 
     let mut cmd = tokio::process::Command::new(NAME);
 
-    cmd.arg("--lair-root")
+    cmd.kill_on_drop(true)
+        .arg("--lair-root")
         .arg(tmpdir.path())
         .arg("init")
         .arg("--piped")
@@ -63,7 +64,10 @@ async fn fwd_compat_0_4_4() {
 
     let mut cmd = tokio::process::Command::new(NAME);
 
-    cmd.arg("--lair-root").arg(tmpdir.path()).arg("url");
+    cmd.kill_on_drop(true)
+        .arg("--lair-root")
+        .arg(tmpdir.path())
+        .arg("url");
 
     eprintln!("{cmd:?}");
 
@@ -82,7 +86,8 @@ async fn fwd_compat_0_4_4() {
 
     let mut cmd = tokio::process::Command::new(NAME);
 
-    cmd.arg("--lair-root")
+    cmd.kill_on_drop(true)
+        .arg("--lair-root")
         .arg(tmpdir.path())
         .arg("server")
         .arg("--piped")
@@ -130,6 +135,10 @@ async fn fwd_compat_0_4_4() {
 
     client044.shutdown().await.unwrap();
     drop(client044);
+
+    // give windows a chance to sync to disk
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
     server.kill().await.unwrap();
     drop(server);
 
