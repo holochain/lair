@@ -43,7 +43,7 @@ License: MIT OR Apache-2.0
 
 ### `lair-keystore --help`
 ```text
-lair_keystore 0.4.5
+lair_keystore 0.5.0
 secret lair private keystore
 
 USAGE:
@@ -74,7 +74,7 @@ SUBCOMMANDS:
 ```
 ### `lair-keystore init --help`
 ```text
-lair-keystore-init 0.4.5
+lair-keystore-init 0.5.0
 Set up a new lair private keystore.
 
 USAGE:
@@ -92,7 +92,7 @@ FLAGS:
 ```
 ### `lair-keystore url --help`
 ```text
-lair-keystore-url 0.4.5
+lair-keystore-url 0.5.0
 Print the connection_url for a configured lair-keystore
 server to stdout and exit.
 
@@ -106,7 +106,7 @@ FLAGS:
 ```
 ### `lair-keystore import-seed --help`
 ```text
-lair-keystore-import-seed 0.4.5
+lair-keystore-import-seed 0.5.0
 Load a seed bundle into this lair-keystore instance.
 Note, this operation requires capturing the pid_file,
 make sure you do not have a lair-server running.
@@ -143,7 +143,7 @@ ARGS:
 ```
 ### `lair-keystore server --help`
 ```text
-lair-keystore-server 0.4.5
+lair-keystore-server 0.5.0
 Run a lair keystore server instance. Note you must
 have initialized a config file first with
 'lair-keystore init'.

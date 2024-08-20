@@ -164,15 +164,7 @@ impl SqlPool {
         let mut write_con =
             match create_configured_db_connection(&path, key_pragma.clone()) {
                 Ok(con) => con,
-                Err(
-                    err @ rusqlite::Error::SqliteFailure(
-                        rusqlite::ffi::Error {
-                            code: rusqlite::ffi::ErrorCode::NotADatabase,
-                            ..
-                        },
-                        ..,
-                    ),
-                ) => {
+                Err(err) => {
                     if "true"
                         == std::env::var("LAIR_MIGRATE_UNENCRYPTED")
                             .unwrap_or_default()
@@ -191,7 +183,6 @@ impl SqlPool {
                         return Err(one_err::OneErr::new(err));
                     }
                 }
-                Err(e) => return Err(one_err::OneErr::new(e)),
             };
 
         // only set WAL mode on the first write connection
@@ -523,6 +514,28 @@ fn secure_write_key_pragma(
     Ok(key_pragma.to_read())
 }
 
+fn configure_encryption(con: &rusqlite::Connection) -> rusqlite::Result<()> {
+    con.execute_batch(
+        r#"
+--ensure we use version 4 settings even if we get a newer sqlcipher
+--https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_default_compatibility
+PRAGMA cipher_default_compatibility = 4;
+
+--ensure we use version 4 settings even if we get a newer sqlcipher
+--https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_compatibility
+PRAGMA cipher_compatibility = 4;
+
+--sqlcipher ios compatibility requires this, but breaks salting
+--https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_plaintext_header_size
+PRAGMA cipher_plaintext_header_size = 32;
+
+--we do our own derivation, so a hard-coded salt is okay
+--https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_salt
+PRAGMA cipher_salt = "x'01010101010101010101010101010101'";
+"#,
+    )
+}
+
 fn set_pragmas(
     con: &rusqlite::Connection,
     key_pragma: BufRead,
@@ -533,6 +546,8 @@ fn set_pragmas(
         std::str::from_utf8(&key_pragma.read_lock()).unwrap(),
         [],
     )?;
+
+    configure_encryption(con)?;
 
     con.pragma_update(None, "trusted_schema", "0".to_string())?;
 
@@ -584,13 +599,24 @@ fn encrypt_unencrypted_database(
         conn.execute("BEGIN EXCLUSIVE", ())
             .map_err(one_err::OneErr::new)?;
 
-        let lock = key_pragma.read_lock();
-        conn.execute(
-            "ATTACH DATABASE :db_name AS encrypted KEY :key",
-            rusqlite::named_params! {
-                ":db_name": encrypted_path.to_str(),
-                ":key": &lock[14..81],
-            },
+        {
+            let lock = key_pragma.read_lock();
+            conn.execute(
+                "ATTACH DATABASE :db_name AS encrypted KEY :key",
+                rusqlite::named_params! {
+                    ":db_name": encrypted_path.to_str(),
+                    ":key": &lock[14..81],
+                },
+            )
+            .map_err(one_err::OneErr::new)?;
+        }
+
+        conn.execute_batch(
+            r#"
+PRAGMA encrypted.cipher_compatibility = 4;
+PRAGMA encrypted.cipher_plaintext_header_size = 32;
+PRAGMA encrypted.cipher_salt = "x'01010101010101010101010101010101'";
+"#,
         )
         .map_err(one_err::OneErr::new)?;
 
