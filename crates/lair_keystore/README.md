@@ -32,8 +32,7 @@ lair_keystore = "0.1.1"
 - Library usage with underscores:
 
 ```rust
-use lair_keystore::create_sql_pool_factory;
-let _sqlite_store_factory = create_sql_pool_factory(".");
+use lair_keystore::*;
 ```
 
 ## `lair-keystore` commandline executable usage:

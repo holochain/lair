@@ -16,23 +16,29 @@ const READ_CON_COUNT: usize = 3;
 /// by an encrypted (sqlcipher) sqlite database.
 /// WARNING: If running on windows, this currently degenerates to a
 /// plaintext (non-encrypted) sqlite database.
-pub fn create_sql_pool_factory<P>(sqlite_file_path: P) -> LairStoreFactory
+pub fn create_sql_pool_factory<P>(
+    sqlite_file_path: P,
+    db_salt: &BinDataSized<16>,
+) -> LairStoreFactory
 where
     P: AsRef<std::path::Path>,
 {
     let sqlite_file_path = sqlite_file_path.as_ref().to_owned();
-    struct X(std::path::PathBuf);
+    struct X(std::path::PathBuf, BinDataSized<16>);
     impl AsLairStoreFactory for X {
         fn connect_to_store(
             &self,
             unlock_secret: sodoken::BufReadSized<32>,
         ) -> BoxFuture<'static, LairResult<LairStore>> {
             let sqlite_file_path = self.0.clone();
-            async move { SqlPool::new(sqlite_file_path, unlock_secret).await }
-                .boxed()
+            let db_salt = self.1.clone();
+            async move {
+                SqlPool::new(sqlite_file_path, unlock_secret, db_salt).await
+            }
+            .boxed()
         }
     }
-    let inner = X(sqlite_file_path);
+    let inner = X(sqlite_file_path, db_salt.clone());
     LairStoreFactory(Arc::new(inner))
 }
 
@@ -135,6 +141,7 @@ impl SqlPool {
     fn new_sync(
         path: std::path::PathBuf,
         db_key: sodoken::BufReadSized<32>,
+        db_salt: BinDataSized<16>,
     ) -> LairResult<LairStore> {
         use rusqlite::OpenFlags;
 
@@ -161,29 +168,34 @@ impl SqlPool {
         // initialize the sqlcipher key pragma
         let key_pragma = secure_write_key_pragma(dbk_secret)?;
 
-        let mut write_con =
-            match create_configured_db_connection(&path, key_pragma.clone()) {
-                Ok(con) => con,
-                Err(err) => {
-                    if "true"
-                        == std::env::var("LAIR_MIGRATE_UNENCRYPTED")
-                            .unwrap_or_default()
-                            .as_str()
-                    {
-                        encrypt_unencrypted_database(
-                            &path,
-                            key_pragma.clone(),
-                        )?;
-                        create_configured_db_connection(
-                            &path,
-                            key_pragma.clone(),
-                        )
-                        .map_err(one_err::OneErr::new)?
-                    } else {
-                        return Err(one_err::OneErr::new(err));
-                    }
+        let mut write_con = match create_configured_db_connection(
+            &path,
+            key_pragma.clone(),
+            db_salt.clone(),
+        ) {
+            Ok(con) => con,
+            Err(err) => {
+                if "true"
+                    == std::env::var("LAIR_MIGRATE_UNENCRYPTED")
+                        .unwrap_or_default()
+                        .as_str()
+                {
+                    encrypt_unencrypted_database(
+                        &path,
+                        key_pragma.clone(),
+                        db_salt.clone(),
+                    )?;
+                    create_configured_db_connection(
+                        &path,
+                        key_pragma.clone(),
+                        db_salt.clone(),
+                    )
+                    .map_err(one_err::OneErr::new)?
+                } else {
+                    return Err(one_err::OneErr::new(err));
                 }
-            };
+            }
+        };
 
         // only set WAL mode on the first write connection
         // it's a slow operation, and not needed on subsequent connections.
@@ -222,7 +234,7 @@ impl SqlPool {
             .map_err(one_err::OneErr::new)?;
 
             // set generic pragmas
-            set_pragmas(&read_con, key_pragma.clone())
+            set_pragmas(&read_con, key_pragma.clone(), db_salt.clone())
                 .map_err(one_err::OneErr::new)?;
 
             *rc_mut = Some(read_con);
@@ -245,11 +257,14 @@ impl SqlPool {
     pub fn new(
         path: std::path::PathBuf,
         db_key: sodoken::BufReadSized<32>,
+        db_salt: BinDataSized<16>,
     ) -> impl Future<Output = LairResult<LairStore>> + 'static + Send {
         async move {
-            tokio::task::spawn_blocking(move || Self::new_sync(path, db_key))
-                .await
-                .map_err(one_err::OneErr::new)?
+            tokio::task::spawn_blocking(move || {
+                Self::new_sync(path, db_key, db_salt)
+            })
+            .await
+            .map_err(one_err::OneErr::new)?
         }
     }
 
@@ -302,6 +317,7 @@ impl SqlPool {
 fn create_configured_db_connection(
     path: &std::path::PathBuf,
     key_pragma: BufRead,
+    db_salt: BinDataSized<16>,
 ) -> rusqlite::Result<rusqlite::Connection> {
     use rusqlite::OpenFlags;
 
@@ -315,7 +331,7 @@ fn create_configured_db_connection(
     )?;
 
     // set generic pragmas
-    set_pragmas(&write_con, key_pragma)?;
+    set_pragmas(&write_con, key_pragma, db_salt)?;
 
     Ok(write_con)
 }
@@ -518,27 +534,34 @@ fn configure_encryption(con: &rusqlite::Connection) -> rusqlite::Result<()> {
     con.execute_batch(
         r#"
 --ensure we use version 4 settings even if we get a newer sqlcipher
---https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_default_compatibility
-PRAGMA cipher_default_compatibility = 4;
-
---ensure we use version 4 settings even if we get a newer sqlcipher
 --https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_compatibility
 PRAGMA cipher_compatibility = 4;
 
 --sqlcipher ios compatibility requires this, but breaks salting
 --https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_plaintext_header_size
 PRAGMA cipher_plaintext_header_size = 32;
-
---we do our own derivation, so a hard-coded salt is okay
---https://www.zetetic.net/sqlcipher/sqlcipher-api/#cipher_salt
-PRAGMA cipher_salt = "x'01010101010101010101010101010101'";
 "#,
     )
+}
+
+fn set_salt(
+    con: &rusqlite::Connection,
+    name: &'static str,
+    db_salt: BinDataSized<16>,
+) -> rusqlite::Result<()> {
+    let mut salt = format!("PRAGMA {name} = \"x'");
+    for b in *db_salt.0 {
+        salt.push_str(&format!("{b:02X}"));
+    }
+    salt.push_str("'\";");
+
+    con.execute_optional(&salt, [])
 }
 
 fn set_pragmas(
     con: &rusqlite::Connection,
     key_pragma: BufRead,
+    db_salt: BinDataSized<16>,
 ) -> rusqlite::Result<()> {
     con.busy_timeout(std::time::Duration::from_millis(30_000))?;
 
@@ -546,6 +569,8 @@ fn set_pragmas(
         std::str::from_utf8(&key_pragma.read_lock()).unwrap(),
         [],
     )?;
+
+    set_salt(con, "cipher_salt", db_salt)?;
 
     configure_encryption(con)?;
 
@@ -559,6 +584,7 @@ fn set_pragmas(
 fn encrypt_unencrypted_database(
     path: &std::path::PathBuf,
     key_pragma: BufRead,
+    db_salt: BinDataSized<16>,
 ) -> LairResult<()> {
     // e.g. keystore/store_file -> keystore/store_file-encrypted
     let encrypted_path = path
@@ -615,10 +641,12 @@ fn encrypt_unencrypted_database(
             r#"
 PRAGMA encrypted.cipher_compatibility = 4;
 PRAGMA encrypted.cipher_plaintext_header_size = 32;
-PRAGMA encrypted.cipher_salt = "x'01010101010101010101010101010101'";
 "#,
         )
         .map_err(one_err::OneErr::new)?;
+
+        set_salt(&conn, "encrypted.cipher_salt", db_salt)
+            .map_err(one_err::OneErr::new)?;
 
         conn.query_row("SELECT sqlcipher_export('encrypted')", (), |_| Ok(0))
             .map_err(one_err::OneErr::new)?;
@@ -653,8 +681,9 @@ mod tests {
         sqlite.push("db.sqlite3");
 
         let db_key = sodoken::BufReadSized::new_no_lock([0; 32]);
+        let db_salt = BinDataSized([0; 16].into());
 
-        let pool = SqlPool::new(sqlite, db_key).await.unwrap();
+        let pool = SqlPool::new(sqlite, db_key, db_salt).await.unwrap();
 
         let pk = pool
             .new_seed("test-tag".into(), false)

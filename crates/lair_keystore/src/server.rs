@@ -64,6 +64,7 @@ impl StandaloneServer {
         // construct our sqlite store factory
         let store_factory = crate::store_sqlite::create_sql_pool_factory(
             &self.config.store_file,
+            &self.config.database_salt,
         );
 
         // spawn the server

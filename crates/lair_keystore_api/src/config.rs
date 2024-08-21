@@ -53,6 +53,9 @@ pub struct LairServerConfigInner {
     /// in case the pub key does not exist in the lair store.
     pub signature_fallback: LairServerSignatureFallback,
 
+    /// salt for sqlcipher connection
+    pub database_salt: BinDataSized<16>,
+
     /// salt for decrypting runtime data
     pub runtime_secrets_salt: BinDataSized<16>,
 
@@ -110,7 +113,7 @@ impl std::fmt::Display for LairServerConfigInner {
                     lines.push("#       - test-arg1");
                     lines.push("#       - test-arg2");
                     lines.push("#   ```");
-                } else if line.starts_with("runtimeSecretsSalt:") {
+                } else if line.starts_with("databaseSalt:") {
                     lines.push("");
                     lines.push("# -- cryptographic secrets --");
                     lines.push("# If you modify the data below, you risk losing access to your keys.");
@@ -151,6 +154,10 @@ impl LairServerConfigInner {
             // pre-hash the passphrase
             let pw_hash = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
             sodoken::hash::blake2b::hash(pw_hash.clone(), passphrase).await?;
+
+            // generate a random salt for the sqlcipher database
+            let db_salt = <sodoken::BufWriteSized<16>>::new_no_lock();
+            sodoken::random::bytes_buf(db_salt.clone()).await?;
 
             // generate a random salt for the pwhash
             let salt = <sodoken::BufWriteSized<16>>::new_no_lock();
@@ -254,6 +261,7 @@ impl LairServerConfigInner {
                 pid_file,
                 store_file,
                 signature_fallback: LairServerSignatureFallback::None,
+                database_salt: db_salt.try_unwrap_sized().unwrap().into(),
                 runtime_secrets_salt: salt.try_unwrap_sized().unwrap().into(),
                 runtime_secrets_mem_limit: mem_limit,
                 runtime_secrets_ops_limit: ops_limit,
