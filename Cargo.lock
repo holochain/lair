@@ -739,7 +739,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "criterion",
  "lair_keystore_api",
@@ -755,7 +755,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_api"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "assert_cmd",
  "base64 0.22.1",

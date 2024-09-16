@@ -1,6 +1,6 @@
 ### `lair-keystore url --help`
 ```text
-lair-keystore-url 0.5.0
+lair-keystore-url 0.5.1
 Print the connection_url for a configured lair-keystore
 server to stdout and exit.
 
