@@ -37,4 +37,4 @@ jobs:
           args: cargo-readme
 
       - name: Make Static
-        run: make static
+        run: CHK_SQL_FMT=1 make static

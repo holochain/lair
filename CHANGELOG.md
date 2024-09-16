@@ -1,3 +1,7 @@
+## 0.5.1
+
+- fix to build.rs to not check sql formatting unless environment variable CHK_SQL_FMT=1
+
 ## 0.5.0
 
 - breaking sqlcipher update for ios compatibility
