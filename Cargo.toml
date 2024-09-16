@@ -16,7 +16,7 @@ futures = "0.3.28"
 # determinism of the strict client/server version checks
 hc_seed_bundle = { version = "=0.2.4", path = "./crates/hc_seed_bundle" }
 # lair_keystore_api must be pinned to enable strict version checks
-lair_keystore_api = { version = "=0.5.0", path = "./crates/lair_keystore_api" }
+lair_keystore_api = { version = "=0.5.1", path = "./crates/lair_keystore_api" }
 lru = "0.12.3"
 nanoid = "0.4.0"
 one_err = "0.0.8"
@@ -33,7 +33,7 @@ serde_bytes = "0.11.9"
 serde_json = "1"
 serde_yaml = "0.9.21"
 sodoken = "=0.0.11"
-sqlformat = "0.2.1"
+sqlformat = "=0.2.6"
 structopt = "0.3.26"
 sysinfo = "0.30.12"
 tempdir = "0.3.7"
