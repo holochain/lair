@@ -192,6 +192,16 @@ async fn get_config(
 }
 
 async fn exec() -> LairResult<()> {
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::FmtSubscriber::builder()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .compact()
+            .finish(),
+    )
+    .unwrap();
+
+    tracing::info!("starting lair-keystore");
+
     let opt = Opt::from_args();
     let Opt { lair_root, cmd } = opt;
     let lair_root = dunce::canonicalize(&lair_root)?;
