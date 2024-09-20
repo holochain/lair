@@ -1,21 +1,23 @@
 [package]
 name = "lair_keystore"
-version = "0.5.1"
+version = "0.5.2"
 description = "secret lair private keystore"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/holochain/lair"
 documentation = "https://docs.rs/lair_keystore"
-authors = [ "Holochain Core Dev Team <devcore@holochain.org>" ]
-keywords = [ "holochain", "holo", "keystore", "secret", "cryptography" ]
-categories = [ "cryptography" ]
+authors = ["Holochain Core Dev Team <devcore@holochain.org>"]
+keywords = ["holochain", "holo", "keystore", "secret", "cryptography"]
+categories = ["cryptography"]
 edition = "2018"
 
 [features]
-default = [ "rusqlite-bundled-sqlcipher-vendored-openssl" ]
-rusqlite-bundled = [ "rusqlite/bundled" ]
-rusqlite-bundled-sqlcipher = [ "rusqlite/bundled-sqlcipher" ]
-rusqlite-bundled-sqlcipher-vendored-openssl = [ "rusqlite/bundled-sqlcipher-vendored-openssl" ]
-rusqlite-sqlcipher = [ "rusqlite/sqlcipher" ]
+default = ["rusqlite-bundled-sqlcipher-vendored-openssl"]
+rusqlite-bundled = ["rusqlite/bundled"]
+rusqlite-bundled-sqlcipher = ["rusqlite/bundled-sqlcipher"]
+rusqlite-bundled-sqlcipher-vendored-openssl = [
+  "rusqlite/bundled-sqlcipher-vendored-openssl",
+]
+rusqlite-sqlcipher = ["rusqlite/sqlcipher"]
 
 [dependencies]
 # lair_keystore_api must be pinned to enable strict version checks
@@ -43,4 +45,3 @@ path = "src/lib.rs"
 name = "lair-keystore"
 path = "src/bin/lair-keystore-bin/main.rs"
 doc = false
-

@@ -1,13 +1,13 @@
 [package]
 name = "lair_keystore_api"
-version = "0.5.1"
+version = "0.5.2"
 description = "secret lair private keystore API library"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/holochain/lair"
 documentation = "https://docs.rs/lair_keystore_api"
-authors = [ "Holochain Core Dev Team <devcore@holochain.org>" ]
-keywords = [ "holochain", "holo", "keystore", "secret", "cryptography" ]
-categories = [ "cryptography" ]
+authors = ["Holochain Core Dev Team <devcore@holochain.org>"]
+keywords = ["holochain", "holo", "keystore", "secret", "cryptography"]
+categories = ["cryptography"]
 edition = "2018"
 
 [dependencies]
@@ -23,7 +23,7 @@ time = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
-tokio = { workspace = true, features = [ "full" ] }
+tokio = { workspace = true, features = ["full"] }
 toml = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
@@ -39,4 +39,3 @@ tracing-subscriber = { workspace = true }
 
 [build-dependencies]
 toml = { workspace = true }
-

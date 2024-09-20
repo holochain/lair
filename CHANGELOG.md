@@ -1,3 +1,7 @@
+## 0.5.2
+
+- enables some basic tracing [#135](https://github.com/holochain/lair/pull/135)
+
 ## 0.5.1
 
 - fix to build.rs to not check sql formatting unless environment variable CHK_SQL_FMT=1
