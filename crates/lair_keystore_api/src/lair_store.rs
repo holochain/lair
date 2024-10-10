@@ -140,6 +140,7 @@ pub enum LairEntryInner {
     /// - derived
     /// - used for ed25519 signatures
     /// - used for x25519 encryption
+    ///
     /// The secretstream seed uses the base passphrase-derived secret
     /// for decryption.
     Seed {

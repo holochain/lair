@@ -1,5 +1,15 @@
 const SQL_DIR: &str = "./src/sql";
+const CHK_SQL_FMT: Option<&str> = option_env!("CHK_SQL_FMT");
 const FIX_SQL_FMT: Option<&str> = option_env!("FIX_SQL_FMT");
+
+fn chk_sql_fmt() -> bool {
+    if let Some(csf) = CHK_SQL_FMT {
+        !csf.is_empty()
+    } else {
+        false
+    }
+}
+
 fn fix_sql_fmt() -> bool {
     if let Some(fsf) = FIX_SQL_FMT {
         !fsf.is_empty()
@@ -54,7 +64,7 @@ fn check_fmt(path: &std::path::Path) {
     let opt = sqlformat::FormatOptions {
         indent: sqlformat::Indent::Spaces(2),
         uppercase: true,
-        lines_between_queries: 1,
+        lines_between_queries: 2,
     };
 
     let fmt_sql =
@@ -70,7 +80,7 @@ fn check_fmt(path: &std::path::Path) {
                 path.to_string_lossy()
             );
         }
-    } else {
+    } else if chk_sql_fmt() {
         panic_on_diff(path, src_sql, fmt_sql);
     }
 }
@@ -78,7 +88,9 @@ fn check_fmt(path: &std::path::Path) {
 fn main() {
     lair_keystore_api::internal::build::build_ver();
 
+    println!("cargo:rerun-if-env-changed=CHK_SQL_FMT");
     println!("cargo:rerun-if-env-changed=FIX_SQL_FMT");
+
     for sql in find_sql(std::path::Path::new(SQL_DIR)) {
         check_fmt(&sql);
     }
