@@ -3,9 +3,11 @@ on:
   push:
     branches:
       - main
+      - release-0.4.x
   pull_request:
     branches:
       - main
+      - release-0.4.x
 jobs:
   static-analysis:
     name: Static Analysis
@@ -37,4 +39,4 @@ jobs:
           args: cargo-readme
 
       - name: Make Static
-        run: make static
+        run: CHK_SQL_FMT=1 make static
