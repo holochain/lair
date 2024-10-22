@@ -1,3 +1,8 @@
+## Unreleased
+
+- Set tracing writer to write to `stderr` instead of `stdout` [#138](https://github.com/holochain/lair/pull/138)
+- The `lair-keystore` binary now exits with an error (exit code `1`) if and error occurs [#138](https://github.com/holochain/lair/pull/138)
+
 ## 0.5.2
 
 - enables some basic tracing [#135](https://github.com/holochain/lair/pull/135)

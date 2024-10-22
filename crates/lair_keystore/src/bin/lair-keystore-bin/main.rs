@@ -195,6 +195,7 @@ async fn exec() -> LairResult<()> {
     tracing::subscriber::set_global_default(
         tracing_subscriber::FmtSubscriber::builder()
             .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .with_writer(std::io::stderr)
             .compact()
             .finish(),
     )
@@ -223,8 +224,6 @@ async fn exec() -> LairResult<()> {
 }
 
 #[tokio::main(flavor = "multi_thread")]
-async fn main() {
-    if let Err(e) = exec().await {
-        eprintln!("{e}");
-    }
+async fn main() -> LairResult<()> {
+    exec().await
 }
