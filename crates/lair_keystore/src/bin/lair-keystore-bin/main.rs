@@ -224,8 +224,6 @@ async fn exec() -> LairResult<()> {
 }
 
 #[tokio::main(flavor = "multi_thread")]
-async fn main() {
-    if let Err(e) = exec().await {
-        eprintln!("{e}");
-    }
+async fn main() -> LairResult<()> {
+    exec().await
 }
