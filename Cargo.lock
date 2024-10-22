@@ -741,6 +741,7 @@ dependencies = [
 name = "lair_keystore"
 version = "0.5.2"
 dependencies = [
+ "assert_cmd",
  "criterion",
  "lair_keystore_api",
  "pretty_assertions",
