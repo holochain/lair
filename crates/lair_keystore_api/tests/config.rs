@@ -27,10 +27,7 @@ async fn lair_config_connection_url_relative_root() {
     expected_path.push(dir.path().components().last().unwrap());
     let expected_path_str = expected_path.to_str().unwrap();
 
-    assert_eq!(
-        true,
-        config.connection_url.as_str().contains(expected_path_str)
-    );
+    assert!(config.connection_url.as_str().contains(expected_path_str));
 }
 
 #[cfg(not(windows))]
@@ -59,8 +56,5 @@ async fn lair_config_connection_url_absolute_root() {
     expected_path.push(dir.path().components().last().unwrap());
     let expected_path_str = expected_path.to_str().unwrap();
 
-    assert_eq!(
-        true,
-        config.connection_url.as_str().contains(expected_path_str)
-    );
+    assert!(config.connection_url.as_str().contains(expected_path_str));
 }

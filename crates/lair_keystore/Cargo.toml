@@ -1,6 +1,6 @@
 [package]
 name = "lair_keystore"
-version = "0.5.2"
+version = "0.5.3"
 description = "secret lair private keystore"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/holochain/lair"
@@ -35,7 +35,6 @@ sqlformat = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
-criterion = { workspace = true }
 tempdir = { workspace = true }
 
 [lib]

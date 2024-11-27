@@ -9,14 +9,13 @@ members = [
 [workspace.dependencies]
 assert_cmd = "2.0.11"
 base64 = "0.22.1"
-criterion = "0.5.1"
 dunce = "1.0.4"
 futures = "0.3.28"
 # this doesn't strictly need to be pinned, but it supports the
 # determinism of the strict client/server version checks
 hc_seed_bundle = { version = "=0.2.5", path = "./crates/hc_seed_bundle" }
 # lair_keystore_api must be pinned to enable strict version checks
-lair_keystore_api = { version = "=0.5.2", path = "./crates/lair_keystore_api" }
+lair_keystore_api = { version = "=0.5.3", path = "./crates/lair_keystore_api" }
 lru = "0.12.3"
 nanoid = "0.4.0"
 one_err = "0.0.8"
@@ -37,7 +36,6 @@ sqlformat = "=0.2.6"
 structopt = "0.3.26"
 sysinfo = "0.32.1"
 tempdir = "0.3.7"
-time = "0.3.36"
 tokio = { version = "1.35.1" }
 toml = "0.8.14"
 tracing = "0.1.37"

@@ -1,6 +1,6 @@
 [package]
 name = "lair_keystore_api"
-version = "0.5.2"
+version = "0.5.3"
 description = "secret lair private keystore API library"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/holochain/lair"
@@ -19,7 +19,6 @@ nanoid = { workspace = true }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
 rcgen = { workspace = true }
-time = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
