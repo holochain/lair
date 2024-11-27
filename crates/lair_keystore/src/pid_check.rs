@@ -5,6 +5,7 @@ use std::{
     io::{Read, Write},
     str::FromStr,
 };
+use sysinfo::ProcessesToUpdate;
 
 /// Execute lair pid_check verifying we are the one true Lair process
 /// with access to given store / pidfile.
@@ -56,7 +57,7 @@ fn pid_check_write(
                 let pid =
                     sysinfo::Pid::from_str(&String::from_utf8_lossy(&buf))
                         .map_err(one_err::OneErr::new)?;
-                sys.refresh_process(pid);
+                sys.refresh_processes(ProcessesToUpdate::Some(&[pid]), true);
                 match sys.process(pid) {
                     Some(process)
                         if process.name() == env!("CARGO_PKG_NAME") =>
