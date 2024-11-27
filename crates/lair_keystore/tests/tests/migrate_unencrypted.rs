@@ -1,7 +1,5 @@
-use common::{connect_with_config, create_config};
+use super::common::{connect_with_config, create_config};
 use lair_keystore_api::dependencies::{sodoken, tokio};
-
-mod common;
 
 #[cfg(not(windows))] // No encryption on Windows, ignore this test
 #[tokio::test(flavor = "multi_thread")]

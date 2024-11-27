@@ -1,8 +1,6 @@
-use common::connect;
+use super::common::connect;
 use lair_keystore::dependencies::*;
 use lair_keystore_api::prelude::*;
-
-mod common;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn server_test_happy_path() {
