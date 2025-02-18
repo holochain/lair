@@ -1,13 +1,20 @@
+use std::convert::TryFrom;
 use std::ops::{Deref, DerefMut};
+use one_err::OneErr;
 
 /// A fixed sized byte array with all the translation and serialization
 /// support we need for working with SeedBundles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct U8Array<const N: usize>(pub [u8; N]);
 
-impl<const N: usize> From<U8Array<N>> for sodoken::BufReadSized<N> {
-    fn from(o: U8Array<N>) -> Self {
-        o.0.into()
+impl<const N: usize> TryFrom<U8Array<N>> for sodoken::LockedArray<N> {
+    type Error = OneErr;
+
+    fn try_from(o: U8Array<N>) -> Result<Self, Self::Error> {
+        let mut out = sodoken::LockedArray::new()?;
+        out.lock().copy_from_slice(&o.0);
+
+        Ok(out)
     }
 }
 
@@ -17,9 +24,9 @@ impl<const N: usize> From<[u8; N]> for U8Array<N> {
     }
 }
 
-impl<const N: usize> From<sodoken::BufReadSized<N>> for U8Array<N> {
-    fn from(o: sodoken::BufReadSized<N>) -> Self {
-        (*o.read_lock_sized()).into()
+impl<const N: usize> From<sodoken::LockedArray<N>> for U8Array<N> {
+    fn from(mut o: sodoken::LockedArray<N>) -> Self {
+        (*o.lock()).into()
     }
 }
 

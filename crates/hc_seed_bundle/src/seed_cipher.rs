@@ -1,9 +1,10 @@
 //! A module for seed bundle cipher related items
 
+use std::convert::TryInto;
 use futures::future::{BoxFuture, FutureExt};
 use one_err::*;
-use sodoken::SodokenResult;
 use std::sync::Arc;
+use parking_lot::Mutex;
 
 mod u8array;
 use u8array::*;
@@ -19,8 +20,8 @@ pub use pw_hash_limits::*;
 
 type PrivCalcCipher = Box<
     dyn FnOnce(
-            sodoken::BufReadSized<32>,
-        ) -> BoxFuture<'static, SodokenResult<SeedCipher>>
+            Arc<Mutex<sodoken::LockedArray<32>>>,
+        ) -> BoxFuture<'static, Result<SeedCipher, OneErr>>
         + 'static
         + Send,
 >;
@@ -28,30 +29,25 @@ type PrivCalcCipher = Box<
 /// To lock a SeedBundle, we need a list of ciphers and their secrets.
 /// This builder allows specifying those, then generating the locked bytes.
 pub struct SeedCipherBuilder {
-    seed: sodoken::BufReadSized<32>,
+    seed: Arc<Mutex<sodoken::LockedArray<32>>>,
     app_data: Arc<[u8]>,
     cipher_list: Vec<PrivCalcCipher>,
 }
 
 impl SeedCipherBuilder {
-    pub(crate) fn new<S>(seed: S, app_data: Arc<[u8]>) -> Self
-    where
-        S: Into<sodoken::BufReadSized<32>> + 'static + Send,
+    pub(crate) fn new(seed: Arc<Mutex<sodoken::LockedArray<32>>>, app_data: Arc<[u8]>) -> Self
     {
         Self {
-            seed: seed.into(),
+            seed,
             app_data,
             cipher_list: Vec::new(),
         }
     }
 
     /// Add a simple pwhash passphrase cipher to the cipher list.
-    pub fn add_pwhash_cipher<P>(mut self, passphrase: P) -> Self
-    where
-        P: Into<sodoken::BufRead> + 'static + Send,
+    pub fn add_pwhash_cipher<const P: usize>(mut self, passphrase: sodoken::LockedArray<P>) -> Self
     {
         let limits = PwHashLimits::current();
-        let passphrase = passphrase.into();
         let gen_cipher: PrivCalcCipher = Box::new(move |seed| {
             async move {
                 // encrypt the passphrase
@@ -74,13 +70,11 @@ impl SeedCipherBuilder {
     }
 
     /// Add a security question based cipher to the cipher list.
-    pub fn add_security_question_cipher<A>(
+    pub fn add_security_question_cipher<const N1: usize, const N2: usize, const N3: usize>(
         mut self,
         question_list: (String, String, String),
-        answer_list: (A, A, A),
+        answer_list: (sodoken::LockedArray<N1>, sodoken::LockedArray<N2>, sodoken::LockedArray<N3>),
     ) -> Self
-    where
-        A: Into<sodoken::BufRead> + 'static + Send,
     {
         let limits = PwHashLimits::current();
         let gen_cipher: PrivCalcCipher = Box::new(move |seed| {
@@ -110,7 +104,7 @@ impl SeedCipherBuilder {
     }
 
     /// Process the seed ciphers and generate the locked bytes of this bundle.
-    pub async fn lock(self) -> SodokenResult<Box<[u8]>> {
+    pub async fn lock(self) -> Result<Box<[u8]>, OneErr> {
         let Self {
             seed,
             app_data,
@@ -147,11 +141,11 @@ impl SeedCipherBuilder {
 
 /// This locked cipher is a simple pwHash type.
 pub struct LockedSeedCipherPwHash {
-    salt: sodoken::BufReadSized<16>,
+    salt: sodoken::LockedArray<16>,
     mem_limit: u32,
     ops_limit: u32,
-    seed_cipher_header: sodoken::BufReadSized<24>,
-    seed_cipher: sodoken::BufReadSized<49>,
+    seed_cipher_header: sodoken::LockedArray<24>,
+    seed_cipher: sodoken::LockedArray<49>,
     app_data: Arc<[u8]>,
 }
 
@@ -163,12 +157,10 @@ impl std::fmt::Debug for LockedSeedCipherPwHash {
 
 impl LockedSeedCipherPwHash {
     /// Decrypt this Cipher into an UnlockedSeedBundle struct.
-    pub async fn unlock<P>(
+    pub async fn unlock<const P: usize>(
         self,
-        passphrase: P,
-    ) -> SodokenResult<crate::UnlockedSeedBundle>
-    where
-        P: Into<sodoken::BufRead> + 'static + Send,
+        passphrase: sodoken::LockedArray<P>,
+    ) -> Result<crate::UnlockedSeedBundle, OneErr>
     {
         // destructure our decoding data
         let LockedSeedCipherPwHash {
@@ -179,7 +171,6 @@ impl LockedSeedCipherPwHash {
             seed_cipher,
             app_data,
         } = self;
-        let passphrase = passphrase.into();
 
         // decrypt the seed with the given passphrase
         let seed = pw_dec(
@@ -205,12 +196,12 @@ impl LockedSeedCipherPwHash {
 
 /// This locked cipher is based on security questions.
 pub struct LockedSeedCipherSecurityQuestions {
-    salt: sodoken::BufReadSized<16>,
+    salt: sodoken::LockedArray<16>,
     mem_limit: u32,
     ops_limit: u32,
     question_list: (String, String, String),
-    seed_cipher_header: sodoken::BufReadSized<24>,
-    seed_cipher: sodoken::BufReadSized<49>,
+    seed_cipher_header: sodoken::LockedArray<24>,
+    seed_cipher: sodoken::LockedArray<49>,
     app_data: Arc<[u8]>,
 }
 
@@ -229,12 +220,10 @@ impl LockedSeedCipherSecurityQuestions {
     }
 
     /// Decrypt this Cipher into an UnlockedSeedBundle struct.
-    pub async fn unlock<A>(
+    pub async fn unlock<const N1: usize, const N2: usize, const N3: usize>(
         self,
-        answer_list: (A, A, A),
-    ) -> SodokenResult<crate::UnlockedSeedBundle>
-    where
-        A: Into<sodoken::BufRead> + 'static + Send,
+        answer_list: (sodoken::LockedArray<N1>, sodoken::LockedArray<N2>, sodoken::LockedArray<N3>),
+    ) -> Result<crate::UnlockedSeedBundle, OneErr>
     {
         // destructure our decoding data
         let LockedSeedCipherSecurityQuestions {
@@ -248,8 +237,9 @@ impl LockedSeedCipherSecurityQuestions {
         } = self;
 
         // generate a deterministic passphrase with the given answers
-        let (a1, a2, a3) = answer_list;
-        let passphrase = process_security_answers(a1, a2, a3)?;
+        let (mut a1, mut a2, mut a3) = answer_list;
+        let out = a1.lock().len() + a2.lock().len() + a3.lock().len();
+        let passphrase = process_security_answers::<N1, N2, N3, { out }>(a1, a2, a3)?;
 
         // decrypt the seed with the generated passphrase
         let seed = pw_dec(
@@ -291,7 +281,7 @@ pub enum LockedSeedCipher {
 
 impl LockedSeedCipher {
     /// used by UnlockedSeedBundle::from_locked to get a list of LockedSeeCipher
-    pub(crate) fn from_locked(bytes: &[u8]) -> SodokenResult<Vec<Self>> {
+    pub(crate) fn from_locked(bytes: &[u8]) -> Result<Vec<Self>, OneErr> {
         // deserialize the top-level bundle
         let bundle: SeedBundle =
             rmp_serde::from_slice(bytes).map_err(OneErr::new)?;
@@ -319,11 +309,11 @@ impl LockedSeedCipher {
                     // this is a PwHash type, emit that
                     out.push(LockedSeedCipher::PwHash(
                         LockedSeedCipherPwHash {
-                            salt: salt.into(),
+                            salt: salt.try_into()?,
                             mem_limit,
                             ops_limit,
-                            seed_cipher_header: header.into(),
-                            seed_cipher: cipher.into(),
+                            seed_cipher_header: header.try_into()?,
+                            seed_cipher: cipher.try_into()?,
                             app_data: app_data.clone(),
                         },
                     ));
@@ -339,12 +329,12 @@ impl LockedSeedCipher {
                     // this is a SecurityQuestions type, emit that
                     out.push(LockedSeedCipher::SecurityQuestions(
                         LockedSeedCipherSecurityQuestions {
-                            salt: salt.into(),
+                            salt: salt.try_into()?,
                             mem_limit,
                             ops_limit,
                             question_list,
-                            seed_cipher_header: header.into(),
-                            seed_cipher: cipher.into(),
+                            seed_cipher_header: header.try_into()?,
+                            seed_cipher: cipher.try_into()?,
                             app_data: app_data.clone(),
                         },
                     ));
