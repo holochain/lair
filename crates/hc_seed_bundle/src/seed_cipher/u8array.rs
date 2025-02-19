@@ -1,17 +1,19 @@
+use one_err::OneErr;
+use parking_lot::Mutex;
 use std::convert::TryFrom;
 use std::ops::{Deref, DerefMut};
-use one_err::OneErr;
+use std::sync::Arc;
 
 /// A fixed sized byte array with all the translation and serialization
 /// support we need for working with SeedBundles.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct U8Array<const N: usize>(pub [u8; N]);
 
-impl<const N: usize> TryFrom<U8Array<N>> for sodoken::LockedArray<N> {
+impl<const N: usize> TryFrom<U8Array<N>> for sodoken::SizedLockedArray<N> {
     type Error = OneErr;
 
     fn try_from(o: U8Array<N>) -> Result<Self, Self::Error> {
-        let mut out = sodoken::LockedArray::new()?;
+        let mut out = sodoken::SizedLockedArray::new()?;
         out.lock().copy_from_slice(&o.0);
 
         Ok(out)
@@ -24,9 +26,17 @@ impl<const N: usize> From<[u8; N]> for U8Array<N> {
     }
 }
 
-impl<const N: usize> From<sodoken::LockedArray<N>> for U8Array<N> {
-    fn from(mut o: sodoken::LockedArray<N>) -> Self {
+impl<const N: usize> From<sodoken::SizedLockedArray<N>> for U8Array<N> {
+    fn from(mut o: sodoken::SizedLockedArray<N>) -> Self {
         (*o.lock()).into()
+    }
+}
+
+impl<const N: usize> From<Arc<Mutex<sodoken::SizedLockedArray<N>>>>
+    for U8Array<N>
+{
+    fn from(o: Arc<Mutex<sodoken::SizedLockedArray<N>>>) -> Self {
+        (*o.lock().lock()).into()
     }
 }
 

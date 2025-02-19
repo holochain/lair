@@ -54,7 +54,9 @@ impl PwHashLimits {
     pub fn as_mem_limit(&self) -> u32 {
         match self {
             Self::Minimum => sodoken::argon2::ARGON2_ID_MEMLIMIT_MIN,
-            Self::Interactive => sodoken::argon2::ARGON2_ID_MEMLIMIT_INTERACTIVE,
+            Self::Interactive => {
+                sodoken::argon2::ARGON2_ID_MEMLIMIT_INTERACTIVE
+            }
             Self::Moderate => sodoken::argon2::ARGON2_ID_MEMLIMIT_MODERATE,
             Self::Sensitive => sodoken::argon2::ARGON2_ID_MEMLIMIT_SENSITIVE,
         }
@@ -64,7 +66,9 @@ impl PwHashLimits {
     pub fn as_ops_limit(&self) -> u32 {
         match self {
             Self::Minimum => sodoken::argon2::ARGON2_ID_OPSLIMIT_MIN,
-            Self::Interactive => sodoken::argon2::ARGON2_ID_OPSLIMIT_INTERACTIVE,
+            Self::Interactive => {
+                sodoken::argon2::ARGON2_ID_OPSLIMIT_INTERACTIVE
+            }
             Self::Moderate => sodoken::argon2::ARGON2_ID_OPSLIMIT_MODERATE,
             Self::Sensitive => sodoken::argon2::ARGON2_ID_OPSLIMIT_SENSITIVE,
         }
