@@ -5,7 +5,6 @@ use futures::future::{BoxFuture, FutureExt};
 use futures::stream::{BoxStream, Stream, StreamExt};
 use one_err::*;
 use parking_lot::Mutex;
-use sodoken::secretstream::xchacha20poly1305 as sss;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
@@ -29,10 +28,22 @@ pub mod traits {
         fn send(&self, t: T) -> BoxFuture<'static, LairResult<()>>;
 
         /// Get outgoing encryption context key.
-        fn get_enc_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }>;
+        fn get_enc_ctx_key(
+            &self,
+        ) -> Arc<
+            Mutex<
+                sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>,
+            >,
+        >;
 
         /// Get incoming decryption context key.
-        fn get_dec_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }>;
+        fn get_dec_ctx_key(
+            &self,
+        ) -> Arc<
+            Mutex<
+                sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>,
+            >,
+        >;
 
         /// Shutdown the channel.
         fn shutdown(&self) -> BoxFuture<'static, LairResult<()>>;
@@ -70,12 +81,20 @@ where
     }
 
     /// Get outgoing encryption context key.
-    pub fn get_enc_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }> {
+    pub fn get_enc_ctx_key(
+        &self,
+    ) -> Arc<
+        Mutex<sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>>,
+    > {
         AsS3Sender::get_enc_ctx_key(&*self.0)
     }
 
     /// Get incoming decryption context key.
-    pub fn get_dec_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }> {
+    pub fn get_dec_ctx_key(
+        &self,
+    ) -> Arc<
+        Mutex<sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>>,
+    > {
         AsS3Sender::get_dec_ctx_key(&*self.0)
     }
 
@@ -108,8 +127,8 @@ where
 pub fn new_s3_server<T, S, R>(
     send: S,
     recv: R,
-    srv_id_pub_key: sodoken::BufReadSized<32>,
-    srv_id_sec_key: sodoken::BufReadSized<32>,
+    srv_id_pub_key: Arc<[u8; 32]>,
+    srv_id_sec_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
 ) -> impl Future<Output = LairResult<(S3Sender<T>, S3Receiver<T>)>> + 'static + Send
 where
     T: 'static + serde::Serialize + for<'de> serde::Deserialize<'de> + Send,
@@ -117,8 +136,8 @@ where
     R: 'static + tokio::io::AsyncRead + Send + Unpin,
 {
     async move {
-        use sodoken::crypto_box::curve25519xchacha20poly1305 as cbox;
         use sodoken::kx;
+        use sodoken::secretbox as cbox;
 
         // box these up into trait objects so we can easily refer to their types.
         let mut send: PrivRawSend = Box::new(send);
@@ -301,25 +320,31 @@ use inner::*;
 /// use secret keys to initialize secretstream encryption / decryption.
 fn priv_init_ss<'a>(
     send: &'a mut PrivRawSend,
-    tx: sodoken::BufReadSized<{ sss::KEYBYTES }>,
+    tx: sodoken::BufReadSized<{ sodoken::secretstream::KEYBYTES }>,
     recv: &'a mut PrivRawRecv,
-    rx: sodoken::BufReadSized<{ sss::KEYBYTES }>,
+    rx: sodoken::BufReadSized<{ sodoken::secretstream::KEYBYTES }>,
 ) -> impl Future<
-    Output = LairResult<(sss::SecretStreamEncrypt, sss::SecretStreamDecrypt)>,
+    Output = LairResult<(
+        sodoken::secretstream::SecretStreamEncrypt,
+        sodoken::secretstream::SecretStreamDecrypt,
+    )>,
 >
        + 'a
        + Send {
     async move {
         // for our sender, initialize encryption by generating / sending header.
         let header = sodoken::BufWriteSized::new_no_lock();
-        let enc = sss::SecretStreamEncrypt::new(tx, header.clone())?;
+        let enc = sodoken::secretstream::SecretStreamEncrypt::new(
+            tx,
+            header.clone(),
+        )?;
         // clone to keep this future 'Send'
         let mut header2 = *header.read_lock_sized();
         send.write_all(&header2).await?;
 
         // for our receiver, parse the incoming header
         recv.read_exact(&mut header2).await?;
-        let dec = sss::SecretStreamDecrypt::new(rx, header2)?;
+        let dec = sodoken::secretstream::SecretStreamDecrypt::new(rx, header2)?;
 
         Ok((enc, dec))
     }

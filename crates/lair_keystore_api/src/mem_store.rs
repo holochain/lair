@@ -4,7 +4,7 @@
 use crate::lair_store::traits::*;
 use crate::*;
 use futures::future::{BoxFuture, FutureExt};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -21,13 +21,13 @@ struct PrivMemStoreFactory;
 impl AsLairStoreFactory for PrivMemStoreFactory {
     fn connect_to_store(
         &self,
-        unlock_secret: sodoken::BufReadSized<32>,
+        unlock_secret: sodoken::SizedLockedArray<32>,
     ) -> BoxFuture<'static, LairResult<LairStore>> {
         async move {
             // construct a new in-memory store
             // use the unlock_secret directly as our bidi context key
             let inner = PrivMemStoreInner {
-                bidi_key: unlock_secret,
+                bidi_key: Arc::new(Mutex::new(unlock_secret)),
                 entry_by_tag: HashMap::new(),
                 ed_pk_to_tag: HashMap::new(),
                 x_pk_to_tag: HashMap::new(),
@@ -43,7 +43,7 @@ impl AsLairStoreFactory for PrivMemStoreFactory {
 
 struct PrivMemStoreInner {
     /// key for encryption / decryption of secrets
-    bidi_key: sodoken::BufReadSized<32>,
+    bidi_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
     /// the actual entry store, keyed by tag
     entry_by_tag: HashMap<Arc<str>, LairEntry>,
     /// index for signature pub key to tag
@@ -55,7 +55,7 @@ struct PrivMemStoreInner {
 struct PrivMemStore(Arc<RwLock<PrivMemStoreInner>>);
 
 impl AsLairStore for PrivMemStore {
-    fn get_bidi_ctx_key(&self) -> sodoken::BufReadSized<32> {
+    fn get_bidi_ctx_key(&self) -> Arc<Mutex<sodoken::SizedLockedArray<32>>> {
         self.0.read().bidi_key.clone()
     }
 
@@ -218,10 +218,10 @@ mod tests {
 
         let factory = create_mem_store_factory();
 
-        let store = factory
-            .connect_to_store(sodoken::BufReadSized::from([0xff; 32]))
-            .await
-            .unwrap();
+        let mut key = sodoken::SizedLockedArray::<32>::new().unwrap();
+        key.lock().copy_from_slice(&[0xff; 32]);
+
+        let store = factory.connect_to_store(key).await.unwrap();
 
         let seed_info =
             store.new_seed("test-seed".into(), false).await.unwrap();

@@ -976,7 +976,7 @@ pub(crate) fn priv_get_full_entry_by_x_pub_key<'a>(
 pub(crate) fn priv_req_get_wka_tls_cert_priv_key<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
-    enc_ctx_key: &'a sodoken::BufReadSized<32>,
+    enc_ctx_key: &'a sodoken::SizedLockedArray<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqGetWkaTlsCertPrivKey,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {

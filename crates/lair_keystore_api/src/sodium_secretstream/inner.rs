@@ -1,4 +1,5 @@
 use super::*;
+use parking_lot::lock_api::MutexGuard;
 
 /// Internal state for the typed sender.
 pub(crate) struct PrivSendInner {
@@ -9,10 +10,14 @@ pub(crate) struct PrivSendInner {
     send: Option<PrivCryptSend>,
 
     /// Our transmit encryption key
-    tx: sodoken::BufReadSized<{ sss::KEYBYTES }>,
+    tx: Arc<
+        Mutex<sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>>,
+    >,
 
     /// Our receive decryption key
-    rx: sodoken::BufReadSized<{ sss::KEYBYTES }>,
+    rx: Arc<
+        Mutex<sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>>,
+    >,
 }
 
 /// Typed sender.
@@ -30,15 +35,15 @@ where
     /// Initialize a new typed sender.
     pub(crate) fn new(
         send: PrivCryptSend,
-        tx: sodoken::BufReadSized<{ sss::KEYBYTES }>,
-        rx: sodoken::BufReadSized<{ sss::KEYBYTES }>,
+        tx: sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>,
+        rx: sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>,
     ) -> Self {
         Self(
             Arc::new(Mutex::new(PrivSendInner {
                 limit: Arc::new(tokio::sync::Semaphore::new(1)),
                 send: Some(send),
-                tx,
-                rx,
+                tx: Arc::new(Mutex::new(tx)),
+                rx: Arc::new(Mutex::new(rx)),
             })),
             std::marker::PhantomData,
         )
@@ -77,11 +82,19 @@ where
         .boxed()
     }
 
-    fn get_enc_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }> {
+    fn get_enc_ctx_key(
+        &self,
+    ) -> Arc<
+        Mutex<sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>>,
+    > {
         self.0.lock().tx.clone()
     }
 
-    fn get_dec_ctx_key(&self) -> sodoken::BufReadSized<{ sss::KEYBYTES }> {
+    fn get_dec_ctx_key(
+        &self,
+    ) -> Arc<
+        Mutex<sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>>,
+    > {
         self.0.lock().rx.clone()
     }
 

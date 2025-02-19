@@ -2,6 +2,7 @@
 
 use crate::*;
 use once_cell::sync::Lazy;
+use std::convert::TryInto;
 use std::sync::Arc;
 
 /// The well-known CA keypair in plaintext pem format.
@@ -52,7 +53,7 @@ pub struct TlsCertGenResult {
     /// sni used in cert
     pub sni: Arc<str>,
     /// certificate private key
-    pub priv_key: sodoken::BufRead,
+    pub priv_key: sodoken::LockedArray,
     /// the der encoded certificate
     pub cert: Arc<[u8]>,
     /// blake2b digest of der encoded certificate
@@ -105,9 +106,8 @@ pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
             .map_err(one_err::OneErr::new)?;
 
         let cert_pk = zeroize::Zeroizing::new(cert.serialize_private_key_der());
-        let priv_key = sodoken::BufWrite::new_mem_locked(cert_pk.len())?;
-        priv_key.write_lock().copy_from_slice(&cert_pk);
-        let priv_key = priv_key.to_read();
+        let mut priv_key = sodoken::LockedArray::new(cert_pk.len())?;
+        priv_key.lock().copy_from_slice(&cert_pk);
 
         let root_cert = &**WK_CA_RCGEN_CERT;
         let cert_der = cert
@@ -119,14 +119,19 @@ pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
     .await
     .map_err(one_err::OneErr::new)??;
 
-    let digest = sodoken::BufWriteSized::new_no_lock();
-    sodoken::hash::blake2b::hash(digest.clone(), cert.clone()).await?;
+    let mut digest = Vec::with_capacity(32);
+    sodoken::blake2b::blake2b_hash(
+        digest.as_mut_slice(),
+        cert.as_slice(),
+        None,
+    )
+    .await?;
 
     Ok(TlsCertGenResult {
         sni: sni.into(),
         priv_key,
         cert: cert.into(),
-        digest: digest.try_unwrap_sized().unwrap().into(),
+        digest: digest.as_slice().try_into().unwrap(),
     })
 }
 

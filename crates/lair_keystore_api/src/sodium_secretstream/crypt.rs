@@ -1,11 +1,13 @@
 use super::*;
+use crate::dependencies::sodoken::secretstream::Tag;
+use assert_cmd::assert::IntoOutputPredicate;
 
 /// wrap our streams with cryptography.
 pub(crate) fn priv_crypt(
     send: PrivFramedSend,
-    enc: sss::SecretStreamEncrypt,
+    enc: sodoken::secretstream::State,
     recv: PrivFramedRecv,
-    dec: sss::SecretStreamDecrypt,
+    dec: sodoken::secretstream::State,
 ) -> (PrivCryptSend, PrivCryptRecv) {
     let send = PrivCryptSend::new(send, enc);
     let recv = PrivCryptRecv::new(recv, dec);
@@ -15,14 +17,14 @@ pub(crate) fn priv_crypt(
 /// Encryption sender.
 pub(crate) struct PrivCryptSend {
     send: PrivFramedSend,
-    enc: sss::SecretStreamEncrypt,
+    enc: sodoken::secretstream::State,
 }
 
 impl PrivCryptSend {
     /// Initialize the encryption sender.
     pub(crate) fn new(
         send: PrivFramedSend,
-        enc: sss::SecretStreamEncrypt,
+        enc: sodoken::secretstream::State,
     ) -> Self {
         Self { send, enc }
     }
@@ -34,22 +36,22 @@ impl PrivCryptSend {
     ) -> impl Future<Output = LairResult<()>> + '_ + Send {
         async move {
             // calculate the cipher length
-            let len = data.len() + sss::ABYTES;
+            let len = data.len() + sodoken::secretstream::ABYTES;
 
             // initialize the cipher buffer
-            let cipher = sodoken::BufExtend::new_no_lock(len);
+            let mut cipher = sodoken::LockedArray::new(len)?;
 
             // encrypt the message
-            self.enc
-                .push_message(
-                    data,
-                    <Option<sodoken::BufRead>>::None,
-                    cipher.clone(),
-                )
-                .await?;
+            sodoken::secretstream::push(
+                &mut self.enc,
+                &mut cipher.lock(),
+                data.as_ref(),
+                None,
+                Tag::Message,
+            )?;
 
             // extract the raw cipher data
-            let cipher = cipher.try_unwrap().unwrap();
+            let cipher = cipher.lock().into();
 
             // send the cipher to the remote
             self.send.send(cipher).await?;
@@ -71,7 +73,10 @@ pub(crate) struct PrivCryptRecv(BoxStream<'static, LairResult<Box<[u8]>>>);
 
 impl PrivCryptRecv {
     /// Initialize the new decryption receiver.
-    pub fn new(recv: PrivFramedRecv, dec: sss::SecretStreamDecrypt) -> Self {
+    pub fn new(
+        recv: PrivFramedRecv,
+        dec: sodoken::secretstream::State,
+    ) -> Self {
         let recv = futures::stream::try_unfold(
             (recv, dec),
             |(mut recv, mut dec)| async move {
@@ -79,13 +84,21 @@ impl PrivCryptRecv {
                     None => return Ok(None),
                     Some(cipher) => cipher?,
                 };
-                let cipher = sodoken::BufRead::from(cipher);
-                let msg =
-                    sodoken::BufWrite::new_no_lock(cipher.len() - sss::ABYTES);
-                dec.pull(cipher, <Option<sodoken::BufRead>>::None, msg.clone())
-                    .await?;
-                let msg = msg.try_unwrap().unwrap();
-                Ok(Some((msg, (recv, dec))))
+                let mut cipher = sodoken::LockedArray::from(cipher);
+                let mut msg = sodoken::LockedArray::new(
+                    cipher.lock().len() - sodoken::secretstream::ABYTES,
+                )?;
+
+                sodoken::secretstream::pull(
+                    &mut dec,
+                    &mut msg.lock(),
+                    &cipher.lock(),
+                    None,
+                )?;
+
+                let out = Box::<[u8]>::from(&*msg.lock());
+
+                Ok(Some((out, (recv, dec))))
             },
         );
         Self(recv.boxed())

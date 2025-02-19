@@ -1,4 +1,6 @@
 use super::*;
+use crate::dependencies::one_err::OneErr;
+use parking_lot::Mutex;
 
 /// A [`LairEntry`], including some precomputed values if the entry corresponds to a non-deep-locked seed.
 #[derive(Clone)]
@@ -8,11 +10,11 @@ pub(crate) struct FullLairEntry {
     /// Copied from the entry's seed. If false, an error will be produced when attempting to export this seed
     pub(crate) exportable: bool,
     /// If the entry is for a non-deep-locked seed, this is Some clone of it.
-    pub(crate) seed: Option<sodoken::BufReadSized<32>>,
+    pub(crate) seed: Option<Arc<Mutex<sodoken::SizedLockedArray<32>>>>,
     /// If the entry is for a non-deep-locked seed, this is the signing private key derived from the seed
-    pub(crate) ed_sk: Option<sodoken::BufReadSized<64>>,
+    pub(crate) ed_sk: Option<Arc<Mutex<sodoken::SizedLockedArray<64>>>>,
     /// If the entry is for a non-deep-locked seed, this is the decryption private key derived from the seed
-    pub(crate) x_sk: Option<sodoken::BufReadSized<32>>,
+    pub(crate) x_sk: Option<Arc<Mutex<sodoken::SizedLockedArray<32>>>>,
 }
 
 pub(crate) struct SrvInner {
@@ -20,8 +22,14 @@ pub(crate) struct SrvInner {
     pub(crate) server_name: Arc<str>,
     pub(crate) server_version: Arc<str>,
     pub(crate) store: LairStore,
-    pub(crate) id_pk: sodoken::BufReadSized<32>,
-    pub(crate) id_sk: sodoken::BufReadSized<32>,
+    pub(crate) id_pk: Arc<[u8; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES]>,
+    pub(crate) id_sk: Arc<
+        Mutex<
+            sodoken::SizedLockedArray<
+                sodoken::crypto_box::XSALSA_SECRETKEYBYTES,
+            >,
+        >,
+    >,
     pub(crate) entries_by_tag: lru::LruCache<Arc<str>, FullLairEntry>,
     pub(crate) entries_by_ed: lru::LruCache<Ed25519PubKey, FullLairEntry>,
     #[allow(dead_code)]
@@ -37,16 +45,31 @@ impl Srv {
         server_name: Arc<str>,
         server_version: Arc<str>,
         store_factory: LairStoreFactory,
-        passphrase: sodoken::BufRead,
+        mut passphrase: sodoken::LockedArray,
     ) -> impl Future<Output = LairResult<Self>> + 'static + Send {
         async move {
             // pre-hash the passphrase
-            let pw_hash = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-            sodoken::hash::blake2b::hash(pw_hash.clone(), passphrase).await?;
+            let pw_hash =
+                Arc::new(Mutex::new(sodoken::SizedLockedArray::<64>::new()?));
+            tokio::task::spawn_blocking({
+                let pw_hash = pw_hash.clone();
+                move || -> LairResult<()> {
+                    sodoken::blake2b::blake2b_hash(
+                        &mut pw_hash.lock().lock(),
+                        &passphrase.lock(),
+                        None,
+                    )?;
+
+                    Ok(())
+                }
+            })
+            .await
+            .map_err(|e| OneErr::from(e))??;
 
             // read salt from config
-            let salt = sodoken::BufReadSized::from(
-                config.runtime_secrets_salt.cloned_inner(),
+            let mut salt = sodoken::SizedLockedArray::<16>::new()?;
+            salt.lock().copy_from_slice(
+                config.runtime_secrets_salt.cloned_inner().as_ref(),
             );
 
             // read limits from config
@@ -54,55 +77,64 @@ impl Srv {
             let mem_limit = config.runtime_secrets_mem_limit;
 
             // calculate pre_secret from argon2id passphrase hash
-            let pre_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-            sodoken::hash::argon2id::hash(
-                pre_secret.clone(),
-                pw_hash,
-                salt,
-                ops_limit,
-                mem_limit,
-            )
-            .await?;
+            let pre_secret =
+                Arc::new(Mutex::new(sodoken::SizedLockedArray::<32>::new()?));
+            tokio::task::spawn_blocking({
+                let pre_secret = pre_secret.clone();
+                move || {
+                    sodoken::argon2::blocking_argon2id(
+                        &mut pre_secret.lock().lock(),
+                        &pw_hash.lock().lock(),
+                        &salt.lock(),
+                        ops_limit,
+                        mem_limit,
+                    )
+                }
+            })
+            .await
+            .map_err(|e| OneErr::from(e))??;
 
             // derive ctx (db) decryption secret
-            let ctx_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            let mut ctx_secret = sodoken::SizedLockedArray::<32>::new()?;
             sodoken::kdf::derive_from_key(
-                ctx_secret.clone(),
+                &mut ctx_secret.lock(),
                 42,
-                *b"CtxSecKy",
-                pre_secret.clone(),
+                b"CtxSecKy",
+                &pre_secret.lock().lock(),
             )?;
 
             // derive signature decryption secret
-            let id_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            let mut id_secret = sodoken::SizedLockedArray::<32>::new()?;
             sodoken::kdf::derive_from_key(
-                id_secret.clone(),
+                &mut id_secret.lock(),
                 142,
-                *b"IdnSecKy",
-                pre_secret,
+                b"IdnSecKy",
+                &pre_secret.lock().lock(),
             )?;
 
             // decrypt the context (database) key
             let context_key = config
                 .runtime_secrets_context_key
-                .decrypt(ctx_secret.to_read_sized())
+                .decrypt(ctx_secret)
                 .await?;
 
             // decrypt the signature seed
-            let id_seed = config
-                .runtime_secrets_id_seed
-                .decrypt(id_secret.to_read_sized())
-                .await?;
+            let mut id_seed =
+                config.runtime_secrets_id_seed.decrypt(id_secret).await?;
 
             // derive the signature keypair from the signature seed
-            let id_pk = <sodoken::BufWriteSized<32>>::new_no_lock();
-            let id_sk = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-            use sodoken::crypto_box::curve25519xchacha20poly1305::*;
-            seed_keypair(id_pk.clone(), id_sk.clone(), id_seed.clone()).await?;
+            let mut id_pk =
+                Vec::with_capacity(sodoken::crypto_box::XSALSA_PUBLICKEYBYTES);
+            let mut id_sk = sodoken::SizedLockedArray::<32>::new()?;
+            sodoken::crypto_box::xsalsa_seed_keypair(
+                id_pk.as_mut_slice(),
+                &mut id_sk.lock(),
+                &id_seed.lock(),
+            )
+            .await?;
 
             // generate a lair_store instance using the database key
-            let store =
-                store_factory.connect_to_store(context_key.clone()).await?;
+            let store = store_factory.connect_to_store(context_key).await?;
 
             // if a fallback signer is specified, launch it
             let fallback_cmd = match &config.signature_fallback {
@@ -117,8 +149,8 @@ impl Srv {
                 server_name,
                 server_version,
                 store,
-                id_pk: id_pk.try_unwrap_sized().unwrap().into(),
-                id_sk: id_sk.to_read_sized(),
+                id_pk: id_pk.into(),
+                id_sk: Arc::new(Mutex::new(id_sk)),
                 // worst case, if all these caches evict different entries
                 // we could end up storing 384 entries at once...
                 // the entries themselves are Arc<>'s so putting them
@@ -157,24 +189,22 @@ pub(crate) fn priv_srv_accept(
             .await?;
 
         // derive our encryption (to client) secret
-        let enc_ctx_key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        let mut enc_ctx_key = sodoken::SizedLockedArray::<32>::new()?;
         sodoken::kdf::derive_from_key(
-            enc_ctx_key.clone(),
+            &mut *enc_ctx_key.lock(),
             42,
-            *b"ToCliCxK",
-            send.get_enc_ctx_key(),
+            b"ToCliCxK",
+            &send.get_enc_ctx_key().lock().lock(),
         )?;
-        let enc_ctx_key = enc_ctx_key.to_read_sized();
 
         // derive our decryption (from client) secret
-        let dec_ctx_key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        let mut dec_ctx_key = sodoken::SizedLockedArray::<32>::new()?;
         sodoken::kdf::derive_from_key(
-            dec_ctx_key.clone(),
+            &mut *dec_ctx_key.lock(),
             142,
-            *b"ToSrvCxK",
-            send.get_dec_ctx_key(),
+            b"ToSrvCxK",
+            &send.get_dec_ctx_key().lock().lock(),
         )?;
-        let dec_ctx_key = dec_ctx_key.to_read_sized();
 
         // even if our core inner state is unlocked, we still need
         // every connection to go through the process, so this is
@@ -238,8 +268,8 @@ pub(crate) fn priv_srv_accept(
 pub(crate) fn priv_dispatch_incoming<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
-    enc_ctx_key: &'a sodoken::BufReadSized<32>,
-    dec_ctx_key: &'a sodoken::BufReadSized<32>,
+    enc_ctx_key: &'a sodoken::SizedLockedArray<32>,
+    dec_ctx_key: &'a sodoken::SizedLockedArray<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     incoming: LairApiEnum,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
