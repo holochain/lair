@@ -35,6 +35,7 @@ pub mod client_traits {
 }
 use crate::dependencies::one_err::OneErr;
 use client_traits::*;
+use crate::dependencies::sodoken::SizedLockedArray;
 
 /// A lair keystore client handle. Use this to make requests of the keystore.
 #[derive(Clone)]
@@ -567,10 +568,10 @@ async fn encrypt_passphrase(
     key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
 ) -> LairResult<DeepLockPassphraseBytes> {
     // pre-hash the passphrase
-    let pw_hash = tokio::task::spawn_blocking(move || {
+    let pw_hash = tokio::task::spawn_blocking(move || -> LairResult<SizedLockedArray<64>> {
         let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
         sodoken::blake2b::blake2b_hash(
-            &mut pw_hash.lock(),
+            &mut *pw_hash.lock(),
             &pass.lock().lock(),
             None,
         )?;

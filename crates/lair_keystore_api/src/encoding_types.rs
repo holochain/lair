@@ -188,13 +188,12 @@ impl BinDataSized<32> {
         &self,
         signature: BinDataSized<64>,
         message: Arc<[u8]>,
-    ) -> LairResult<bool> {
+    ) -> bool {
         sodoken::sign::verify_detached(
             &signature.cloned_inner(),
             &message,
             &self.0,
         )
-        .await
     }
 }
 
@@ -211,7 +210,7 @@ pub struct SecretData(
 impl SecretData {
     /// Encrypt some data as a 'SecretData' object with given context key.
     pub async fn encrypt(
-        mut key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+        key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
         data: Arc<[u8]>,
     ) -> LairResult<Self> {
         tokio::task::spawn_blocking(move || Self::encrypt_inner(key, &data))
@@ -266,7 +265,7 @@ impl SecretData {
     /// Decrypt some data as a 'SecretData' object with given context key.
     pub async fn decrypt(
         &self,
-        mut key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+        key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
     ) -> LairResult<sodoken::LockedArray> {
         let mut dec = sodoken::secretstream::State::default();
         sodoken::secretstream::init_pull(
@@ -297,31 +296,30 @@ pub struct SecretDataSized<const M: usize, const C: usize>(
 impl<const M: usize, const C: usize> SecretDataSized<M, C> {
     /// Encrypt some data as a 'SecretDataSized' object with given context key.
     pub async fn encrypt(
-        mut key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+        key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
         mut data: sodoken::SizedLockedArray<M>,
     ) -> LairResult<Self> {
-        let mut header = sodoken::SizedLockedArray::<
-            { sodoken::secretstream::HEADERBYTES },
-        >::new()?;
-        let mut cipher = sodoken::SizedLockedArray::<
-            { sodoken::secretstream::KEYBYTES },
-        >::new()?;
+        let mut header = [0; sodoken::secretstream::HEADERBYTES];
+        let mut cipher = vec![0; data.lock().len() + sodoken::secretstream::ABYTES];
         let mut enc = sodoken::secretstream::State::default();
         sodoken::secretstream::init_push(
             &mut enc,
-            &mut header.lock(),
+            &mut header,
             &key.lock().lock(),
         )?;
 
         sodoken::secretstream::push(
             &mut enc,
-            &mut cipher.lock(),
-            &data.lock(),
+            cipher.as_mut_slice(),
+            &*data.lock(),
             None,
             sodoken::secretstream::Tag::Final,
         )?;
 
-        Ok(Self(header.lock().into(), cipher.into()))
+        let cipher: [u8; C] = cipher.try_into().map_err(|_| {
+            OneErr::new("cipher data length does not match expected size")
+        })?;
+        Ok(Self(header.into(), cipher.into()))
     }
 
     /// Decrypt some data as a 'SecretDataSized' object with given context key.
@@ -330,10 +328,10 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
         key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
     ) -> LairResult<sodoken::SizedLockedArray<M>> {
         let mut header = sodoken::SizedLockedArray::<24>::new()?;
-        header.lock().copy_from_slice(&self.0.cloned_inner());
+        header.lock().copy_from_slice(self.0.cloned_inner().as_slice());
 
         let mut cipher = sodoken::SizedLockedArray::<C>::new()?;
-        cipher.lock().copy_from_slice(&self.1.cloned_inner());
+        cipher.lock().copy_from_slice(self.1.cloned_inner().as_slice());
 
         let mut state = sodoken::secretstream::State::default();
         sodoken::secretstream::init_pull(
@@ -345,11 +343,10 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
         let mut out = sodoken::SizedLockedArray::<M>::new()?;
         sodoken::secretstream::pull(
             &mut state,
-            &mut out.lock(),
-            &cipher.lock(),
+            &mut *out.lock(),
+            &*cipher.lock(),
             None,
-        )
-        .await?;
+        )?;
 
         Ok(out)
     }

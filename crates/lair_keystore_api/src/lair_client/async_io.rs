@@ -7,7 +7,7 @@ use parking_lot::Mutex;
 pub fn new_async_io_lair_client<S, R>(
     send: S,
     recv: R,
-    srv_id_pub_key: sodoken::SizedLockedArray<32>,
+    srv_id_pub_key: BinDataSized<32>,
 ) -> impl Future<Output = LairResult<LairClient>> + 'static + Send
 where
     S: tokio::io::AsyncWrite + 'static + Send + Unpin,
@@ -25,7 +25,7 @@ where
         // derive our encryption (to server) secret context key
         let mut enc_ctx_key = sodoken::SizedLockedArray::<32>::new()?;
         sodoken::kdf::derive_from_key(
-            &mut enc_ctx_key.lock(),
+            &mut *enc_ctx_key.lock(),
             142,
             b"ToSrvCxK",
             &send.get_enc_ctx_key().lock().lock(),
@@ -34,7 +34,7 @@ where
         // derive our decryption (from server) secret context key
         let mut dec_ctx_key = sodoken::SizedLockedArray::<32>::new()?;
         sodoken::kdf::derive_from_key(
-            &mut dec_ctx_key.lock(),
+            &mut *dec_ctx_key.lock(),
             42,
             b"ToCliCxK",
             &send.get_dec_ctx_key().lock().lock(),

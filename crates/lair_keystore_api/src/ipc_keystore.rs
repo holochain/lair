@@ -127,7 +127,7 @@ pub fn ipc_keystore_connect_options(
         let cli_hnd = crate::lair_client::async_io::new_async_io_lair_client(
             send,
             recv,
-            server_pub_key.cloned_inner().into(),
+            server_pub_key.clone(),
         )
         .await?;
 

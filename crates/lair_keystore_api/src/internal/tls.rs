@@ -5,6 +5,7 @@ use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use std::convert::TryInto;
 use std::sync::Arc;
+use crate::dependencies::one_err::OneErr;
 
 /// The well-known CA keypair in plaintext pem format.
 /// Some TLS clients require CA roots to validate client-side certificates.
@@ -111,28 +112,35 @@ pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
         priv_key.lock().copy_from_slice(&cert_pk);
 
         let root_cert = &**WK_CA_RCGEN_CERT;
-        let cert_der = cert
+        let cert_der: Arc<[u8]> = cert
             .serialize_der_with_signer(root_cert)
-            .map_err(one_err::OneErr::new)?;
+            .map_err(one_err::OneErr::new)?.into();
 
         LairResult::Ok((sni, priv_key, cert_der))
     })
     .await
     .map_err(one_err::OneErr::new)??;
 
-    let mut digest = Vec::with_capacity(32);
-    sodoken::blake2b::blake2b_hash(
-        digest.as_mut_slice(),
-        cert.as_slice(),
-        None,
-    )
-    .await?;
+    let digest = tokio::task::spawn_blocking({
+        let cert = cert.clone();
+        move || -> LairResult<[u8; 32]> {
+            let mut digest = [0; 32];
+            sodoken::blake2b::blake2b_hash(
+                &mut digest,
+                &cert,
+                None,
+            )?;
+
+            Ok(digest)
+        }
+    })
+    .await.map_err(OneErr::new)??;
 
     Ok(TlsCertGenResult {
         sni: sni.into(),
         priv_key: Arc::new(Mutex::new(priv_key)),
         cert: cert.into(),
-        digest: digest.as_slice().try_into().unwrap(),
+        digest: digest.into(),
     })
 }
 

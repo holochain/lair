@@ -252,26 +252,24 @@ impl LairStore {
         let inner = self.0.clone();
         async move {
             // derive the ed25519 signature keypair from this seed
-            let mut ed_pk = Vec::with_capacity(sodoken::sign::PUBLICKEYBYTES);
+            let mut ed_pk = [0; sodoken::sign::PUBLICKEYBYTES];
             let mut ed_sk = sodoken::SizedLockedArray::<
                 { sodoken::sign::SECRETKEYBYTES },
             >::new()?;
             sodoken::sign::seed_keypair(
-                ed_pk.as_mut_slice(),
-                &mut ed_sk.lock(),
+                &mut ed_pk,
+                &mut *ed_sk.lock(),
                 &seed.lock(),
-            )
-            .await?;
+            )?;
 
             // derive the x25519 encryption keypair from this seed
-            let mut x_pk =
-                Vec::with_capacity(sodoken::crypto_box::XSALSA_PUBLICKEYBYTES);
+            let mut x_pk = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
             let mut x_sk = sodoken::SizedLockedArray::<
                 { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
             >::new()?;
             sodoken::crypto_box::xsalsa_seed_keypair(
-                x_pk.as_mut_slice(),
-                &mut x_sk.lock(),
+                &mut x_pk,
+                &mut *x_sk.lock(),
                 &seed.lock(),
             )?;
 
@@ -281,8 +279,8 @@ impl LairStore {
 
             // populate our seed info with the derived public keys
             let seed_info = SeedInfo {
-                ed25519_pub_key: ed_pk.try_unwrap_sized().unwrap().into(),
-                x25519_pub_key: x_pk.try_unwrap_sized().unwrap().into(),
+                ed25519_pub_key: ed_pk.into(),
+                x25519_pub_key: x_pk.into(),
                 exportable,
             };
 
@@ -313,7 +311,7 @@ impl LairStore {
         async move {
             // generate a new random seed
             let mut seed = sodoken::SizedLockedArray::<32>::new()?;
-            sodoken::random::randombytes_buf(&mut seed.lock()).await?;
+            sodoken::random::randombytes_buf(&mut *seed.lock())?;
 
             this.insert_seed(seed, tag, exportable).await
         }
@@ -336,49 +334,44 @@ impl LairStore {
         let inner = self.0.clone();
         async move {
             // derive the ed25519 signature keypair from this seed
-            let mut ed_pk = Vec::with_capacity(sodoken::sign::PUBLICKEYBYTES);
+            let mut ed_pk = [0; sodoken::sign::PUBLICKEYBYTES];
             let mut ed_sk = sodoken::SizedLockedArray::<
                 { sodoken::sign::SECRETKEYBYTES },
             >::new()?;
             sodoken::sign::seed_keypair(
-                ed_pk.as_mut_slice(),
+                &mut ed_pk,
                 &mut ed_sk.lock(),
                 &seed.lock(),
-            )
-            .await?;
+            )?;
 
             // derive the x25519 encryption keypair from this seed
-            let mut x_pk =
-                Vec::with_capacity(sodoken::crypto_box::XSALSA_PUBLICKEYBYTES);
+            let mut x_pk = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
             let mut x_sk = sodoken::SizedLockedArray::<
                 { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
             >::new()?;
             sodoken::crypto_box::xsalsa_seed_keypair(
-                x_pk.as_mut_slice(),
+                &mut x_pk,
                 &mut x_sk.lock(),
                 &seed.lock(),
-            )
-            .await?;
-
-            // generate the salt for the pwhash deep locking
-            let mut salt = [0; sodoken::argon2::ARGON2_ID_SALTBYTES];
-            sodoken::random::randombytes_buf(&mut salt).await?;
-            let salt = Arc::new(salt);
+            )?;
 
             // generate the deep lock key from the passphrase
-            let key = tokio::task::spawn_blocking({
-                let salt = salt.clone();
-                move || {
+            let (salt, key) = tokio::task::spawn_blocking({
+                move || -> std::io::Result<([u8; sodoken::argon2::ARGON2_ID_SALTBYTES], sodoken::SizedLockedArray<32>)> {
+                    // generate the salt for the pwhash deep locking
+                    let mut salt = [0; sodoken::argon2::ARGON2_ID_SALTBYTES];
+                    sodoken::random::randombytes_buf(&mut salt)?;
+
                     let mut key = sodoken::SizedLockedArray::<32>::new()?;
                     sodoken::argon2::blocking_argon2id(
-                        &mut key.lock(),
-                        &deep_lock_passphrase.lock(),
+                        &mut *key.lock(),
+                        &*deep_lock_passphrase.lock(),
                         &salt,
                         ops_limit,
                         mem_limit,
                     )?;
 
-                    Ok(key)
+                    Ok((salt, key))
                 }
             })
             .await
@@ -391,8 +384,8 @@ impl LairStore {
 
             // populate our seed info with the derived public keys
             let seed_info = SeedInfo {
-                ed25519_pub_key: ed_pk.try_unwrap_sized().unwrap().into(),
-                x25519_pub_key: x_pk.try_unwrap_sized().unwrap().into(),
+                ed25519_pub_key: ed_pk.into(),
+                x25519_pub_key: x_pk.into(),
                 exportable,
             };
 

@@ -26,7 +26,7 @@ pub(crate) struct SrvInner {
     pub(crate) id_sk: Arc<
         Mutex<
             sodoken::SizedLockedArray<
-                sodoken::crypto_box::XSALSA_SECRETKEYBYTES,
+                { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
             >,
         >,
     >,
@@ -55,7 +55,7 @@ impl Srv {
                 let pw_hash = pw_hash.clone();
                 move || -> LairResult<()> {
                     sodoken::blake2b::blake2b_hash(
-                        &mut pw_hash.lock().lock(),
+                        &mut *pw_hash.lock().lock(),
                         &passphrase.lock().lock(),
                         None,
                     )?;
@@ -64,7 +64,7 @@ impl Srv {
                 }
             })
             .await
-            .map_err(|e| OneErr::from(e))??;
+            .map_err(OneErr::new)??;
 
             // read salt from config
             let mut salt = sodoken::SizedLockedArray::<16>::new()?;
@@ -77,39 +77,39 @@ impl Srv {
             let mem_limit = config.runtime_secrets_mem_limit;
 
             // calculate pre_secret from argon2id passphrase hash
-            let pre_secret =
-                Arc::new(Mutex::new(sodoken::SizedLockedArray::<32>::new()?));
-            tokio::task::spawn_blocking({
-                let pre_secret = pre_secret.clone();
-                move || {
-                    sodoken::argon2::blocking_argon2id(
-                        &mut pre_secret.lock().lock(),
-                        &pw_hash.lock().lock(),
-                        &salt.lock(),
-                        ops_limit,
-                        mem_limit,
-                    )
-                }
+
+            let mut pre_secret = tokio::task::spawn_blocking(move || {
+                let mut pre_secret = sodoken::SizedLockedArray::<32>::new()?;
+
+                sodoken::argon2::blocking_argon2id(
+                    &mut *pre_secret.lock(),
+                    pw_hash.lock().lock().as_slice(),
+                    &salt.lock(),
+                    ops_limit,
+                    mem_limit,
+                )?;
+
+                Ok(pre_secret)
             })
             .await
-            .map_err(|e| OneErr::from(e))??;
+            .map_err(OneErr::new)??;
 
             // derive ctx (db) decryption secret
             let mut ctx_secret = sodoken::SizedLockedArray::<32>::new()?;
             sodoken::kdf::derive_from_key(
-                &mut ctx_secret.lock(),
+                &mut *ctx_secret.lock(),
                 42,
                 b"CtxSecKy",
-                &pre_secret.lock().lock(),
+                &pre_secret.lock(),
             )?;
 
             // derive signature decryption secret
             let mut id_secret = sodoken::SizedLockedArray::<32>::new()?;
             sodoken::kdf::derive_from_key(
-                &mut id_secret.lock(),
+                &mut *id_secret.lock(),
                 142,
                 b"IdnSecKy",
-                &pre_secret.lock().lock(),
+                &pre_secret.lock(),
             )?;
 
             // decrypt the context (database) key
@@ -125,15 +125,19 @@ impl Srv {
                 .await?;
 
             // derive the signature keypair from the signature seed
-            let mut id_pk =
-                Vec::with_capacity(sodoken::crypto_box::XSALSA_PUBLICKEYBYTES);
-            let mut id_sk = sodoken::SizedLockedArray::<32>::new()?;
-            sodoken::crypto_box::xsalsa_seed_keypair(
-                id_pk.as_mut_slice(),
-                &mut id_sk.lock(),
-                &id_seed.lock(),
-            )
-            .await?;
+            let (id_pk, id_sk) = tokio::task::spawn_blocking(move || -> LairResult<([u8; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES], sodoken::SizedLockedArray<{ sodoken::crypto_box::XSALSA_SECRETKEYBYTES }>)> {
+                let mut id_pk =
+                    [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+                let mut id_sk = sodoken::SizedLockedArray::<{sodoken::crypto_box::XSALSA_SECRETKEYBYTES}>::new()?;
+                sodoken::crypto_box::xsalsa_seed_keypair(
+                    &mut id_pk,
+                    &mut *id_sk.lock(),
+                    &id_seed.lock(),
+                )?;
+
+                Ok((id_pk, id_sk))
+            })
+            .await.map_err(OneErr::new)??;
 
             // generate a lair_store instance using the database key
             let store = store_factory.connect_to_store(context_key).await?;

@@ -211,7 +211,7 @@ where
 pub fn new_s3_client<T, S, R>(
     send: S,
     recv: R,
-    srv_id_pub_key: sodoken::BufReadSized<32>,
+    srv_id_pub_key: BinDataSized<32>,
 ) -> impl Future<Output = LairResult<(S3Sender<T>, S3Receiver<T>)>> + 'static + Send
 where
     T: 'static + serde::Serialize + for<'de> serde::Deserialize<'de> + Send,

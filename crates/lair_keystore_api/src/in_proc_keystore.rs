@@ -30,7 +30,7 @@ impl InProcKeystore {
                 "lair-keystore-in-proc".into(),
                 LAIR_VER.into(),
                 store_factory,
-                passphrase,
+                passphrase.clone(),
             )
             .await?;
 

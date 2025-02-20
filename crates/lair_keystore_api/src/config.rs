@@ -137,7 +137,7 @@ impl LairServerConfigInner {
     /// Respects hc_seed_bundle::PwHashLimits.
     pub fn new<P>(
         root_path: P,
-        mut passphrase: Arc<Mutex<sodoken::LockedArray>>,
+        passphrase: Arc<Mutex<sodoken::LockedArray>>,
     ) -> impl Future<Output = LairResult<Self>> + 'static + Send
     where
         P: AsRef<std::path::Path>,
@@ -162,69 +162,72 @@ impl LairServerConfigInner {
             )?;
 
             // generate a random salt for the sqlcipher database
-            let mut db_salt = Vec::with_capacity(16);
-            sodoken::random::randombytes_buf(db_salt.as_mut_slice())?;
+            let mut db_salt = [0; 16];
+            sodoken::random::randombytes_buf(&mut db_salt)?;
 
             // generate a random salt for the pwhash
             let mut salt = [0; sodoken::argon2::ARGON2_ID_SALTBYTES];
-            sodoken::random::randombytes_buf(salt.as_mut_slice()).await?;
+            sodoken::random::randombytes_buf(&mut salt)?;
 
             // pull the captured argon2id limits
             let ops_limit = limits.as_ops_limit();
             let mem_limit = limits.as_mem_limit();
 
             // generate an argon2id pre_secret from the passphrase
-            let mut pre_secret =
-                Arc::new(Mutex::new(sodoken::SizedLockedArray::<32>::new()?));
-            tokio::task::spawn_blocking(move || {
+            let mut pre_secret = tokio::task::spawn_blocking(move || -> LairResult<_> {
+                let mut pre_secret =
+                    sodoken::SizedLockedArray::<32>::new()?;
+
                 sodoken::argon2::blocking_argon2id(
-                    &mut *pre_secret.lock().lock(),
-                    &pw_hash.lock(),
+                    &mut *pre_secret.lock(),
+                    &*pw_hash.lock(),
                     &salt,
                     ops_limit,
                     mem_limit,
-                )
+                )?;
+
+                Ok(pre_secret)
             })
             .await
-            .map_err(OneErr::from)??;
+            .map_err(OneErr::new)??;
 
             // derive our context secret
             // this will be used to encrypt the context_key
-            let mut ctx_secret =
+            let ctx_secret =
                 Arc::new(Mutex::new(sodoken::SizedLockedArray::<32>::new()?));
             sodoken::kdf::derive_from_key(
-                &mut ctx_secret.lock().lock(),
+                &mut *ctx_secret.lock().lock(),
                 42,
                 b"CtxSecKy",
-                &pre_secret.lock().lock(),
+                &pre_secret.lock(),
             )?;
 
             // derive our signature secret
             // this will be used to encrypt the signature seed
-            let mut id_secret =
+            let id_secret =
                 Arc::new(Mutex::new(sodoken::SizedLockedArray::<32>::new()?));
             sodoken::kdf::derive_from_key(
                 &mut *id_secret.lock().lock(),
                 142,
                 b"IdnSecKy",
-                &pre_secret.lock().lock(),
+                &pre_secret.lock(),
             )?;
 
             // the context key is used to encrypt our store_file
             let mut context_key = sodoken::SizedLockedArray::<32>::new()?;
-            sodoken::random::randombytes_buf(&mut context_key.lock())?;
+            sodoken::random::randombytes_buf(&mut *context_key.lock())?;
 
             // the sign seed derives our signature keypair
             // which allows us to authenticate server identity
             let mut id_seed = sodoken::SizedLockedArray::<32>::new()?;
-            sodoken::random::randombytes_buf(&mut id_seed.lock())?;
+            sodoken::random::randombytes_buf(&mut *id_seed.lock())?;
 
             // server identity encryption keypair
             let mut id_pk =
-                Vec::with_capacity(sodoken::crypto_box::XSALSA_PUBLICKEYBYTES);
+                [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
             let mut id_sk = sodoken::SizedLockedArray::<32>::new()?;
             sodoken::crypto_box::xsalsa_seed_keypair(
-                id_pk.as_mut_slice(),
+                &mut id_pk,
                 &mut *id_sk.lock(),
                 &id_seed.lock(),
             )?;
