@@ -3,7 +3,9 @@
 
 use crate::*;
 use futures::stream::StreamExt;
+use parking_lot::Mutex;
 use std::future::Future;
+use std::sync::Arc;
 
 mod raw_ipc;
 
@@ -17,19 +19,16 @@ pub struct IpcKeystoreServer {
 
 impl IpcKeystoreServer {
     /// Construct a new IpcKeystoreServer instance.
-    pub fn new<P>(
+    pub fn new(
         config: LairServerConfig,
         store_factory: LairStoreFactory,
-        passphrase: P,
-    ) -> impl Future<Output = LairResult<Self>> + 'static + Send
-    where
-        P: Into<sodoken::BufRead> + 'static + Send,
-    {
+        passphrase: Arc<Mutex<sodoken::LockedArray>>,
+    ) -> impl Future<Output = LairResult<Self>> + 'static + Send {
         async move {
             let con_recv = raw_ipc::ipc_bind(config.clone()).await?;
 
             // set up our server handler
-            let srv_hnd = crate::lair_server::spawn_lair_server_task(
+            let srv_hnd = spawn_lair_server_task(
                 config.clone(),
                 "lair-keystore-ipc".into(),
                 crate::LAIR_VER.into(),
@@ -86,7 +85,7 @@ pub struct IpcKeystoreClientOptions {
     pub connection_url: url::Url,
 
     /// The passphrase to use to connect.
-    pub passphrase: sodoken::BufRead,
+    pub passphrase: Arc<Mutex<sodoken::LockedArray>>,
 
     /// Require the client and server to have exactly matching
     /// client / server versions.
@@ -97,13 +96,10 @@ pub struct IpcKeystoreClientOptions {
 /// unix domain socket on linux/macOs or named pipe on windows.
 /// This constructor will first validate server authenticity,
 /// then unlock the connection with the supplied passphrase.
-pub fn ipc_keystore_connect<P>(
+pub fn ipc_keystore_connect(
     connection_url: url::Url,
-    passphrase: P,
-) -> impl Future<Output = LairResult<LairClient>> + 'static + Send
-where
-    P: Into<sodoken::BufRead> + 'static + Send,
-{
+    passphrase: Arc<Mutex<sodoken::LockedArray>>,
+) -> impl Future<Output = LairResult<LairClient>> + 'static + Send {
     let passphrase = passphrase.into();
     ipc_keystore_connect_options(IpcKeystoreClientOptions {
         connection_url,
@@ -148,12 +144,10 @@ fn priv_check_hello_ver(
     opts: &IpcKeystoreClientOptions,
     server_version: &str,
 ) -> LairResult<()> {
-    if opts.exact_client_server_version_match
-        && server_version != crate::LAIR_VER
-    {
+    if opts.exact_client_server_version_match && server_version != LAIR_VER {
         return Err(format!(
             "Invalid lair server version, this client requires '{}', but got '{}'.",
-            crate::LAIR_VER,
+            LAIR_VER,
             server_version,
         ).into());
     }
@@ -168,7 +162,9 @@ mod tests {
 
     async fn connect(tmp_dir: &tempdir::TempDir) -> crate::LairClient {
         // set up a passphrase
-        let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
+        let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(
+            b"passphrase".to_vec(),
+        )));
 
         // create the config for the test server
         let config = Arc::new(
@@ -248,7 +244,7 @@ mod tests {
             .unwrap();
         assert!(seed_info_ref
             .ed25519_pub_key
-            .verify_detached(sig, &b"hello"[..])
+            .verify_detached(sig, b"hello".into())
             .await
             .unwrap());
 
@@ -257,7 +253,9 @@ mod tests {
             .with_exec(|| {
                 client.new_seed(
                     "test-tag-deep".into(),
-                    Some(sodoken::BufRead::from(&b"deep"[..])),
+                    Some(Arc::new(Mutex::new(sodoken::LockedArray::from(
+                        b"deep".to_vec(),
+                    )))),
                     false,
                 )
             })
@@ -269,11 +267,11 @@ mod tests {
             client.new_wka_tls_cert("test-cert".into()).await.unwrap();
         println!("{cert_info:#?}");
 
-        let priv_key = client
+        let mut priv_key = client
             .get_wka_tls_cert_priv_key("test-cert".into())
             .await
             .unwrap();
-        println!("got priv key: {} bytes", priv_key.len());
+        println!("got priv key: {} bytes", priv_key.lock().len());
 
         println!("{:#?}", client.list_entries().await.unwrap());
 

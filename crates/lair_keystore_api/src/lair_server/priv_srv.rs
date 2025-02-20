@@ -45,7 +45,7 @@ impl Srv {
         server_name: Arc<str>,
         server_version: Arc<str>,
         store_factory: LairStoreFactory,
-        mut passphrase: sodoken::LockedArray,
+        passphrase: Arc<Mutex<sodoken::LockedArray>>,
     ) -> impl Future<Output = LairResult<Self>> + 'static + Send {
         async move {
             // pre-hash the passphrase
@@ -56,7 +56,7 @@ impl Srv {
                 move || -> LairResult<()> {
                     sodoken::blake2b::blake2b_hash(
                         &mut pw_hash.lock().lock(),
-                        &passphrase.lock(),
+                        &passphrase.lock().lock(),
                         None,
                     )?;
 
@@ -115,12 +115,14 @@ impl Srv {
             // decrypt the context (database) key
             let context_key = config
                 .runtime_secrets_context_key
-                .decrypt(ctx_secret)
+                .decrypt(Arc::new(Mutex::new(ctx_secret)))
                 .await?;
 
             // decrypt the signature seed
-            let mut id_seed =
-                config.runtime_secrets_id_seed.decrypt(id_secret).await?;
+            let mut id_seed = config
+                .runtime_secrets_id_seed
+                .decrypt(Arc::new(Mutex::new(id_secret)))
+                .await?;
 
             // derive the signature keypair from the signature seed
             let mut id_pk =
@@ -183,7 +185,7 @@ pub(crate) fn priv_srv_accept(
 
         // initialize encryption on the async io channel
         let (send, recv) =
-            crate::sodium_secretstream::new_s3_server::<LairApiEnum, _, _>(
+            sodium_secretstream::new_s3_server::<LairApiEnum, _, _>(
                 send, recv, id_pk, id_sk,
             )
             .await?;
@@ -215,8 +217,8 @@ pub(crate) fn priv_srv_accept(
         tokio::task::spawn(async move {
             let inner = &inner;
             let send = &send;
-            let enc_ctx_key = &enc_ctx_key;
-            let dec_ctx_key = &dec_ctx_key;
+            let enc_ctx_key = Arc::new(Mutex::new(enc_ctx_key));
+            let dec_ctx_key = Arc::new(Mutex::new(dec_ctx_key));
             let unlocked = &unlocked;
             recv.for_each_concurrent(4096, move |incoming| async move {
                 let incoming = match incoming {
@@ -267,9 +269,9 @@ pub(crate) fn priv_srv_accept(
 
 pub(crate) fn priv_dispatch_incoming<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
-    send: &'a crate::sodium_secretstream::S3Sender<LairApiEnum>,
-    enc_ctx_key: &'a sodoken::SizedLockedArray<32>,
-    dec_ctx_key: &'a sodoken::SizedLockedArray<32>,
+    send: &'a sodium_secretstream::S3Sender<LairApiEnum>,
+    enc_ctx_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+    dec_ctx_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     incoming: LairApiEnum,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {

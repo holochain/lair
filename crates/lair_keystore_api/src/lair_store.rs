@@ -64,6 +64,7 @@ pub mod traits {
         ) -> BoxFuture<'static, LairResult<LairStore>>;
     }
 }
+use crate::dependencies::one_err::OneErr;
 use traits::*;
 
 /// Public information associated with a given seed.
@@ -360,20 +361,28 @@ impl LairStore {
             .await?;
 
             // generate the salt for the pwhash deep locking
-            let mut salt =
-                Vec::with_capacity(sodoken::argon2::ARGON2_ID_SALTBYTES);
-            sodoken::random::randombytes_buf(salt.as_mut_slice()).await?;
+            let mut salt = [0; sodoken::argon2::ARGON2_ID_SALTBYTES];
+            sodoken::random::randombytes_buf(&mut salt).await?;
+            let salt = Arc::new(salt);
 
             // generate the deep lock key from the passphrase
-            let mut key = sodoken::SizedLockedArray::<32>::new()?;
-            sodoken::argon2::blocking_argon2id(
-                &mut key.lock(),
-                &deep_lock_passphrase.lock(),
-                salt.as_slice().try_into().unwrap(),
-                ops_limit,
-                mem_limit,
-            )
-            .await?;
+            let key = tokio::task::spawn_blocking({
+                let salt = salt.clone();
+                move || {
+                    let mut key = sodoken::SizedLockedArray::<32>::new()?;
+                    sodoken::argon2::blocking_argon2id(
+                        &mut key.lock(),
+                        &deep_lock_passphrase.lock(),
+                        &salt,
+                        ops_limit,
+                        mem_limit,
+                    )?;
+
+                    Ok(key)
+                }
+            })
+            .await
+            .map_err(OneErr::new)??;
 
             // encrypt the seed with the deep lock key
             let seed =
@@ -415,14 +424,14 @@ impl LairStore {
         tag: Arc<str>,
         ops_limit: u32,
         mem_limit: u32,
-        mut deep_lock_passphrase: sodoken::SizedLockedArray<64>,
+        deep_lock_passphrase: sodoken::SizedLockedArray<64>,
         exportable: bool,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let this = self.clone();
         async move {
             // generate a new random seed
             let mut seed = sodoken::SizedLockedArray::<32>::new()?;
-            sodoken::random::randombytes_buf(&mut seed.lock()).await?;
+            sodoken::random::randombytes_buf(&mut *seed.lock())?;
 
             this.insert_deep_locked_seed(
                 seed,
@@ -457,7 +466,7 @@ impl LairStore {
 
             // encrypt the private key with our context secret
             let key = inner.get_bidi_ctx_key();
-            let priv_key = SecretData::encrypt(key, priv_key).await?;
+            let priv_key = SecretData::encrypt_secret(key, priv_key).await?;
 
             // populate the certificate info
             let cert_info = CertInfo {

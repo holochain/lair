@@ -1,8 +1,13 @@
 //! Helper types for dealing with serialization.
 
+use crate::dependencies::one_err::OneErr;
+use crate::types::{
+    MaybeLockedBytes, SharedLockedArray, SharedSizedLockedArray,
+};
 use crate::*;
 use base64::Engine;
 use parking_lot::Mutex;
+use std::convert::TryInto;
 use std::sync::Arc;
 
 fn to_base64_url<B: AsRef<[u8]>>(b: B) -> String {
@@ -209,6 +214,27 @@ impl SecretData {
         mut key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
         data: Arc<[u8]>,
     ) -> LairResult<Self> {
+        tokio::task::spawn_blocking(move || Self::encrypt_inner(key, &data))
+            .await
+            .map_err(OneErr::new)?
+    }
+
+    /// Encrypt some secret data as a 'SecretData' object with given context key.
+    pub async fn encrypt_secret(
+        key: SharedSizedLockedArray<32>,
+        data: SharedLockedArray,
+    ) -> LairResult<Self> {
+        tokio::task::spawn_blocking(move || {
+            Self::encrypt_inner(key, &data.lock().lock())
+        })
+        .await
+        .map_err(OneErr::new)?
+    }
+
+    fn encrypt_inner(
+        key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+        data: &[u8],
+    ) -> LairResult<Self> {
         let mut header = sodoken::SizedLockedArray::<
             { sodoken::secretstream::HEADERBYTES },
         >::new()?;
@@ -231,16 +257,23 @@ impl SecretData {
             sodoken::secretstream::Tag::Final,
         )?;
 
-        Ok(Self(header.lock().into(), cipher.lock().into()))
+        // TODO points at protected memory that will be cleared?
+        let arr = Arc::new(*header.lock());
+        let out = cipher.lock().to_vec().into_boxed_slice();
+        Ok(Self(arr.into(), out.into()))
     }
 
     /// Decrypt some data as a 'SecretData' object with given context key.
     pub async fn decrypt(
         &self,
-        mut key: sodoken::SizedLockedArray<32>,
+        mut key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
     ) -> LairResult<sodoken::LockedArray> {
         let mut dec = sodoken::secretstream::State::default();
-        sodoken::secretstream::init_pull(&mut dec, &self.0, &key.lock())?;
+        sodoken::secretstream::init_pull(
+            &mut dec,
+            &self.0,
+            &key.lock().lock(),
+        )?;
 
         let mut out = sodoken::LockedArray::new(
             self.1.len() - sodoken::secretstream::ABYTES,
@@ -294,7 +327,7 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
     /// Decrypt some data as a 'SecretDataSized' object with given context key.
     pub async fn decrypt(
         &self,
-        mut key: sodoken::SizedLockedArray<32>,
+        key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
     ) -> LairResult<sodoken::SizedLockedArray<M>> {
         let mut header = sodoken::SizedLockedArray::<24>::new()?;
         header.lock().copy_from_slice(&self.0.cloned_inner());
@@ -306,7 +339,7 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
         sodoken::secretstream::init_pull(
             &mut state,
             &header.lock(),
-            &key.lock(),
+            &key.lock().lock(),
         )?;
 
         let mut out = sodoken::SizedLockedArray::<M>::new()?;

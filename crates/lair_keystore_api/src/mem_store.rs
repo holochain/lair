@@ -21,13 +21,13 @@ struct PrivMemStoreFactory;
 impl AsLairStoreFactory for PrivMemStoreFactory {
     fn connect_to_store(
         &self,
-        unlock_secret: sodoken::SizedLockedArray<32>,
+        unlock_secret: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
     ) -> BoxFuture<'static, LairResult<LairStore>> {
         async move {
             // construct a new in-memory store
             // use the unlock_secret directly as our bidi context key
             let inner = PrivMemStoreInner {
-                bidi_key: Arc::new(Mutex::new(unlock_secret)),
+                bidi_key: unlock_secret,
                 entry_by_tag: HashMap::new(),
                 ed_pk_to_tag: HashMap::new(),
                 x_pk_to_tag: HashMap::new(),

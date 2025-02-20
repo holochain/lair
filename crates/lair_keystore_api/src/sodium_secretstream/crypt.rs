@@ -1,6 +1,5 @@
 use super::*;
 use crate::dependencies::sodoken::secretstream::Tag;
-use assert_cmd::assert::IntoOutputPredicate;
 
 /// wrap our streams with cryptography.
 pub(crate) fn priv_crypt(
@@ -51,7 +50,7 @@ impl PrivCryptSend {
             )?;
 
             // extract the raw cipher data
-            let cipher = cipher.lock().into();
+            let cipher = (*cipher.lock()).into();
 
             // send the cipher to the remote
             self.send.send(cipher).await?;

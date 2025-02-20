@@ -5,7 +5,7 @@ use crate::*;
 use base64::Engine;
 use futures::future::{BoxFuture, FutureExt};
 use futures::stream::StreamExt;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use std::future::Future;
 use std::sync::atomic;
 use std::sync::Arc;
@@ -72,7 +72,7 @@ pub fn spawn_lair_server_task<C>(
     server_name: Arc<str>,
     server_version: Arc<str>,
     store_factory: LairStoreFactory,
-    passphrase: sodoken::BufRead,
+    passphrase: Arc<Mutex<sodoken::LockedArray>>,
 ) -> impl Future<Output = LairResult<LairServer>> + 'static + Send
 where
     C: Into<LairServerConfig> + 'static + Send,

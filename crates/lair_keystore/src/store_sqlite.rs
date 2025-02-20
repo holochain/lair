@@ -146,7 +146,7 @@ impl SqlPool {
         use rusqlite::OpenFlags;
 
         // derive a key for context encryption in and out of store file
-        let ctx_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        let ctx_secret = sodoken::SizedLockedArray::<32>::new()?;
         sodoken::kdf::derive_from_key(
             ctx_secret.clone(),
             42,
@@ -156,7 +156,7 @@ impl SqlPool {
         let ctx_secret = ctx_secret.to_read_sized();
 
         // derive a key to use for the sqlcipher encryption
-        let dbk_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+        let dbk_secret = sodoken::SizedLockedArray::<32>::new()?;
         sodoken::kdf::derive_from_key(
             dbk_secret.clone(),
             142,

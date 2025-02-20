@@ -1,5 +1,4 @@
 use super::*;
-use parking_lot::lock_api::MutexGuard;
 
 /// Internal state for the typed sender.
 pub(crate) struct PrivSendInner {

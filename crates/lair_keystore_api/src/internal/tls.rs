@@ -2,6 +2,7 @@
 
 use crate::*;
 use once_cell::sync::Lazy;
+use parking_lot::Mutex;
 use std::convert::TryInto;
 use std::sync::Arc;
 
@@ -53,7 +54,7 @@ pub struct TlsCertGenResult {
     /// sni used in cert
     pub sni: Arc<str>,
     /// certificate private key
-    pub priv_key: sodoken::LockedArray,
+    pub priv_key: Arc<Mutex<sodoken::LockedArray>>,
     /// the der encoded certificate
     pub cert: Arc<[u8]>,
     /// blake2b digest of der encoded certificate
@@ -129,7 +130,7 @@ pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
 
     Ok(TlsCertGenResult {
         sni: sni.into(),
-        priv_key,
+        priv_key: Arc::new(Mutex::new(priv_key)),
         cert: cert.into(),
         digest: digest.as_slice().try_into().unwrap(),
     })
