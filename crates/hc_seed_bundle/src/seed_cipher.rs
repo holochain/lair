@@ -4,7 +4,6 @@ use crate::{SharedLockedArray, SharedSizedLockedArray};
 use futures::future::{BoxFuture, FutureExt};
 use one_err::*;
 use parking_lot::Mutex;
-use std::convert::TryInto;
 use std::sync::Arc;
 
 mod u8array;
@@ -147,11 +146,11 @@ impl SeedCipherBuilder {
 
 /// This locked cipher is a simple pwHash type.
 pub struct LockedSeedCipherPwHash {
-    salt: sodoken::SizedLockedArray<16>,
+    salt: U8Array<16>,
     mem_limit: u32,
     ops_limit: u32,
-    seed_cipher_header: sodoken::SizedLockedArray<24>,
-    seed_cipher: sodoken::SizedLockedArray<49>,
+    seed_cipher_header: U8Array<24>,
+    seed_cipher: U8Array<49>,
     app_data: Arc<[u8]>,
 }
 
@@ -201,12 +200,12 @@ impl LockedSeedCipherPwHash {
 
 /// This locked cipher is based on security questions.
 pub struct LockedSeedCipherSecurityQuestions {
-    salt: sodoken::SizedLockedArray<16>,
+    salt: U8Array<16>,
     mem_limit: u32,
     ops_limit: u32,
     question_list: (String, String, String),
-    seed_cipher_header: sodoken::SizedLockedArray<24>,
-    seed_cipher: sodoken::SizedLockedArray<49>,
+    seed_cipher_header: U8Array<24>,
+    seed_cipher: U8Array<49>,
     app_data: Arc<[u8]>,
 }
 
@@ -316,11 +315,11 @@ impl LockedSeedCipher {
                     // this is a PwHash type, emit that
                     out.push(LockedSeedCipher::PwHash(
                         LockedSeedCipherPwHash {
-                            salt: salt.try_into()?,
+                            salt,
                             mem_limit,
                             ops_limit,
-                            seed_cipher_header: header.try_into()?,
-                            seed_cipher: cipher.try_into()?,
+                            seed_cipher_header: header,
+                            seed_cipher: cipher,
                             app_data: app_data.clone(),
                         },
                     ));
@@ -336,12 +335,12 @@ impl LockedSeedCipher {
                     // this is a SecurityQuestions type, emit that
                     out.push(LockedSeedCipher::SecurityQuestions(
                         LockedSeedCipherSecurityQuestions {
-                            salt: salt.try_into()?,
+                            salt,
                             mem_limit,
                             ops_limit,
                             question_list,
-                            seed_cipher_header: header.try_into()?,
-                            seed_cipher: cipher.try_into()?,
+                            seed_cipher_header: header,
+                            seed_cipher: cipher,
                             app_data: app_data.clone(),
                         },
                     ));

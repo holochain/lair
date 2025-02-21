@@ -141,6 +141,9 @@
 //! - `secretstream_xchacha20poly1305`
 //!   - single `push_final/pull_final` with entire contents
 
+use parking_lot::Mutex;
+use std::sync::Arc;
+
 /// re-exported dependencies
 pub mod dependencies {
     pub use futures;
@@ -153,10 +156,7 @@ pub mod dependencies {
 }
 
 mod seed_cipher;
-
-use parking_lot::Mutex;
 pub use seed_cipher::*;
-use std::sync::Arc;
 
 mod unlocked_seed_bundle;
 pub use unlocked_seed_bundle::*;

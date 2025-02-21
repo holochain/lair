@@ -127,13 +127,11 @@ pub(crate) async fn pw_enc(
 /// Return that seed.
 pub(crate) async fn pw_dec(
     passphrase: SharedLockedArray,
-    mut salt: sodoken::SizedLockedArray<
-        { sodoken::argon2::ARGON2_ID_SALTBYTES },
-    >,
+    salt: U8Array<{ sodoken::argon2::ARGON2_ID_SALTBYTES }>,
     mem_limit: u32,
     ops_limit: u32,
-    mut header: sodoken::SizedLockedArray<24>,
-    mut cipher: sodoken::SizedLockedArray<49>,
+    header: U8Array<24>,
+    cipher: U8Array<49>,
 ) -> Result<sodoken::SizedLockedArray<32>, OneErr> {
     // pre-hash the passphrase
     let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
@@ -151,7 +149,7 @@ pub(crate) async fn pw_dec(
             sodoken::argon2::blocking_argon2id(
                 &mut *secret.lock().lock(),
                 &*pw_hash.lock(),
-                &salt.lock(),
+                &salt,
                 ops_limit,
                 mem_limit,
             )
@@ -164,7 +162,7 @@ pub(crate) async fn pw_dec(
     let mut dec = sodoken::secretstream::State::default();
     sodoken::secretstream::init_pull(
         &mut dec,
-        &header.lock(),
+        &header.0,
         &secret.lock().lock(),
     )?;
 
@@ -172,7 +170,7 @@ pub(crate) async fn pw_dec(
     let tag = sodoken::secretstream::pull(
         &mut dec,
         &mut *seed.lock(),
-        &*cipher.lock(),
+        &cipher.0,
         None,
     )?;
 
