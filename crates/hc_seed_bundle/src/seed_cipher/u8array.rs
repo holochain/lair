@@ -1,8 +1,7 @@
+use crate::SharedSizedLockedArray;
 use one_err::OneErr;
-use parking_lot::Mutex;
 use std::convert::TryFrom;
 use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
 
 /// A fixed sized byte array with all the translation and serialization
 /// support we need for working with SeedBundles.
@@ -32,10 +31,8 @@ impl<const N: usize> From<sodoken::SizedLockedArray<N>> for U8Array<N> {
     }
 }
 
-impl<const N: usize> From<Arc<Mutex<sodoken::SizedLockedArray<N>>>>
-    for U8Array<N>
-{
-    fn from(o: Arc<Mutex<sodoken::SizedLockedArray<N>>>) -> Self {
+impl<const N: usize> From<SharedSizedLockedArray<N>> for U8Array<N> {
+    fn from(o: SharedSizedLockedArray<N>) -> Self {
         (*o.lock().lock()).into()
     }
 }

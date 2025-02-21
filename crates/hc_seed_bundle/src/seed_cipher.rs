@@ -1,5 +1,6 @@
 //! A module for seed bundle cipher related items
 
+use crate::{SharedLockedArray, SharedSizedLockedArray};
 use futures::future::{BoxFuture, FutureExt};
 use one_err::*;
 use parking_lot::Mutex;
@@ -20,7 +21,7 @@ pub use pw_hash_limits::*;
 
 type PrivCalcCipher = Box<
     dyn FnOnce(
-            Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+            SharedSizedLockedArray<32>,
         ) -> BoxFuture<'static, Result<SeedCipher, OneErr>>
         + 'static
         + Send,
@@ -29,14 +30,14 @@ type PrivCalcCipher = Box<
 /// To lock a SeedBundle, we need a list of ciphers and their secrets.
 /// This builder allows specifying those, then generating the locked bytes.
 pub struct SeedCipherBuilder {
-    seed: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+    seed: SharedSizedLockedArray<32>,
     app_data: Arc<[u8]>,
     cipher_list: Vec<PrivCalcCipher>,
 }
 
 impl SeedCipherBuilder {
     pub(crate) fn new(
-        seed: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+        seed: SharedSizedLockedArray<32>,
         app_data: Arc<[u8]>,
     ) -> Self {
         Self {
@@ -47,10 +48,7 @@ impl SeedCipherBuilder {
     }
 
     /// Add a simple pwhash passphrase cipher to the cipher list.
-    pub fn add_pwhash_cipher(
-        mut self,
-        passphrase: Arc<Mutex<sodoken::LockedArray>>,
-    ) -> Self {
+    pub fn add_pwhash_cipher(mut self, passphrase: SharedLockedArray) -> Self {
         let limits = PwHashLimits::current();
         let gen_cipher: PrivCalcCipher = Box::new(move |seed| {
             async move {
@@ -167,7 +165,7 @@ impl LockedSeedCipherPwHash {
     /// Decrypt this Cipher into an UnlockedSeedBundle struct.
     pub async fn unlock(
         self,
-        passphrase: Arc<Mutex<sodoken::LockedArray>>,
+        passphrase: SharedLockedArray,
     ) -> Result<crate::UnlockedSeedBundle, OneErr> {
         // destructure our decoding data
         let LockedSeedCipherPwHash {

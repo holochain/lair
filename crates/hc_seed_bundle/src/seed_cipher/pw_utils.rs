@@ -58,20 +58,14 @@ pub(crate) fn process_security_answers(
 /// Use that secret to secretstream encrypt the given seed.
 /// Return the argon salt, and the secretstream header and cipher.
 pub(crate) async fn pw_enc(
-    seed: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
-    passphrase: Arc<Mutex<sodoken::LockedArray>>,
+    seed: SharedSizedLockedArray<32>,
+    passphrase: SharedLockedArray,
     limits: PwHashLimits,
 ) -> Result<
     (
-        Arc<
-            Mutex<
-                sodoken::SizedLockedArray<
-                    { sodoken::argon2::ARGON2_ID_SALTBYTES },
-                >,
-            >,
-        >,
-        sodoken::SizedLockedArray<24>,
-        sodoken::SizedLockedArray<49>,
+        [u8; sodoken::argon2::ARGON2_ID_SALTBYTES],
+        [u8; 24],
+        [u8; 49],
     ),
     OneErr,
 > {
@@ -83,26 +77,25 @@ pub(crate) async fn pw_enc(
         None,
     )?;
 
-    // generate a random salt
-    let mut salt = sodoken::SizedLockedArray::new()?;
-    sodoken::random::randombytes_buf(salt.lock().as_mut_slice())?;
-    let salt = Arc::new(Mutex::new(salt));
-
     // generate a secret using the passphrase with argon
     let ops_limit = limits.as_ops_limit();
     let mem_limit = limits.as_mem_limit();
-    let secret = Arc::new(Mutex::new(sodoken::SizedLockedArray::new()?));
-    tokio::task::spawn_blocking({
-        let secret = secret.clone();
-        let salt = salt.clone();
-        move || {
+    let (salt, mut secret) = tokio::task::spawn_blocking({
+        move || -> Result<_, OneErr> {
+            // generate a random salt
+            let mut salt = [0; sodoken::argon2::ARGON2_ID_SALTBYTES];
+            sodoken::random::randombytes_buf(&mut salt)?;
+
+            let mut secret = sodoken::SizedLockedArray::new()?;
             sodoken::argon2::blocking_argon2id(
-                &mut *secret.lock().lock(),
+                &mut *secret.lock(),
                 &*pw_hash.lock(),
-                &salt.lock().lock(),
+                &salt,
                 ops_limit,
                 mem_limit,
-            )
+            )?;
+
+            Ok((salt, secret))
         }
     })
     .await
@@ -110,20 +103,14 @@ pub(crate) async fn pw_enc(
 
     // initialize the secret stream encrypt item
     let mut enc = sodoken::secretstream::State::default();
-    let mut header = sodoken::SizedLockedArray::<
-        { sodoken::secretstream::HEADERBYTES },
-    >::new()?;
-    sodoken::secretstream::init_push(
-        &mut enc,
-        &mut header.lock(),
-        &secret.lock().lock(),
-    )?;
+    let mut header = [0; sodoken::secretstream::HEADERBYTES];
+    sodoken::secretstream::init_push(&mut enc, &mut header, &secret.lock())?;
 
     // encrypt the seed
-    let mut cipher = sodoken::SizedLockedArray::<49>::new()?;
+    let mut cipher = [0; 49];
     sodoken::secretstream::push(
         &mut enc,
-        &mut *cipher.lock(),
+        &mut cipher,
         &*seed.lock().lock(),
         None,
         sodoken::secretstream::Tag::Final,
@@ -139,7 +126,7 @@ pub(crate) async fn pw_enc(
 /// a 32 byte secret seed.
 /// Return that seed.
 pub(crate) async fn pw_dec(
-    passphrase: Arc<Mutex<sodoken::LockedArray>>,
+    passphrase: SharedLockedArray,
     mut salt: sodoken::SizedLockedArray<
         { sodoken::argon2::ARGON2_ID_SALTBYTES },
     >,

@@ -153,7 +153,17 @@ pub mod dependencies {
 }
 
 mod seed_cipher;
+
+use parking_lot::Mutex;
 pub use seed_cipher::*;
+use std::sync::Arc;
 
 mod unlocked_seed_bundle;
 pub use unlocked_seed_bundle::*;
+
+/// SharedLockedArray type alias for a [sodoken::LockedArray] wrapped in an [Arc] and [Mutex].
+pub type SharedLockedArray = Arc<Mutex<sodoken::LockedArray>>;
+
+/// SharedSizedLockedArray type alias for a [sodoken::SizedLockedArray] wrapped in an [Arc] and [Mutex].
+pub type SharedSizedLockedArray<const N: usize> =
+    Arc<Mutex<sodoken::SizedLockedArray<N>>>;

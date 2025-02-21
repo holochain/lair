@@ -132,6 +132,7 @@ pub mod prelude {
     pub use crate::lair_client::*;
     pub use crate::lair_server::*;
     pub use crate::lair_store::*;
+    pub use crate::types::*;
     pub use crate::LairResult;
     pub use hc_seed_bundle::PwHashLimits;
 }
