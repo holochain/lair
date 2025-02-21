@@ -91,10 +91,7 @@ impl Test {
                         )));
                     let seed = cipher.unlock(passphrase).await.unwrap();
                     let pub_key = seed.get_sign_pub_key();
-                    assert_eq_b64(
-                        &self.sign_pub_key,
-                        pub_key.lock().lock().as_slice(),
-                    );
+                    assert_eq_b64(&self.sign_pub_key, pub_key.as_slice());
                     out = Some(seed);
                 }
                 LockedSeedCipher::SecurityQuestions(cipher) => {
@@ -123,10 +120,7 @@ impl Test {
                     );
                     let seed = cipher.unlock((a1, a2, a3)).await.unwrap();
                     let pub_key = seed.get_sign_pub_key();
-                    assert_eq_b64(
-                        &self.sign_pub_key,
-                        pub_key.lock().lock().as_slice(),
-                    );
+                    assert_eq_b64(&self.sign_pub_key, pub_key.as_slice());
                     out = Some(seed);
                 }
                 LockedSeedCipher::UnsupportedCipher(name) => {
@@ -150,10 +144,7 @@ impl Test {
                 cur = cur.derive(subkey_id.parse().unwrap()).await.unwrap();
             }
 
-            assert_eq_b64(
-                target.as_str(),
-                cur.get_sign_pub_key().lock().lock().as_slice(),
-            );
+            assert_eq_b64(target.as_str(), &cur.get_sign_pub_key().as_slice());
         }
     }
 }

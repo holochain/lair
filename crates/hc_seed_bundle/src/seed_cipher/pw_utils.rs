@@ -1,5 +1,4 @@
 use super::*;
-use parking_lot::Mutex;
 
 /// For SeedCipherSecurityQuestions (and the "Locked" struct)
 /// we need to be able to translate three answers into a semi-deterministic
@@ -34,9 +33,9 @@ pub(crate) fn process_security_answers(
     let mut out = sodoken::LockedArray::new(a1.len() + a2.len() + a3.len())?;
 
     {
+        // output buffer write lock
         let mut lock = out.lock();
 
-        // output buffer write lock
         // copy / concatenate the three answers
         (&mut *lock)[0..a1.len()].copy_from_slice(a1);
         (&mut *lock)[a1.len()..a1.len() + a2.len()].copy_from_slice(a2);
@@ -99,7 +98,7 @@ pub(crate) async fn pw_enc(
         }
     })
     .await
-    .map_err(|e| OneErr::new(format!("argon2id blocking failed: {}", e)))??;
+    .map_err(OneErr::new)??;
 
     // initialize the secret stream encrypt item
     let mut enc = sodoken::secretstream::State::default();
@@ -142,29 +141,26 @@ pub(crate) async fn pw_dec(
     )?;
 
     // generate the argon secret
-    let secret = Arc::new(Mutex::new(sodoken::SizedLockedArray::new()?));
-    tokio::task::spawn_blocking({
-        let secret = secret.clone();
-        move || {
+    let mut secret = tokio::task::spawn_blocking({
+        move || -> Result<_, OneErr> {
+            let mut secret = sodoken::SizedLockedArray::new()?;
             sodoken::argon2::blocking_argon2id(
-                &mut *secret.lock().lock(),
+                &mut *secret.lock(),
                 &*pw_hash.lock(),
                 &salt,
                 ops_limit,
                 mem_limit,
-            )
+            )?;
+
+            Ok(secret)
         }
     })
     .await
-    .map_err(|e| OneErr::new(format!("argon2id blocking failed: {}", e)))??;
+    .map_err(OneErr::new)??;
 
     // decrypt the seed
     let mut dec = sodoken::secretstream::State::default();
-    sodoken::secretstream::init_pull(
-        &mut dec,
-        &header.0,
-        &secret.lock().lock(),
-    )?;
+    sodoken::secretstream::init_pull(&mut dec, &header.0, &secret.lock())?;
 
     let mut seed = sodoken::SizedLockedArray::new()?;
     let tag = sodoken::secretstream::pull(

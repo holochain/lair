@@ -1,6 +1,4 @@
 use crate::SharedSizedLockedArray;
-use one_err::OneErr;
-use std::convert::TryFrom;
 use std::ops::{Deref, DerefMut};
 
 /// A fixed sized byte array with all the translation and serialization
@@ -8,26 +6,9 @@ use std::ops::{Deref, DerefMut};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct U8Array<const N: usize>(pub [u8; N]);
 
-impl<const N: usize> TryFrom<U8Array<N>> for sodoken::SizedLockedArray<N> {
-    type Error = OneErr;
-
-    fn try_from(o: U8Array<N>) -> Result<Self, Self::Error> {
-        let mut out = sodoken::SizedLockedArray::new()?;
-        out.lock().copy_from_slice(&o.0);
-
-        Ok(out)
-    }
-}
-
 impl<const N: usize> From<[u8; N]> for U8Array<N> {
     fn from(o: [u8; N]) -> Self {
         Self(o)
-    }
-}
-
-impl<const N: usize> From<sodoken::SizedLockedArray<N>> for U8Array<N> {
-    fn from(mut o: sodoken::SizedLockedArray<N>) -> Self {
-        (*o.lock()).into()
     }
 }
 
