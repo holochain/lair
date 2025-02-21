@@ -137,7 +137,7 @@ impl LairServerConfigInner {
     /// Respects hc_seed_bundle::PwHashLimits.
     pub fn new<P>(
         root_path: P,
-        passphrase: Arc<Mutex<sodoken::LockedArray>>,
+        passphrase: SharedLockedArray,
     ) -> impl Future<Output = LairResult<Self>> + 'static + Send
     where
         P: AsRef<std::path::Path>,

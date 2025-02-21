@@ -129,7 +129,7 @@ pub fn new_s3_server<T, S, R>(
     send: S,
     recv: R,
     srv_id_pub_key: Arc<[u8; 32]>,
-    srv_id_sec_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+    srv_id_sec_key: SharedSizedLockedArray<32>,
 ) -> impl Future<Output = LairResult<(S3Sender<T>, S3Receiver<T>)>> + 'static + Send
 where
     T: 'static + serde::Serialize + for<'de> serde::Deserialize<'de> + Send,

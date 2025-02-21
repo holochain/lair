@@ -14,14 +14,13 @@ fn is_false(b: impl std::borrow::Borrow<bool>) -> bool {
 /// you are implementing new lair core instance logic.
 pub mod traits {
     use super::*;
-    use parking_lot::Mutex;
+    use std::sync::Arc;
 
     /// Defines a lair storage mechanism.
     pub trait AsLairStore: 'static + Send + Sync {
         /// Return the context key for both encryption and decryption
         /// of secret data within the store that is NOT deep_locked.
-        fn get_bidi_ctx_key(&self)
-            -> Arc<Mutex<sodoken::SizedLockedArray<32>>>;
+        fn get_bidi_ctx_key(&self) -> SharedSizedLockedArray<32>;
 
         /// List the entries tracked by the lair store.
         fn list_entries(
@@ -59,7 +58,7 @@ pub mod traits {
         /// Open a store connection with given config / passphrase.
         fn connect_to_store(
             &self,
-            unlock_secret: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+            unlock_secret: SharedSizedLockedArray<32>,
         ) -> BoxFuture<'static, LairResult<LairStore>>;
     }
 }
@@ -234,9 +233,7 @@ pub struct LairStore(pub Arc<dyn AsLairStore>);
 impl LairStore {
     /// Return the context key for both encryption and decryption
     /// of secret data within the store that is NOT deep_locked.
-    pub fn get_bidi_ctx_key(
-        &self,
-    ) -> Arc<Mutex<sodoken::SizedLockedArray<32>>> {
+    pub fn get_bidi_ctx_key(&self) -> SharedSizedLockedArray<32> {
         AsLairStore::get_bidi_ctx_key(&*self.0)
     }
 
@@ -326,7 +323,7 @@ impl LairStore {
     /// runtime passphrase to be decrypted / used.
     pub fn insert_deep_locked_seed(
         &self,
-        seed: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+        seed: SharedSizedLockedArray<32>,
         tag: Arc<str>,
         ops_limit: u32,
         mem_limit: u32,

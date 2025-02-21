@@ -4,7 +4,7 @@
 use crate::lair_store::traits::*;
 use crate::*;
 use futures::future::{BoxFuture, FutureExt};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -21,7 +21,7 @@ struct PrivMemStoreFactory;
 impl AsLairStoreFactory for PrivMemStoreFactory {
     fn connect_to_store(
         &self,
-        unlock_secret: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+        unlock_secret: SharedSizedLockedArray<32>,
     ) -> BoxFuture<'static, LairResult<LairStore>> {
         async move {
             // construct a new in-memory store
@@ -43,7 +43,7 @@ impl AsLairStoreFactory for PrivMemStoreFactory {
 
 struct PrivMemStoreInner {
     /// key for encryption / decryption of secrets
-    bidi_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+    bidi_key: SharedSizedLockedArray<32>,
     /// the actual entry store, keyed by tag
     entry_by_tag: HashMap<Arc<str>, LairEntry>,
     /// index for signature pub key to tag
@@ -55,7 +55,7 @@ struct PrivMemStoreInner {
 struct PrivMemStore(Arc<RwLock<PrivMemStoreInner>>);
 
 impl AsLairStore for PrivMemStore {
-    fn get_bidi_ctx_key(&self) -> Arc<Mutex<sodoken::SizedLockedArray<32>>> {
+    fn get_bidi_ctx_key(&self) -> SharedSizedLockedArray<32> {
         self.0.read().bidi_key.clone()
     }
 

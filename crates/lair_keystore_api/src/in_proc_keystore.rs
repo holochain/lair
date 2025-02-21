@@ -2,16 +2,14 @@
 //! without needing to call out to an external process.
 
 use crate::*;
-use parking_lot::Mutex;
 use std::future::Future;
-use std::sync::Arc;
 
 /// An in-process keystore that manages the entire lair server life-cycle
 /// without needing to call out to an external process.
 #[derive(Clone)]
 pub struct InProcKeystore {
     config: LairServerConfig,
-    passphrase: Arc<Mutex<sodoken::LockedArray>>,
+    passphrase: SharedLockedArray,
     srv_hnd: crate::lair_server::LairServer,
 }
 
@@ -21,7 +19,7 @@ impl InProcKeystore {
     pub fn new(
         config: LairServerConfig,
         store_factory: LairStoreFactory,
-        passphrase: Arc<Mutex<sodoken::LockedArray>>,
+        passphrase: SharedLockedArray,
     ) -> impl Future<Output = LairResult<Self>> + 'static + Send {
         async move {
             // set up our server handler
@@ -110,6 +108,7 @@ impl InProcKeystore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use parking_lot::Mutex;
     use std::sync::Arc;
 
     #[tokio::test(flavor = "multi_thread")]

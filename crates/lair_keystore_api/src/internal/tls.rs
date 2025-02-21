@@ -54,7 +54,7 @@ pub struct TlsCertGenResult {
     /// sni used in cert
     pub sni: Arc<str>,
     /// certificate private key
-    pub priv_key: Arc<Mutex<sodoken::LockedArray>>,
+    pub priv_key: SharedLockedArray,
     /// the der encoded certificate
     pub cert: Arc<[u8]>,
     /// blake2b digest of der encoded certificate

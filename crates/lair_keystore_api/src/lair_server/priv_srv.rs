@@ -10,11 +10,11 @@ pub(crate) struct FullLairEntry {
     /// Copied from the entry's seed. If false, an error will be produced when attempting to export this seed
     pub(crate) exportable: bool,
     /// If the entry is for a non-deep-locked seed, this is Some clone of it.
-    pub(crate) seed: Option<Arc<Mutex<sodoken::SizedLockedArray<32>>>>,
+    pub(crate) seed: Option<SharedSizedLockedArray<32>>,
     /// If the entry is for a non-deep-locked seed, this is the signing private key derived from the seed
-    pub(crate) ed_sk: Option<Arc<Mutex<sodoken::SizedLockedArray<64>>>>,
+    pub(crate) ed_sk: Option<SharedSizedLockedArray<64>>,
     /// If the entry is for a non-deep-locked seed, this is the decryption private key derived from the seed
-    pub(crate) x_sk: Option<Arc<Mutex<sodoken::SizedLockedArray<32>>>>,
+    pub(crate) x_sk: Option<SharedSizedLockedArray<32>>,
 }
 
 pub(crate) struct SrvInner {
@@ -45,7 +45,7 @@ impl Srv {
         server_name: Arc<str>,
         server_version: Arc<str>,
         store_factory: LairStoreFactory,
-        passphrase: Arc<Mutex<sodoken::LockedArray>>,
+        passphrase: SharedLockedArray,
     ) -> impl Future<Output = LairResult<Self>> + 'static + Send {
         async move {
             // pre-hash the passphrase
@@ -287,8 +287,8 @@ pub(crate) fn priv_srv_accept(
 pub(crate) fn priv_dispatch_incoming<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a sodium_secretstream::S3Sender<LairApiEnum>,
-    enc_ctx_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
-    dec_ctx_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+    enc_ctx_key: SharedSizedLockedArray<32>,
+    dec_ctx_key: SharedSizedLockedArray<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     incoming: LairApiEnum,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {

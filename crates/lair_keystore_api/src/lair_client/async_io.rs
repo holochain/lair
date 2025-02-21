@@ -90,8 +90,8 @@ where
 // -- private -- //
 
 struct CliInner {
-    enc_ctx_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
-    dec_ctx_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+    enc_ctx_key: SharedSizedLockedArray<32>,
+    dec_ctx_key: SharedSizedLockedArray<32>,
     send: sodium_secretstream::S3Sender<LairApiEnum>,
     pending: HashMap<Arc<str>, tokio::sync::oneshot::Sender<LairApiEnum>>,
 }
@@ -99,11 +99,11 @@ struct CliInner {
 struct Cli(Arc<RwLock<CliInner>>);
 
 impl AsLairClient for Cli {
-    fn get_enc_ctx_key(&self) -> Arc<Mutex<sodoken::SizedLockedArray<32>>> {
+    fn get_enc_ctx_key(&self) -> SharedSizedLockedArray<32> {
         self.0.read().enc_ctx_key.clone()
     }
 
-    fn get_dec_ctx_key(&self) -> Arc<Mutex<sodoken::SizedLockedArray<32>>> {
+    fn get_dec_ctx_key(&self) -> SharedSizedLockedArray<32> {
         self.0.read().dec_ctx_key.clone()
     }
 

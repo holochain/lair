@@ -3,9 +3,7 @@
 
 use crate::*;
 use futures::stream::StreamExt;
-use parking_lot::Mutex;
 use std::future::Future;
-use std::sync::Arc;
 
 mod raw_ipc;
 
@@ -22,7 +20,7 @@ impl IpcKeystoreServer {
     pub fn new(
         config: LairServerConfig,
         store_factory: LairStoreFactory,
-        passphrase: Arc<Mutex<sodoken::LockedArray>>,
+        passphrase: SharedLockedArray,
     ) -> impl Future<Output = LairResult<Self>> + 'static + Send {
         async move {
             let con_recv = raw_ipc::ipc_bind(config.clone()).await?;
@@ -85,7 +83,7 @@ pub struct IpcKeystoreClientOptions {
     pub connection_url: url::Url,
 
     /// The passphrase to use to connect.
-    pub passphrase: Arc<Mutex<sodoken::LockedArray>>,
+    pub passphrase: SharedLockedArray,
 
     /// Require the client and server to have exactly matching
     /// client / server versions.
@@ -98,7 +96,7 @@ pub struct IpcKeystoreClientOptions {
 /// then unlock the connection with the supplied passphrase.
 pub fn ipc_keystore_connect(
     connection_url: url::Url,
-    passphrase: Arc<Mutex<sodoken::LockedArray>>,
+    passphrase: SharedLockedArray,
 ) -> impl Future<Output = LairResult<LairClient>> + 'static + Send {
     ipc_keystore_connect_options(IpcKeystoreClientOptions {
         connection_url,
@@ -157,6 +155,7 @@ fn priv_check_hello_ver(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use parking_lot::Mutex;
     use std::sync::Arc;
 
     async fn connect(tmp_dir: &tempdir::TempDir) -> crate::LairClient {

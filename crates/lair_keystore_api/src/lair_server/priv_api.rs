@@ -42,7 +42,7 @@ pub(crate) fn priv_req_hello<'a>(
 pub(crate) fn priv_req_unlock<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a sodium_secretstream::S3Sender<LairApiEnum>,
-    dec_ctx_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+    dec_ctx_key: SharedSizedLockedArray<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqUnlock,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
@@ -199,7 +199,7 @@ pub(crate) fn priv_req_list_entries<'a>(
 pub(crate) fn priv_req_new_seed<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a sodium_secretstream::S3Sender<LairApiEnum>,
-    dec_ctx_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+    dec_ctx_key: SharedSizedLockedArray<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqNewSeed,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
@@ -244,7 +244,7 @@ pub(crate) fn priv_req_new_seed<'a>(
 pub(crate) fn priv_req_derive_seed<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a sodium_secretstream::S3Sender<LairApiEnum>,
-    dec_ctx_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+    dec_ctx_key: SharedSizedLockedArray<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqDeriveSeed,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
@@ -418,7 +418,7 @@ pub(crate) fn priv_req_export_seed_by_tag<'a>(
 pub(crate) fn priv_req_import_seed<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a sodium_secretstream::S3Sender<LairApiEnum>,
-    dec_ctx_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+    dec_ctx_key: SharedSizedLockedArray<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqImportSeed,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
@@ -505,7 +505,7 @@ pub(crate) fn priv_req_import_seed<'a>(
 
 async fn deep_unlock_key_from_passphrase(
     dlp: DeepLockPassphrase,
-    dec_ctx_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+    dec_ctx_key: SharedSizedLockedArray<32>,
     salt: Arc<[u8; 16]>,
 ) -> LairResult<sodoken::SizedLockedArray<32>> {
     // generate the deep lock key from the passphrase
@@ -532,7 +532,7 @@ async fn deep_unlock_key_from_passphrase(
 pub(crate) fn priv_req_sign_by_pub_key<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a sodium_secretstream::S3Sender<LairApiEnum>,
-    dec_ctx_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+    dec_ctx_key: SharedSizedLockedArray<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqSignByPubKey,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {
@@ -1090,7 +1090,7 @@ pub(crate) fn priv_get_full_entry_by_x_pub_key<'a>(
 pub(crate) fn priv_req_get_wka_tls_cert_priv_key<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a sodium_secretstream::S3Sender<LairApiEnum>,
-    enc_ctx_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+    enc_ctx_key: SharedSizedLockedArray<32>,
     unlocked: &'a Arc<atomic::AtomicBool>,
     req: LairApiReqGetWkaTlsCertPrivKey,
 ) -> impl Future<Output = LairResult<()>> + 'a + Send {

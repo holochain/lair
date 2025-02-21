@@ -4,7 +4,6 @@ use crate::dependencies::one_err::OneErr;
 use crate::types::{SharedLockedArray, SharedSizedLockedArray};
 use crate::*;
 use base64::Engine;
-use parking_lot::Mutex;
 use std::convert::TryInto;
 use std::sync::Arc;
 
@@ -208,7 +207,7 @@ pub struct SecretData(
 impl SecretData {
     /// Encrypt some data as a 'SecretData' object with given context key.
     pub async fn encrypt(
-        key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+        key: SharedSizedLockedArray<32>,
         data: Arc<[u8]>,
     ) -> LairResult<Self> {
         tokio::task::spawn_blocking(move || Self::encrypt_inner(key, &data))
@@ -229,7 +228,7 @@ impl SecretData {
     }
 
     fn encrypt_inner(
-        key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+        key: SharedSizedLockedArray<32>,
         data: &[u8],
     ) -> LairResult<Self> {
         let mut header = sodoken::SizedLockedArray::<
@@ -263,7 +262,7 @@ impl SecretData {
     /// Decrypt some data as a 'SecretData' object with given context key.
     pub async fn decrypt(
         &self,
-        key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+        key: SharedSizedLockedArray<32>,
     ) -> LairResult<sodoken::LockedArray> {
         let mut dec = sodoken::secretstream::State::default();
         sodoken::secretstream::init_pull(
@@ -294,7 +293,7 @@ pub struct SecretDataSized<const M: usize, const C: usize>(
 impl<const M: usize, const C: usize> SecretDataSized<M, C> {
     /// Encrypt some data as a 'SecretDataSized' object with given context key.
     pub async fn encrypt(
-        key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+        key: SharedSizedLockedArray<32>,
         data: SharedSizedLockedArray<M>,
     ) -> LairResult<Self> {
         let mut header = [0; sodoken::secretstream::HEADERBYTES];
@@ -324,7 +323,7 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
     /// Decrypt some data as a 'SecretDataSized' object with given context key.
     pub async fn decrypt(
         &self,
-        key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+        key: SharedSizedLockedArray<32>,
     ) -> LairResult<sodoken::SizedLockedArray<M>> {
         let mut header = sodoken::SizedLockedArray::<24>::new()?;
         header
