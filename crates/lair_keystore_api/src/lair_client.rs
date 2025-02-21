@@ -580,6 +580,8 @@ async fn encrypt_passphrase(
     .await
     .map_err(OneErr::new)??;
 
+    let pw_hash = Arc::new(Mutex::new(pw_hash));
+
     let secret = SecretDataSized::encrypt(key, pw_hash).await?;
     Ok(secret)
 }

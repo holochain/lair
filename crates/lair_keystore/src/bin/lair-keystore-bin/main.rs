@@ -19,26 +19,9 @@ mod cmd_init;
 mod cmd_server;
 mod cmd_url;
 
-fn vec_to_locked(mut pass_tmp: Vec<u8>) -> LairResult<sodoken::BufRead> {
-    match sodoken::BufWrite::new_mem_locked(pass_tmp.len()) {
-        Err(e) => {
-            pass_tmp.fill(0);
-            Err(e)
-        }
-        Ok(p) => {
-            {
-                let mut lock = p.write_lock();
-                lock.copy_from_slice(&pass_tmp);
-                pass_tmp.fill(0);
-            }
-            Ok(p.to_read())
-        }
-    }
-}
-
 pub(crate) async fn read_interactive_passphrase(
     prompt: &str,
-) -> LairResult<sodoken::BufRead> {
+) -> LairResult<sodoken::LockedArray> {
     let prompt = prompt.to_owned();
     let pass_tmp = tokio::task::spawn_blocking(move || {
         LairResult::Ok(
@@ -50,13 +33,14 @@ pub(crate) async fn read_interactive_passphrase(
     .await
     .map_err(one_err::OneErr::new)??;
 
-    vec_to_locked(pass_tmp)
+    Ok(sodoken::LockedArray::from(pass_tmp))
 }
 
 // you're wrong clippy... it's clearer this way because
 // it matches the adjoining len() >= 2
 #[allow(clippy::len_zero)]
-pub(crate) async fn read_piped_passphrase() -> LairResult<sodoken::BufRead> {
+pub(crate) async fn read_piped_passphrase() -> LairResult<sodoken::LockedArray>
+{
     let mut stdin = tokio::io::stdin();
     let mut pass_tmp = Vec::new();
 
@@ -72,7 +56,8 @@ pub(crate) async fn read_piped_passphrase() -> LairResult<sodoken::BufRead> {
     } else if pass_tmp.len() >= 1 && pass_tmp[pass_tmp.len() - 1] == 10 {
         pass_tmp.pop();
     }
-    vec_to_locked(pass_tmp)
+
+    Ok(sodoken::LockedArray::from(pass_tmp))
 }
 
 #[derive(Debug, StructOpt)]

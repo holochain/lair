@@ -1,4 +1,5 @@
 use super::*;
+use parking_lot::Mutex;
 
 pub(crate) async fn exec(
     config: LairServerConfig,
@@ -13,6 +14,8 @@ pub(crate) async fn exec(
     } else {
         read_interactive_passphrase("\n# passphrase> ").await?
     };
+
+    let passphrase = Arc::new(Mutex::new(passphrase));
 
     server.run(passphrase).await?;
 

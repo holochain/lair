@@ -233,11 +233,18 @@ impl LairServerConfigInner {
             )?;
 
             // lock the context key
-            let context_key =
-                SecretDataSized::encrypt(ctx_secret, context_key).await?;
+            let context_key = SecretDataSized::encrypt(
+                ctx_secret,
+                Arc::new(Mutex::new(context_key)),
+            )
+            .await?;
 
             // lock the signature seed
-            let id_seed = SecretDataSized::encrypt(id_secret, id_seed).await?;
+            let id_seed = SecretDataSized::encrypt(
+                id_secret,
+                Arc::new(Mutex::new(id_seed)),
+            )
+            .await?;
 
             // get the signature public key bytes for encoding in the url
             let id_pk: BinDataSized<32> = id_pk.into();

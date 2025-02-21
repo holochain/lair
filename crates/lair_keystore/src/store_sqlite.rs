@@ -5,14 +5,13 @@ use futures::future::{BoxFuture, FutureExt};
 use lair_keystore_api::lair_store::traits::*;
 use parking_lot::Mutex;
 use rusqlite::params;
-use sodoken::*;
 use std::future::Future;
 use std::sync::Arc;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 const READ_CON_COUNT: usize = 3;
 
-/// Create a [lair_keystore_api::lair_store::LairStoreFactory] backed
+/// Create a [LairStoreFactory] backed
 /// by an encrypted (sqlcipher) sqlite database.
 /// WARNING: If running on windows, this currently degenerates to a
 /// plaintext (non-encrypted) sqlite database.
@@ -28,7 +27,7 @@ where
     impl AsLairStoreFactory for X {
         fn connect_to_store(
             &self,
-            unlock_secret: sodoken::BufReadSized<32>,
+            unlock_secret: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
         ) -> BoxFuture<'static, LairResult<LairStore>> {
             let sqlite_file_path = self.0.clone();
             let db_salt = self.1.clone();
@@ -43,7 +42,7 @@ where
 }
 
 struct SqlPoolInner {
-    ctx_secret: sodoken::BufReadSized<32>,
+    ctx_secret: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
     write_limit: Arc<Semaphore>,
     write_con: Option<rusqlite::Connection>,
     read_limit: Arc<Semaphore>,
@@ -140,33 +139,32 @@ pub struct SqlPool(Arc<Mutex<SqlPoolInner>>);
 impl SqlPool {
     fn new_sync(
         path: std::path::PathBuf,
-        db_key: sodoken::BufReadSized<32>,
+        db_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
         db_salt: BinDataSized<16>,
     ) -> LairResult<LairStore> {
         use rusqlite::OpenFlags;
 
         // derive a key for context encryption in and out of store file
-        let ctx_secret = sodoken::SizedLockedArray::<32>::new()?;
+        let mut ctx_secret = sodoken::SizedLockedArray::<32>::new()?;
         sodoken::kdf::derive_from_key(
-            ctx_secret.clone(),
+            &mut *ctx_secret.lock(),
             42,
-            *b"CtxSecKy",
-            db_key.clone(),
+            b"CtxSecKy",
+            &db_key.lock().lock(),
         )?;
-        let ctx_secret = ctx_secret.to_read_sized();
 
         // derive a key to use for the sqlcipher encryption
-        let dbk_secret = sodoken::SizedLockedArray::<32>::new()?;
+        let mut dbk_secret = sodoken::SizedLockedArray::<32>::new()?;
         sodoken::kdf::derive_from_key(
-            dbk_secret.clone(),
+            &mut *dbk_secret.lock(),
             142,
-            *b"DbKSecKy",
-            db_key,
+            b"DbKSecKy",
+            &db_key.lock().lock(),
         )?;
-        let dbk_secret = dbk_secret.to_read_sized();
 
         // initialize the sqlcipher key pragma
-        let key_pragma = secure_write_key_pragma(dbk_secret)?;
+        let key_pragma =
+            Arc::new(Mutex::new(secure_write_key_pragma(dbk_secret)?));
 
         let mut write_con = match create_configured_db_connection(
             &path,
@@ -242,7 +240,7 @@ impl SqlPool {
 
         // build the pool state instance
         let inner = Self(Arc::new(Mutex::new(SqlPoolInner {
-            ctx_secret,
+            ctx_secret: Arc::new(Mutex::new(ctx_secret)),
             write_limit: Arc::new(Semaphore::new(1)),
             write_con: Some(write_con),
             read_limit: Arc::new(Semaphore::new(READ_CON_COUNT)),
@@ -256,7 +254,7 @@ impl SqlPool {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         path: std::path::PathBuf,
-        db_key: sodoken::BufReadSized<32>,
+        db_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
         db_salt: BinDataSized<16>,
     ) -> impl Future<Output = LairResult<LairStore>> + 'static + Send {
         async move {
@@ -316,7 +314,7 @@ impl SqlPool {
 
 fn create_configured_db_connection(
     path: &std::path::PathBuf,
-    key_pragma: BufRead,
+    key_pragma: Arc<Mutex<sodoken::SizedLockedArray<KEY_PRAGMA_LEN>>>,
     db_salt: BinDataSized<16>,
 ) -> rusqlite::Result<rusqlite::Connection> {
     use rusqlite::OpenFlags;
@@ -337,7 +335,7 @@ fn create_configured_db_connection(
 }
 
 impl AsLairStore for SqlPool {
-    fn get_bidi_ctx_key(&self) -> sodoken::BufReadSized<32> {
+    fn get_bidi_ctx_key(&self) -> Arc<Mutex<sodoken::SizedLockedArray<32>>> {
         self.0.lock().ctx_secret.clone()
     }
 
@@ -510,24 +508,24 @@ const KEY_PRAGMA: &[u8; KEY_PRAGMA_LEN] =
 
 /// write a sqlcipher key pragma maintaining mem protection
 fn secure_write_key_pragma(
-    key: sodoken::BufReadSized<32>,
-) -> LairResult<BufRead> {
+    mut key: sodoken::SizedLockedArray<32>,
+) -> LairResult<sodoken::SizedLockedArray<KEY_PRAGMA_LEN>> {
     // write the pragma line
-    let key_pragma: BufWriteSized<KEY_PRAGMA_LEN> =
-        BufWriteSized::new_mem_locked().map_err(one_err::OneErr::new)?;
+    let mut key_pragma =
+        sodoken::SizedLockedArray::<{ KEY_PRAGMA_LEN }>::new()?;
 
     {
         use std::io::Write;
 
-        let mut key_pragma = key_pragma.write_lock();
+        let mut key_pragma = key_pragma.lock();
         key_pragma.copy_from_slice(KEY_PRAGMA);
         let mut c = std::io::Cursor::new(&mut key_pragma[16..80]);
-        for b in &*key.read_lock() {
+        for b in &*key.lock() {
             write!(c, "{b:02X}").map_err(one_err::OneErr::new)?;
         }
     }
 
-    Ok(key_pragma.to_read())
+    Ok(key_pragma)
 }
 
 fn configure_encryption(con: &rusqlite::Connection) -> rusqlite::Result<()> {
@@ -560,13 +558,13 @@ fn set_salt(
 
 fn set_pragmas(
     con: &rusqlite::Connection,
-    key_pragma: BufRead,
+    key_pragma: Arc<Mutex<sodoken::SizedLockedArray<KEY_PRAGMA_LEN>>>,
     db_salt: BinDataSized<16>,
 ) -> rusqlite::Result<()> {
     con.busy_timeout(std::time::Duration::from_millis(30_000))?;
 
     con.execute_optional(
-        std::str::from_utf8(&key_pragma.read_lock()).unwrap(),
+        std::str::from_utf8(&*key_pragma.lock().lock()).unwrap(),
         [],
     )?;
 
@@ -583,7 +581,7 @@ fn set_pragmas(
 
 fn encrypt_unencrypted_database(
     path: &std::path::PathBuf,
-    key_pragma: BufRead,
+    key_pragma: Arc<Mutex<sodoken::SizedLockedArray<KEY_PRAGMA_LEN>>>,
     db_salt: BinDataSized<16>,
 ) -> LairResult<()> {
     // e.g. keystore/store_file -> keystore/store_file-encrypted
@@ -626,12 +624,12 @@ fn encrypt_unencrypted_database(
             .map_err(one_err::OneErr::new)?;
 
         {
-            let lock = key_pragma.read_lock();
+            let mut lock = key_pragma.lock();
             conn.execute(
                 "ATTACH DATABASE :db_name AS encrypted KEY :key",
                 rusqlite::named_params! {
                     ":db_name": encrypted_path.to_str(),
-                    ":key": &lock[14..81],
+                    ":key": &lock.lock()[14..81],
                 },
             )
             .map_err(one_err::OneErr::new)?;
@@ -680,7 +678,9 @@ mod tests {
         let mut sqlite = tmpdir.path().to_path_buf();
         sqlite.push("db.sqlite3");
 
-        let db_key = sodoken::BufReadSized::new_no_lock([0; 32]);
+        let db_key = Arc::new(Mutex::new(
+            sodoken::SizedLockedArray::<32>::new().unwrap(),
+        ));
         let db_salt = BinDataSized([0; 16].into());
 
         let pool = SqlPool::new(sqlite, db_key, db_salt).await.unwrap();

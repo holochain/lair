@@ -296,7 +296,7 @@ pub(crate) fn priv_req_derive_seed<'a>(
             parent = derived;
         }
 
-        let dst_seed = parent;
+        let dst_seed = Arc::new(Mutex::new(parent));
         let dst_dlp = req.dst_deep_lock_passphrase;
 
         let dst_seed_info = match dst_dlp {
@@ -464,6 +464,8 @@ pub(crate) fn priv_req_import_seed<'a>(
         } else {
             return Err("deep_seed crypto_box not yet implemented".into());
         };
+
+        let seed = Arc::new(Mutex::new(seed));
 
         let seed_info = match deep_lock_passphrase {
             Some(secret) => {

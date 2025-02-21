@@ -1,5 +1,7 @@
 use common::{connect_with_config, create_config};
 use lair_keystore_api::dependencies::{sodoken, tokio};
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 mod common;
 
@@ -10,7 +12,9 @@ async fn migrate_unencrypted() {
 
     let tmpdir = tempdir::TempDir::new("lair keystore test").unwrap();
 
-    let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
+    let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"passphrase".to_vec(),
+    )));
 
     let config = create_config(&tmpdir, passphrase.clone()).await;
 

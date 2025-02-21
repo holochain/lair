@@ -64,6 +64,7 @@ pub mod traits {
     }
 }
 use crate::dependencies::one_err::OneErr;
+use crate::types::SharedSizedLockedArray;
 use traits::*;
 
 /// Public information associated with a given seed.
@@ -244,7 +245,7 @@ impl LairStore {
     /// seed_info derived from the generated seed.
     pub fn insert_seed(
         &self,
-        mut seed: sodoken::SizedLockedArray<32>,
+        seed: SharedSizedLockedArray<32>,
         tag: Arc<str>,
         exportable: bool,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
@@ -258,7 +259,7 @@ impl LairStore {
             sodoken::sign::seed_keypair(
                 &mut ed_pk,
                 &mut ed_sk.lock(),
-                &seed.lock(),
+                &seed.lock().lock(),
             )?;
 
             // derive the x25519 encryption keypair from this seed
@@ -269,7 +270,7 @@ impl LairStore {
             sodoken::crypto_box::xsalsa_seed_keypair(
                 &mut x_pk,
                 &mut x_sk.lock(),
-                &seed.lock(),
+                &seed.lock().lock(),
             )?;
 
             // encrypt the seed with our bidi context key
@@ -312,6 +313,8 @@ impl LairStore {
             let mut seed = sodoken::SizedLockedArray::<32>::new()?;
             sodoken::random::randombytes_buf(&mut *seed.lock())?;
 
+            let seed = Arc::new(Mutex::new(seed));
+
             this.insert_seed(seed, tag, exportable).await
         }
     }
@@ -323,7 +326,7 @@ impl LairStore {
     /// runtime passphrase to be decrypted / used.
     pub fn insert_deep_locked_seed(
         &self,
-        mut seed: sodoken::SizedLockedArray<32>,
+        seed: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
         tag: Arc<str>,
         ops_limit: u32,
         mem_limit: u32,
@@ -340,7 +343,7 @@ impl LairStore {
             sodoken::sign::seed_keypair(
                 &mut ed_pk,
                 &mut ed_sk.lock(),
-                &seed.lock(),
+                &seed.lock().lock(),
             )?;
 
             // derive the x25519 encryption keypair from this seed
@@ -351,7 +354,7 @@ impl LairStore {
             sodoken::crypto_box::xsalsa_seed_keypair(
                 &mut x_pk,
                 &mut x_sk.lock(),
-                &seed.lock(),
+                &seed.lock().lock(),
             )?;
 
             // generate the deep lock key from the passphrase
@@ -424,6 +427,8 @@ impl LairStore {
             // generate a new random seed
             let mut seed = sodoken::SizedLockedArray::<32>::new()?;
             sodoken::random::randombytes_buf(&mut *seed.lock())?;
+
+            let seed = Arc::new(Mutex::new(seed));
 
             this.insert_deep_locked_seed(
                 seed,

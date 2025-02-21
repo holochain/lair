@@ -755,6 +755,7 @@ version = "0.5.3"
 dependencies = [
  "assert_cmd",
  "lair_keystore_api",
+ "parking_lot",
  "pretty_assertions",
  "rpassword",
  "rusqlite",

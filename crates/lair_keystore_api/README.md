@@ -51,8 +51,8 @@ let sig = client.sign_by_pub_key(
 // verify the signature
 assert!(seed_info.ed25519_pub_key.verify_detached(
     sig,
-    b"test-data".to_vec(),
-).await.unwrap());
+    b"test-data".to_vec().into(),
+).await);
 ```
 
 License: MIT OR Apache-2.0

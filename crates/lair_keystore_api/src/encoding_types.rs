@@ -295,11 +295,11 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
     /// Encrypt some data as a 'SecretDataSized' object with given context key.
     pub async fn encrypt(
         key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
-        mut data: sodoken::SizedLockedArray<M>,
+        data: SharedSizedLockedArray<M>,
     ) -> LairResult<Self> {
         let mut header = [0; sodoken::secretstream::HEADERBYTES];
         let mut cipher =
-            vec![0; data.lock().len() + sodoken::secretstream::ABYTES];
+            vec![0; data.lock().lock().len() + sodoken::secretstream::ABYTES];
         let mut enc = sodoken::secretstream::State::default();
         sodoken::secretstream::init_push(
             &mut enc,
@@ -310,7 +310,7 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
         sodoken::secretstream::push(
             &mut enc,
             cipher.as_mut_slice(),
-            &*data.lock(),
+            &*data.lock().lock(),
             None,
             sodoken::secretstream::Tag::Final,
         )?;
