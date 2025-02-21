@@ -27,7 +27,7 @@ where
     impl AsLairStoreFactory for X {
         fn connect_to_store(
             &self,
-            unlock_secret: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+            unlock_secret: SharedSizedLockedArray<32>,
         ) -> BoxFuture<'static, LairResult<LairStore>> {
             let sqlite_file_path = self.0.clone();
             let db_salt = self.1.clone();
@@ -42,7 +42,7 @@ where
 }
 
 struct SqlPoolInner {
-    ctx_secret: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+    ctx_secret: SharedSizedLockedArray<32>,
     write_limit: Arc<Semaphore>,
     write_con: Option<rusqlite::Connection>,
     read_limit: Arc<Semaphore>,
@@ -139,7 +139,7 @@ pub struct SqlPool(Arc<Mutex<SqlPoolInner>>);
 impl SqlPool {
     fn new_sync(
         path: std::path::PathBuf,
-        db_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+        db_key: SharedSizedLockedArray<32>,
         db_salt: BinDataSized<16>,
     ) -> LairResult<LairStore> {
         use rusqlite::OpenFlags;
@@ -254,7 +254,7 @@ impl SqlPool {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         path: std::path::PathBuf,
-        db_key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
+        db_key: SharedSizedLockedArray<32>,
         db_salt: BinDataSized<16>,
     ) -> impl Future<Output = LairResult<LairStore>> + 'static + Send {
         async move {
@@ -314,7 +314,7 @@ impl SqlPool {
 
 fn create_configured_db_connection(
     path: &std::path::PathBuf,
-    key_pragma: Arc<Mutex<sodoken::SizedLockedArray<KEY_PRAGMA_LEN>>>,
+    key_pragma: SharedSizedLockedArray<KEY_PRAGMA_LEN>,
     db_salt: BinDataSized<16>,
 ) -> rusqlite::Result<rusqlite::Connection> {
     use rusqlite::OpenFlags;
@@ -335,7 +335,7 @@ fn create_configured_db_connection(
 }
 
 impl AsLairStore for SqlPool {
-    fn get_bidi_ctx_key(&self) -> Arc<Mutex<sodoken::SizedLockedArray<32>>> {
+    fn get_bidi_ctx_key(&self) -> SharedSizedLockedArray<32> {
         self.0.lock().ctx_secret.clone()
     }
 
@@ -558,7 +558,7 @@ fn set_salt(
 
 fn set_pragmas(
     con: &rusqlite::Connection,
-    key_pragma: Arc<Mutex<sodoken::SizedLockedArray<KEY_PRAGMA_LEN>>>,
+    key_pragma: SharedSizedLockedArray<KEY_PRAGMA_LEN>,
     db_salt: BinDataSized<16>,
 ) -> rusqlite::Result<()> {
     con.busy_timeout(std::time::Duration::from_millis(30_000))?;
@@ -581,7 +581,7 @@ fn set_pragmas(
 
 fn encrypt_unencrypted_database(
     path: &std::path::PathBuf,
-    key_pragma: Arc<Mutex<sodoken::SizedLockedArray<KEY_PRAGMA_LEN>>>,
+    key_pragma: SharedSizedLockedArray<KEY_PRAGMA_LEN>,
     db_salt: BinDataSized<16>,
 ) -> LairResult<()> {
     // e.g. keystore/store_file -> keystore/store_file-encrypted

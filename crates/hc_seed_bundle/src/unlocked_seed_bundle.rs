@@ -51,9 +51,7 @@ impl UnlockedSeedBundle {
             }
         })
         .await
-        .map_err(|e| {
-            OneErr::new(format!("sodoken::sign::seed_keypair: {}", e))
-        })??;
+        .map_err(OneErr::new)??;
 
         // generate the full struct bundle with blank app_data
         Ok(Self {
@@ -67,7 +65,7 @@ impl UnlockedSeedBundle {
     /// Construct a new random seed SeedBundle.
     pub async fn new_random() -> Result<Self, OneErr> {
         let mut seed = sodoken::SizedLockedArray::new()?;
-        sodoken::random::randombytes_buf(seed.lock().as_mut_slice())?;
+        sodoken::random::randombytes_buf(&mut *seed.lock())?;
         Self::priv_from_seed(seed).await
     }
 
@@ -91,13 +89,21 @@ impl UnlockedSeedBundle {
     ) -> impl Future<Output = Result<Self, OneErr>> + 'static + Send {
         let seed = self.seed.clone();
         async move {
-            let mut new_seed = sodoken::SizedLockedArray::new()?;
-            sodoken::kdf::derive_from_key(
-                new_seed.lock().as_mut_slice(),
-                index as u64,
-                KDF_CONTEXT,
-                &seed.lock().lock(),
-            )?;
+            let new_seed =
+                tokio::task::spawn_blocking(move || -> Result<_, OneErr> {
+                    let mut new_seed = sodoken::SizedLockedArray::new()?;
+                    sodoken::kdf::derive_from_key(
+                        new_seed.lock().as_mut_slice(),
+                        index as u64,
+                        KDF_CONTEXT,
+                        &seed.lock().lock(),
+                    )?;
+
+                    Ok(new_seed)
+                })
+                .await
+                .map_err(OneErr::new)??;
+
             Self::priv_from_seed(new_seed).await
         }
     }
@@ -111,25 +117,23 @@ impl UnlockedSeedBundle {
     pub fn sign_detached(
         &self,
         message: Arc<[u8]>,
-    ) -> impl Future<
-        Output = Result<
-            sodoken::SizedLockedArray<{ sodoken::sign::SIGNATUREBYTES }>,
-            OneErr,
-        >,
-    >
+    ) -> impl Future<Output = Result<[u8; sodoken::sign::SIGNATUREBYTES], OneErr>>
            + 'static
            + Send {
         let sign_sec_key = self.sign_sec_key.clone();
         async move {
-            let mut sig = sodoken::SizedLockedArray::<
-                { sodoken::sign::SIGNATUREBYTES },
-            >::new()?;
-            sodoken::sign::sign_detached(
-                &mut sig.lock(),
-                &message,
-                &sign_sec_key.lock().lock(),
-            )?;
-            Ok(sig)
+            tokio::task::spawn_blocking(move || -> Result<_, OneErr> {
+                let mut sig = [0; sodoken::sign::SIGNATUREBYTES];
+                sodoken::sign::sign_detached(
+                    &mut sig,
+                    &message,
+                    &sign_sec_key.lock().lock(),
+                )?;
+
+                Ok(sig)
+            })
+            .await
+            .map_err(OneErr::new)?
         }
     }
 

@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 pub async fn create_config(
     tmpdir: &tempdir::TempDir,
-    passphrase: Arc<Mutex<sodoken::LockedArray>>,
+    passphrase: SharedLockedArray,
 ) -> Arc<LairServerConfigInner> {
     // create the config for the test server
     Arc::new(
@@ -18,7 +18,7 @@ pub async fn create_config(
 
 pub async fn connect_with_config(
     config: Arc<LairServerConfigInner>,
-    passphrase: Arc<Mutex<sodoken::LockedArray>>,
+    passphrase: SharedLockedArray,
 ) -> LairResult<LairClient> {
     // execute the server
     lair_keystore::server::StandaloneServer::new(config.clone())

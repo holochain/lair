@@ -1,5 +1,4 @@
 use super::*;
-use lair_keystore::dependencies::one_err::OneErr;
 use lair_keystore_api::dependencies::base64::Engine;
 use parking_lot::Mutex;
 
@@ -115,18 +114,12 @@ pub(crate) async fn exec(
         let mem_limit = limits.as_mem_limit();
 
         // pre-hash the passphrase
-        let pw_hash = tokio::task::spawn_blocking(move || -> LairResult<_> {
-            let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
-            sodoken::blake2b::blake2b_hash(
-                &mut *pw_hash.lock(),
-                &deep_pass.lock(),
-                None,
-            )?;
-
-            Ok(pw_hash)
-        })
-        .await
-        .map_err(OneErr::new)??;
+        let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
+        sodoken::blake2b::blake2b_hash(
+            &mut *pw_hash.lock(),
+            &deep_pass.lock(),
+            None,
+        )?;
 
         store
             .insert_deep_locked_seed(

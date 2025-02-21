@@ -1,4 +1,3 @@
-use crate::SharedSizedLockedArray;
 use std::ops::{Deref, DerefMut};
 
 /// A fixed sized byte array with all the translation and serialization
@@ -9,12 +8,6 @@ pub(crate) struct U8Array<const N: usize>(pub [u8; N]);
 impl<const N: usize> From<[u8; N]> for U8Array<N> {
     fn from(o: [u8; N]) -> Self {
         Self(o)
-    }
-}
-
-impl<const N: usize> From<SharedSizedLockedArray<N>> for U8Array<N> {
-    fn from(o: SharedSizedLockedArray<N>) -> Self {
-        (*o.lock().lock()).into()
     }
 }
 

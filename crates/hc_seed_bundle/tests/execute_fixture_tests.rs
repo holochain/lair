@@ -1,6 +1,5 @@
-use hc_seed_bundle::*;
-
 use base64::Engine;
+use hc_seed_bundle::*;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::sync::Arc;

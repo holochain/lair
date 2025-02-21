@@ -3,9 +3,7 @@
 
 use crate::*;
 use lair_keystore_api::ipc_keystore::IpcKeystoreServer;
-use parking_lot::Mutex;
 use std::future::Future;
-use std::sync::Arc;
 
 /// Standalone binary lair server used by the 'lair-keystore' executable.
 /// You probably only want to use this directly if you're writing tests.
@@ -59,7 +57,7 @@ impl StandaloneServer {
     /// Run the server.
     pub async fn run(
         &mut self,
-        passphrase: Arc<Mutex<sodoken::LockedArray>>,
+        passphrase: SharedLockedArray,
     ) -> LairResult<()> {
         // construct our sqlite store factory
         let store_factory = crate::store_sqlite::create_sql_pool_factory(
