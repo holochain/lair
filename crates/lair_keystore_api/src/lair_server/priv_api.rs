@@ -1116,7 +1116,7 @@ pub(crate) fn priv_req_get_wka_tls_cert_priv_key<'a>(
 
         // encrypt the priv_key using our CONNECTION CONTEXT KEY
         let priv_key =
-            SecretData::encrypt_secret(enc_ctx_key.clone(), priv_key).await?;
+            SecretData::encrypt(enc_ctx_key.clone(), priv_key).await?;
 
         send.send(
             LairApiResGetWkaTlsCertPrivKey {

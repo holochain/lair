@@ -161,21 +161,17 @@ impl LairServerConfigInner {
                 None,
             )?;
 
-            // generate a random salt for the sqlcipher database
-            let mut db_salt = [0; 16];
-            sodoken::random::randombytes_buf(&mut db_salt)?;
-
-            // generate a random salt for the pwhash
-            let mut salt = [0; sodoken::argon2::ARGON2_ID_SALTBYTES];
-            sodoken::random::randombytes_buf(&mut salt)?;
-
             // pull the captured argon2id limits
             let ops_limit = limits.as_ops_limit();
             let mem_limit = limits.as_mem_limit();
 
             // generate an argon2id pre_secret from the passphrase
-            let mut pre_secret =
+            let (salt, pre_secret) =
                 tokio::task::spawn_blocking(move || -> LairResult<_> {
+                    // generate a random salt for the pwhash
+                    let mut salt = [0; sodoken::argon2::ARGON2_ID_SALTBYTES];
+                    sodoken::random::randombytes_buf(&mut salt)?;
+
                     let mut pre_secret =
                         sodoken::SizedLockedArray::<32>::new()?;
 
@@ -187,32 +183,50 @@ impl LairServerConfigInner {
                         mem_limit,
                     )?;
 
-                    Ok(pre_secret)
+                    Ok((salt, pre_secret))
                 })
                 .await
                 .map_err(OneErr::new)??;
+            let pre_secret = Arc::new(Mutex::new(pre_secret));
 
             // derive our context secret
             // this will be used to encrypt the context_key
-            let ctx_secret =
-                Arc::new(Mutex::new(sodoken::SizedLockedArray::<32>::new()?));
-            sodoken::kdf::derive_from_key(
-                &mut *ctx_secret.lock().lock(),
-                42,
-                b"CtxSecKy",
-                &pre_secret.lock(),
-            )?;
+            let ctx_secret = tokio::task::spawn_blocking({
+                let pre_secret = pre_secret.clone();
+                move || -> LairResult<_> {
+                    let mut ctx_secret =
+                        sodoken::SizedLockedArray::<32>::new()?;
+                    sodoken::kdf::derive_from_key(
+                        &mut *ctx_secret.lock(),
+                        42,
+                        b"CtxSecKy",
+                        &pre_secret.lock().lock(),
+                    )?;
+
+                    Ok(ctx_secret)
+                }
+            })
+            .await
+            .map_err(OneErr::new)??;
+            let ctx_secret = Arc::new(Mutex::new(ctx_secret));
 
             // derive our signature secret
             // this will be used to encrypt the signature seed
             let id_secret =
-                Arc::new(Mutex::new(sodoken::SizedLockedArray::<32>::new()?));
-            sodoken::kdf::derive_from_key(
-                &mut *id_secret.lock().lock(),
-                142,
-                b"IdnSecKy",
-                &pre_secret.lock(),
-            )?;
+                tokio::task::spawn_blocking(move || -> LairResult<_> {
+                    let mut id_secret = sodoken::SizedLockedArray::<32>::new()?;
+                    sodoken::kdf::derive_from_key(
+                        &mut *id_secret.lock(),
+                        142,
+                        b"IdnSecKy",
+                        &pre_secret.lock().lock(),
+                    )?;
+
+                    Ok(id_secret)
+                })
+                .await
+                .map_err(OneErr::new)??;
+            let id_secret = Arc::new(Mutex::new(id_secret));
 
             // the context key is used to encrypt our store_file
             let mut context_key = sodoken::SizedLockedArray::<32>::new()?;
@@ -272,6 +286,10 @@ impl LairServerConfigInner {
                 ))
                 .unwrap()
             };
+
+            // generate a random salt for the sqlcipher database
+            let mut db_salt = [0; 16];
+            sodoken::random::randombytes_buf(&mut db_salt)?;
 
             // put together the full server config struct
             let config = LairServerConfigInner {

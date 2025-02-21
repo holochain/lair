@@ -460,7 +460,7 @@ impl LairStore {
 
             // encrypt the private key with our context secret
             let key = inner.get_bidi_ctx_key();
-            let priv_key = SecretData::encrypt_secret(key, priv_key).await?;
+            let priv_key = SecretData::encrypt(key, priv_key).await?;
 
             // populate the certificate info
             let cert_info = CertInfo {

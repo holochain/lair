@@ -205,58 +205,37 @@ pub struct SecretData(
 );
 
 impl SecretData {
-    /// Encrypt some data as a 'SecretData' object with given context key.
-    pub async fn encrypt(
-        key: SharedSizedLockedArray<32>,
-        data: Arc<[u8]>,
-    ) -> LairResult<Self> {
-        tokio::task::spawn_blocking(move || Self::encrypt_inner(key, &data))
-            .await
-            .map_err(OneErr::new)?
-    }
-
     /// Encrypt some secret data as a 'SecretData' object with given context key.
-    pub async fn encrypt_secret(
+    pub async fn encrypt(
         key: SharedSizedLockedArray<32>,
         data: SharedLockedArray,
     ) -> LairResult<Self> {
         tokio::task::spawn_blocking(move || {
-            Self::encrypt_inner(key, &data.lock().lock())
+            let mut data_guard = data.lock();
+            let data_lock = data_guard.lock();
+            let mut header = [0; sodoken::secretstream::HEADERBYTES];
+            let mut cipher =
+                vec![0; data_lock.len() + sodoken::secretstream::ABYTES];
+
+            let mut enc = sodoken::secretstream::State::default();
+            sodoken::secretstream::init_push(
+                &mut enc,
+                &mut header,
+                &key.lock().lock(),
+            )?;
+
+            sodoken::secretstream::push(
+                &mut enc,
+                &mut cipher,
+                &data_lock,
+                None,
+                sodoken::secretstream::Tag::Final,
+            )?;
+
+            Ok(Self(header.into(), cipher.into_boxed_slice().into()))
         })
         .await
         .map_err(OneErr::new)?
-    }
-
-    fn encrypt_inner(
-        key: SharedSizedLockedArray<32>,
-        data: &[u8],
-    ) -> LairResult<Self> {
-        let mut header = sodoken::SizedLockedArray::<
-            { sodoken::secretstream::HEADERBYTES },
-        >::new()?;
-        let mut cipher = sodoken::LockedArray::new(
-            data.len() + sodoken::secretstream::ABYTES,
-        )?;
-
-        let mut enc = sodoken::secretstream::State::default();
-        sodoken::secretstream::init_push(
-            &mut enc,
-            &mut header.lock(),
-            &key.lock().lock(),
-        )?;
-
-        sodoken::secretstream::push(
-            &mut enc,
-            &mut cipher.lock(),
-            data,
-            None,
-            sodoken::secretstream::Tag::Final,
-        )?;
-
-        // TODO points at protected memory that will be cleared?
-        let arr = Arc::new(*header.lock());
-        let out = cipher.lock().to_vec().into_boxed_slice();
-        Ok(Self(arr.into(), out.into()))
     }
 
     /// Decrypt some data as a 'SecretData' object with given context key.
@@ -264,19 +243,31 @@ impl SecretData {
         &self,
         key: SharedSizedLockedArray<32>,
     ) -> LairResult<sodoken::LockedArray> {
-        let mut dec = sodoken::secretstream::State::default();
-        sodoken::secretstream::init_pull(
-            &mut dec,
-            &self.0,
-            &key.lock().lock(),
-        )?;
+        let header = self.0.clone();
+        let data = self.1.clone();
 
-        let mut out = sodoken::LockedArray::new(
-            self.1.len() - sodoken::secretstream::ABYTES,
-        )?;
-        sodoken::secretstream::pull(&mut dec, &mut out.lock(), &self.1, None)?;
+        tokio::task::spawn_blocking(move || {
+            let mut dec = sodoken::secretstream::State::default();
+            sodoken::secretstream::init_pull(
+                &mut dec,
+                &header,
+                &key.lock().lock(),
+            )?;
 
-        Ok(out)
+            let mut out = sodoken::LockedArray::new(
+                data.len() - sodoken::secretstream::ABYTES,
+            )?;
+            sodoken::secretstream::pull(
+                &mut dec,
+                &mut out.lock(),
+                &data,
+                None,
+            )?;
+
+            Ok(out)
+        })
+        .await
+        .map_err(OneErr::new)?
     }
 }
 
