@@ -237,11 +237,12 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(seed_info_ref_deep
-            .ed25519_pub_key
-            .verify_detached(signature, data)
-            .await
-            .unwrap());
+        assert!(
+            seed_info_ref_deep
+                .ed25519_pub_key
+                .verify_detached(signature, data)
+                .await
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]

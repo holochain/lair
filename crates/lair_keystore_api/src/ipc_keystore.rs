@@ -31,9 +31,9 @@ impl IpcKeystoreServer {
             let srv_hnd = spawn_lair_server_task(
                 config.clone(),
                 "lair-keystore-ipc".into(),
-                crate::LAIR_VER.into(),
+                LAIR_VER.into(),
                 store_factory,
-                passphrase.into(),
+                passphrase,
             )
             .await?;
 
@@ -100,7 +100,6 @@ pub fn ipc_keystore_connect(
     connection_url: url::Url,
     passphrase: Arc<Mutex<sodoken::LockedArray>>,
 ) -> impl Future<Output = LairResult<LairClient>> + 'static + Send {
-    let passphrase = passphrase.into();
     ipc_keystore_connect_options(IpcKeystoreClientOptions {
         connection_url,
         passphrase,
@@ -242,11 +241,12 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(seed_info_ref
-            .ed25519_pub_key
-            .verify_detached(sig, b"hello".into())
-            .await
-            .unwrap());
+        assert!(
+            seed_info_ref
+                .ed25519_pub_key
+                .verify_detached(sig, (*b"hello").into())
+                .await
+        );
 
         // create a new deep-locked seed
         let _seed_info_ref_deep = hc_seed_bundle::PwHashLimits::Minimum

@@ -34,15 +34,15 @@ where
     /// Initialize a new typed sender.
     pub(crate) fn new(
         send: PrivCryptSend,
-        tx: sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>,
-        rx: sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>,
+        tx: SharedSizedLockedArray<{ sodoken::secretstream::KEYBYTES }>,
+        rx: SharedSizedLockedArray<{ sodoken::secretstream::KEYBYTES }>,
     ) -> Self {
         Self(
             Arc::new(Mutex::new(PrivSendInner {
                 limit: Arc::new(tokio::sync::Semaphore::new(1)),
                 send: Some(send),
-                tx: Arc::new(Mutex::new(tx)),
-                rx: Arc::new(Mutex::new(rx)),
+                tx,
+                rx,
             })),
             std::marker::PhantomData,
         )

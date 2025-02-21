@@ -39,7 +39,7 @@
 //! # use std::sync::Arc;
 //! # use parking_lot::Mutex;
 //! # let tmp_dir = tempdir::TempDir::new("lair_ipc_doc_test").unwrap();
-//! # let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(&b"passphrase".to_vec())));
+//! # let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(b"passphrase".to_vec())));
 //! # let config = Arc::new(
 //! #     hc_seed_bundle::PwHashLimits::Minimum
 //! #         .with_exec(|| {
@@ -84,7 +84,7 @@
 //! assert!(seed_info.ed25519_pub_key.verify_detached(
 //!     sig,
 //!     b"test-data".to_vec().into(),
-//! ).await.unwrap());
+//! ).await);
 //! # }
 //! ```
 

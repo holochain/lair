@@ -37,7 +37,7 @@ use api_traits::*;
 
 /// Instructions for how to argon2id pwhash a passphrase
 /// for use in deep locking a seed.
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeepLockPassphrase {
     /// argon2id ops_limit for decrypting runtime data

@@ -1,9 +1,7 @@
 //! Helper types for dealing with serialization.
 
 use crate::dependencies::one_err::OneErr;
-use crate::types::{
-    MaybeLockedBytes, SharedLockedArray, SharedSizedLockedArray,
-};
+use crate::types::{SharedLockedArray, SharedSizedLockedArray};
 use crate::*;
 use base64::Engine;
 use parking_lot::Mutex;
@@ -251,7 +249,7 @@ impl SecretData {
         sodoken::secretstream::push(
             &mut enc,
             &mut cipher.lock(),
-            &data,
+            data,
             None,
             sodoken::secretstream::Tag::Final,
         )?;
@@ -300,7 +298,8 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
         mut data: sodoken::SizedLockedArray<M>,
     ) -> LairResult<Self> {
         let mut header = [0; sodoken::secretstream::HEADERBYTES];
-        let mut cipher = vec![0; data.lock().len() + sodoken::secretstream::ABYTES];
+        let mut cipher =
+            vec![0; data.lock().len() + sodoken::secretstream::ABYTES];
         let mut enc = sodoken::secretstream::State::default();
         sodoken::secretstream::init_push(
             &mut enc,
@@ -328,10 +327,14 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
         key: Arc<Mutex<sodoken::SizedLockedArray<32>>>,
     ) -> LairResult<sodoken::SizedLockedArray<M>> {
         let mut header = sodoken::SizedLockedArray::<24>::new()?;
-        header.lock().copy_from_slice(self.0.cloned_inner().as_slice());
+        header
+            .lock()
+            .copy_from_slice(self.0.cloned_inner().as_slice());
 
         let mut cipher = sodoken::SizedLockedArray::<C>::new()?;
-        cipher.lock().copy_from_slice(self.1.cloned_inner().as_slice());
+        cipher
+            .lock()
+            .copy_from_slice(self.1.cloned_inner().as_slice());
 
         let mut state = sodoken::secretstream::State::default();
         sodoken::secretstream::init_pull(

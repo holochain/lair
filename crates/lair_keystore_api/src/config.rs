@@ -174,22 +174,23 @@ impl LairServerConfigInner {
             let mem_limit = limits.as_mem_limit();
 
             // generate an argon2id pre_secret from the passphrase
-            let mut pre_secret = tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut pre_secret =
-                    sodoken::SizedLockedArray::<32>::new()?;
+            let mut pre_secret =
+                tokio::task::spawn_blocking(move || -> LairResult<_> {
+                    let mut pre_secret =
+                        sodoken::SizedLockedArray::<32>::new()?;
 
-                sodoken::argon2::blocking_argon2id(
-                    &mut *pre_secret.lock(),
-                    &*pw_hash.lock(),
-                    &salt,
-                    ops_limit,
-                    mem_limit,
-                )?;
+                    sodoken::argon2::blocking_argon2id(
+                        &mut *pre_secret.lock(),
+                        &*pw_hash.lock(),
+                        &salt,
+                        ops_limit,
+                        mem_limit,
+                    )?;
 
-                Ok(pre_secret)
-            })
-            .await
-            .map_err(OneErr::new)??;
+                    Ok(pre_secret)
+                })
+                .await
+                .map_err(OneErr::new)??;
 
             // derive our context secret
             // this will be used to encrypt the context_key
@@ -223,12 +224,11 @@ impl LairServerConfigInner {
             sodoken::random::randombytes_buf(&mut *id_seed.lock())?;
 
             // server identity encryption keypair
-            let mut id_pk =
-                [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+            let mut id_pk = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
             let mut id_sk = sodoken::SizedLockedArray::<32>::new()?;
             sodoken::crypto_box::xsalsa_seed_keypair(
                 &mut id_pk,
-                &mut *id_sk.lock(),
+                &mut id_sk.lock(),
                 &id_seed.lock(),
             )?;
 

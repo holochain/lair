@@ -1,6 +1,5 @@
 use super::*;
 use crate::dependencies::one_err::OneErr;
-use crate::dependencies::sodoken::SizedLockedArray;
 use crate::types::SharedSizedLockedArray;
 use parking_lot::Mutex;
 use std::convert::TryInto;
@@ -63,23 +62,24 @@ pub(crate) fn priv_req_unlock<'a>(
         let mem_limit = config.runtime_secrets_mem_limit;
 
         // calculate pre_secret from argon2id passphrase hash
-        let mut pre_secret = tokio::task::spawn_blocking(move || {
-            let mut pre_secret = sodoken::SizedLockedArray::<32>::new()?;
-            sodoken::argon2::blocking_argon2id(
-                &mut *pre_secret.lock(),
-                passphrase.lock().as_slice(),
-                &salt,
-                ops_limit,
-                mem_limit,
-            )?;
+        let mut pre_secret =
+            tokio::task::spawn_blocking(move || -> LairResult<_> {
+                let mut pre_secret = sodoken::SizedLockedArray::<32>::new()?;
+                sodoken::argon2::blocking_argon2id(
+                    &mut *pre_secret.lock(),
+                    passphrase.lock().as_slice(),
+                    &salt,
+                    ops_limit,
+                    mem_limit,
+                )?;
 
-            Ok(pre_secret)
-        })
-        .await
-        .map_err(OneErr::new)??;
+                Ok(pre_secret)
+            })
+            .await
+            .map_err(OneErr::new)??;
 
         // derive signature decryption secret
-        let mut id_secret =
+        let id_secret =
             Arc::new(Mutex::new(sodoken::SizedLockedArray::<32>::new()?));
         sodoken::kdf::derive_from_key(
             &mut *id_secret.lock().lock(),
@@ -99,7 +99,7 @@ pub(crate) fn priv_req_unlock<'a>(
         >::new()?;
         sodoken::crypto_box::xsalsa_seed_keypair(
             &mut d_id_pk,
-            &mut *d_id_sk.lock(),
+            &mut d_id_sk.lock(),
             &id_seed.lock(),
         )?;
 
@@ -270,7 +270,7 @@ pub(crate) fn priv_req_derive_seed<'a>(
             ) => {
                 let deep_key = deep_unlock_key_from_passphrase(
                     secret,
-                    dec_ctx_key,
+                    dec_ctx_key.clone(),
                     salt.clone().cloned_inner(),
                 )
                 .await?;
@@ -362,17 +362,20 @@ pub(crate) fn priv_req_export_seed_by_tag<'a>(
             priv_get_full_entry_by_x_pub_key(inner, req.sender_pub_key.clone())
                 .await?;
 
+        let msg_id = req.msg_id.clone();
+
         let (nonce, cipher) = if let Some(x_sk) = enc_entry.x_sk {
             if let Some(seed) = seed_entry.seed {
                 if !seed_entry.exportable {
                     return Err("seed is not exportable".into());
                 }
 
-                tokio::task::spawn_blocking(move || -> LairResult<([u8; sodoken::crypto_box::XSALSA_NONCEBYTES], Vec<u8>)> {
+                tokio::task::spawn_blocking(move || -> LairResult<_> {
                     let mut nonce = [0; sodoken::crypto_box::XSALSA_NONCEBYTES];
                     sodoken::random::randombytes_buf(&mut nonce)?;
 
-                    let seed_guard = seed.lock().lock();
+                    let mut seed_guard = seed.lock();
+                    let seed_guard = seed_guard.lock();
 
                     let mut cipher = vec![
                         0;
@@ -388,7 +391,9 @@ pub(crate) fn priv_req_export_seed_by_tag<'a>(
                     )?;
 
                     Ok((nonce, cipher))
-                }).await.map_err(OneErr::new)??
+                })
+                .await
+                .map_err(OneErr::new)??
             } else {
                 return Err("deep_seed crypto_box not yet implemented".into());
             }
@@ -398,7 +403,7 @@ pub(crate) fn priv_req_export_seed_by_tag<'a>(
 
         send.send(
             LairApiResExportSeedByTag {
-                msg_id: req.msg_id,
+                msg_id,
                 nonce,
                 cipher: cipher.into(),
             }
@@ -435,8 +440,13 @@ pub(crate) fn priv_req_import_seed<'a>(
             return Err("Bad Seed Length".into());
         }
 
+        let msg_id = req.msg_id.clone();
+        let tag = req.tag.clone();
+        let exportable = req.exportable;
+        let deep_lock_passphrase = req.deep_lock_passphrase.clone();
+
         let seed = if let Some(x_sk) = full_entry.x_sk {
-            tokio::task::spawn_blocking(move || {
+            tokio::task::spawn_blocking(move || -> LairResult<_> {
                 let mut seed = sodoken::SizedLockedArray::<32>::new()?;
 
                 sodoken::crypto_box::xsalsa_open_easy(
@@ -455,7 +465,7 @@ pub(crate) fn priv_req_import_seed<'a>(
             return Err("deep_seed crypto_box not yet implemented".into());
         };
 
-        let seed_info = match req.deep_lock_passphrase {
+        let seed_info = match deep_lock_passphrase {
             Some(secret) => {
                 // if deep locked, decrypt the deep lock passphrase
                 let deep_lock_passphrase =
@@ -465,26 +475,22 @@ pub(crate) fn priv_req_import_seed<'a>(
                 store
                     .insert_deep_locked_seed(
                         seed,
-                        req.tag.clone(),
+                        tag.clone(),
                         secret.ops_limit,
                         secret.mem_limit,
                         deep_lock_passphrase,
-                        req.exportable,
+                        exportable,
                     )
                     .await?
             }
             // create a new seed
-            None => {
-                store
-                    .insert_seed(seed, req.tag.clone(), req.exportable)
-                    .await?
-            }
+            None => store.insert_seed(seed, tag.clone(), exportable).await?,
         };
 
         send.send(
             LairApiResImportSeed {
-                msg_id: req.msg_id,
-                tag: req.tag.clone(),
+                msg_id,
+                tag,
                 seed_info,
             }
             .into_api_enum(),
@@ -503,20 +509,18 @@ async fn deep_unlock_key_from_passphrase(
     // generate the deep lock key from the passphrase
     let mut passphrase = dlp.passphrase.decrypt(dec_ctx_key).await?;
 
-    let deep_key = tokio::task::spawn_blocking(
-        move || -> LairResult<SizedLockedArray<32>> {
-            let mut deep_key = sodoken::SizedLockedArray::<32>::new()?;
-            sodoken::argon2::blocking_argon2id(
-                &mut *deep_key.lock(),
-                passphrase.lock().as_slice(),
-                &salt,
-                dlp.ops_limit,
-                dlp.mem_limit,
-            )?;
+    let deep_key = tokio::task::spawn_blocking(move || -> LairResult<_> {
+        let mut deep_key = sodoken::SizedLockedArray::<32>::new()?;
+        sodoken::argon2::blocking_argon2id(
+            &mut *deep_key.lock(),
+            passphrase.lock().as_slice(),
+            &salt,
+            dlp.ops_limit,
+            dlp.mem_limit,
+        )?;
 
-            Ok(deep_key)
-        },
-    )
+        Ok(deep_key)
+    })
     .await
     .map_err(OneErr::new)??;
 
@@ -544,7 +548,7 @@ pub(crate) fn priv_req_sign_by_pub_key<'a>(
         {
             Ok((full_entry, _)) => {
                 // get the signing private key
-                let ed_sk = match (&*full_entry.entry, full_entry.ed_sk, req.deep_lock_passphrase) {
+                let ed_sk = match (&*full_entry.entry, full_entry.ed_sk, req.deep_lock_passphrase.clone()) {
                     (LairEntryInner::Seed { .. }, Some(ed_sk), _) => { ed_sk }
                     (
                         LairEntryInner::DeepLockedSeed {
@@ -567,24 +571,24 @@ pub(crate) fn priv_req_sign_by_pub_key<'a>(
                     _ => return Err("The entry for this key is not a seed which can produce a signature".into())
                 };
 
-                let signature = tokio::task::spawn_blocking(move || {
-                    let mut signature = [0; sodoken::sign::SIGNATUREBYTES];
+                let msg_id = req.msg_id.clone();
 
-                    sodoken::sign::sign_detached(
-                        &mut signature,
-                        &req.data,
-                        &ed_sk.lock().lock(),
-                    )?;
+                let signature =
+                    tokio::task::spawn_blocking(move || -> LairResult<_> {
+                        let mut signature = [0; sodoken::sign::SIGNATUREBYTES];
 
-                    Ok(signature.into())
-                })
-                .await
-                .map_err(OneErr::new)??;
+                        sodoken::sign::sign_detached(
+                            &mut signature,
+                            &req.data,
+                            &ed_sk.lock().lock(),
+                        )?;
 
-                LairApiResSignByPubKey {
-                    msg_id: req.msg_id,
-                    signature,
-                }
+                        Ok(signature.into())
+                    })
+                    .await
+                    .map_err(OneErr::new)??;
+
+                LairApiResSignByPubKey { msg_id, signature }
             }
             Err(e) => {
                 // we don't have this key, let's see if we should invoke
@@ -621,11 +625,13 @@ pub(crate) fn priv_req_crypto_box_xsalsa_by_pub_key<'a>(
             priv_get_full_entry_by_x_pub_key(inner, req.sender_pub_key.clone())
                 .await?;
 
-        let mut nonce = [0; sodoken::crypto_box::XSALSA_NONCEBYTES];
-        sodoken::random::randombytes_buf(&mut nonce)?;
+        let msg_id = req.msg_id.clone();
 
-        let cipher = if let Some(x_sk) = full_entry.x_sk {
-            tokio::task::spawn_blocking(move || {
+        let (nonce, cipher) = if let Some(x_sk) = full_entry.x_sk {
+            tokio::task::spawn_blocking(move || -> LairResult<_> {
+                let mut nonce = [0; sodoken::crypto_box::XSALSA_NONCEBYTES];
+                sodoken::random::randombytes_buf(&mut nonce)?;
+
                 let mut cipher = vec![
                     0;
                     req.data.len()
@@ -639,7 +645,7 @@ pub(crate) fn priv_req_crypto_box_xsalsa_by_pub_key<'a>(
                     &x_sk.lock().lock(),
                 )?;
 
-                Ok(cipher)
+                Ok((nonce, cipher))
             })
             .await
             .map_err(OneErr::new)??
@@ -649,7 +655,7 @@ pub(crate) fn priv_req_crypto_box_xsalsa_by_pub_key<'a>(
 
         send.send(
             LairApiResCryptoBoxXSalsaByPubKey {
-                msg_id: req.msg_id,
+                msg_id,
                 nonce,
                 cipher: cipher.into(),
             }
@@ -683,8 +689,10 @@ pub(crate) fn priv_req_crypto_box_xsalsa_open_by_pub_key<'a>(
             return Err("InvalidCipherLength".into());
         }
 
+        let msg_id = req.msg_id.clone();
+
         let message = if let Some(x_sk) = full_entry.x_sk {
-            tokio::task::spawn_blocking(move || {
+            tokio::task::spawn_blocking(move || -> LairResult<_> {
                 let mut message = vec![0;
                     req.cipher.len() - sodoken::crypto_box::XSALSA_MACBYTES];
                 sodoken::crypto_box::xsalsa_open_easy(
@@ -705,7 +713,7 @@ pub(crate) fn priv_req_crypto_box_xsalsa_open_by_pub_key<'a>(
 
         send.send(
             LairApiResCryptoBoxXSalsaOpenByPubKey {
-                msg_id: req.msg_id,
+                msg_id,
                 message: message.into(),
             }
             .into_api_enum(),
@@ -734,10 +742,9 @@ pub(crate) fn priv_req_crypto_box_xsalsa_by_sign_pub_key<'a>(
         )
         .await?;
 
-        let mut nonce = [0; sodoken::crypto_box::XSALSA_NONCEBYTES];
-        sodoken::random::randombytes_buf(&mut nonce)?;
+        let msg_id = req.msg_id.clone();
 
-        let cipher = if let Some(ed_sk) = full_entry.ed_sk {
+        let (nonce, cipher) = if let Some(ed_sk) = full_entry.ed_sk {
             let mut x_pk = vec![0; req.recipient_pub_key.len()];
             sodoken::sign::pk_to_curve25519(
                 x_pk.as_mut_slice().try_into().unwrap(),
@@ -749,7 +756,10 @@ pub(crate) fn priv_req_crypto_box_xsalsa_by_sign_pub_key<'a>(
                 &ed_sk.lock().lock(),
             )?;
 
-            tokio::task::spawn_blocking(move || {
+            tokio::task::spawn_blocking(move || -> LairResult<_> {
+                let mut nonce = [0; sodoken::crypto_box::XSALSA_NONCEBYTES];
+                sodoken::random::randombytes_buf(&mut nonce)?;
+
                 let mut cipher = vec![
                     0;
                     req.data.len()
@@ -763,7 +773,7 @@ pub(crate) fn priv_req_crypto_box_xsalsa_by_sign_pub_key<'a>(
                     &x_sk.lock(),
                 )?;
 
-                Ok(cipher)
+                Ok((nonce, cipher))
             })
             .await
             .map_err(OneErr::new)??
@@ -773,7 +783,7 @@ pub(crate) fn priv_req_crypto_box_xsalsa_by_sign_pub_key<'a>(
 
         send.send(
             LairApiResCryptoBoxXSalsaBySignPubKey {
-                msg_id: req.msg_id,
+                msg_id,
                 nonce,
                 cipher: cipher.into(),
             }
@@ -807,6 +817,8 @@ pub(crate) fn priv_req_crypto_box_xsalsa_open_by_sign_pub_key<'a>(
             return Err("InvalidCipherLength".into());
         }
 
+        let msg_id = req.msg_id.clone();
+
         let message = if let Some(ed_sk) = full_entry.ed_sk {
             let mut x_pk = vec![0; req.sender_pub_key.len()];
             sodoken::sign::pk_to_curve25519(
@@ -817,11 +829,11 @@ pub(crate) fn priv_req_crypto_box_xsalsa_open_by_sign_pub_key<'a>(
                 { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
             >::new()?;
             sodoken::sign::sk_to_curve25519(
-                &mut *x_sk.lock(),
+                &mut x_sk.lock(),
                 &ed_sk.lock().lock(),
             )?;
 
-            tokio::task::spawn_blocking(move || {
+            tokio::task::spawn_blocking(move || -> LairResult<_> {
                 let mut message = vec![
                         0;
                         req.cipher.len() - sodoken::crypto_box::XSALSA_MACBYTES
@@ -844,7 +856,7 @@ pub(crate) fn priv_req_crypto_box_xsalsa_open_by_sign_pub_key<'a>(
 
         send.send(
             LairApiResCryptoBoxXSalsaOpenBySignPubKey {
-                msg_id: req.msg_id,
+                msg_id,
                 message: message.into(),
             }
             .into_api_enum(),
@@ -884,20 +896,24 @@ pub(crate) fn priv_req_new_wka_tls_cert<'a>(
 pub(crate) async fn derive_ed(
     seed: SharedSizedLockedArray<32>,
 ) -> LairResult<(Ed25519PubKey, sodoken::SizedLockedArray<64>)> {
-    let (ed_pk, ed_sk) = tokio::task::spawn_blocking(move || -> LairResult<([u8; sodoken::sign::PUBLICKEYBYTES], sodoken::SizedLockedArray<{ sodoken::sign::SECRETKEYBYTES }>)> {
-        // get the signature keypair
-        let mut ed_pk = [0; sodoken::sign::PUBLICKEYBYTES];
-        let mut ed_sk =
-            sodoken::SizedLockedArray::<{ sodoken::sign::SECRETKEYBYTES }>::new()?;
+    let (ed_pk, ed_sk) =
+        tokio::task::spawn_blocking(move || -> LairResult<_> {
+            // get the signature keypair
+            let mut ed_pk = [0; sodoken::sign::PUBLICKEYBYTES];
+            let mut ed_sk = sodoken::SizedLockedArray::<
+                { sodoken::sign::SECRETKEYBYTES },
+            >::new()?;
 
-        sodoken::sign::seed_keypair(
-            &mut ed_pk,
-            &mut *ed_sk.lock(),
-            &seed.lock().lock(),
-        )?;
+            sodoken::sign::seed_keypair(
+                &mut ed_pk,
+                &mut ed_sk.lock(),
+                &seed.lock().lock(),
+            )?;
 
-        Ok((ed_pk, ed_sk))
-    }).await.map_err(OneErr::new)??;
+            Ok((ed_pk, ed_sk))
+        })
+        .await
+        .map_err(OneErr::new)??;
 
     Ok((ed_pk.into(), ed_sk))
 }
@@ -905,7 +921,7 @@ pub(crate) async fn derive_ed(
 pub(crate) async fn derive_x(
     seed: SharedSizedLockedArray<32>,
 ) -> LairResult<(X25519PubKey, sodoken::SizedLockedArray<32>)> {
-    let (x_pk, x_sk) = tokio::task::spawn_blocking(move || -> LairResult<([u8; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES], sodoken::SizedLockedArray<{ sodoken::crypto_box::XSALSA_SECRETKEYBYTES }>)> {
+    let (x_pk, x_sk) = tokio::task::spawn_blocking(move || -> LairResult<_> {
         // get the encryption keypair
         let mut x_pk = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
         let mut x_sk = sodoken::SizedLockedArray::<
@@ -916,7 +932,7 @@ pub(crate) async fn derive_x(
         // keypairs are valid also for salsa.
         sodoken::crypto_box::xsalsa_seed_keypair(
             &mut x_pk,
-            &mut *x_sk.lock(),
+            &mut x_sk.lock(),
             &seed.lock().lock(),
         )?;
 
@@ -944,7 +960,7 @@ pub(crate) fn priv_gen_and_register_entry<'a>(
                     seed.decrypt(store.get_bidi_ctx_key()).await?,
                 ));
                 let (ed_pk, ed_sk) = derive_ed(seed.clone()).await?;
-                let (x_pk, x_sk) = derive_x(seed).await?;
+                let (x_pk, x_sk) = derive_x(seed.clone()).await?;
 
                 if ed_pk != seed_info.ed25519_pub_key {
                     return Err(
@@ -1128,11 +1144,13 @@ pub(crate) fn priv_req_secret_box_xsalsa_by_tag<'a>(
         let (full_entry, _) =
             priv_get_full_entry_by_tag(inner, req.tag.clone()).await?;
 
-        let mut nonce = [0; sodoken::secretbox::XSALSA_NONCEBYTES];
-        sodoken::random::randombytes_buf(&mut nonce)?;
+        let msg_id = req.msg_id.clone();
 
-        let cipher = if let Some(seed) = full_entry.seed {
-            tokio::task::spawn_blocking(move || {
+        let (nonce, cipher) = if let Some(seed) = full_entry.seed {
+            tokio::task::spawn_blocking(move || -> LairResult<_> {
+                let mut nonce = [0; sodoken::secretbox::XSALSA_NONCEBYTES];
+                sodoken::random::randombytes_buf(&mut nonce)?;
+
                 let mut cipher = vec![
                     0;
                     req.data.len()
@@ -1145,7 +1163,7 @@ pub(crate) fn priv_req_secret_box_xsalsa_by_tag<'a>(
                     &seed.lock().lock(),
                 )?;
 
-                Ok(cipher)
+                Ok((nonce, cipher))
             })
             .await
             .map_err(OneErr::new)??
@@ -1155,7 +1173,7 @@ pub(crate) fn priv_req_secret_box_xsalsa_by_tag<'a>(
 
         send.send(
             LairApiResSecretBoxXSalsaByTag {
-                msg_id: req.msg_id,
+                msg_id,
                 nonce,
                 cipher: cipher.into(),
             }
@@ -1185,8 +1203,11 @@ pub(crate) fn priv_req_secret_box_xsalsa_open_by_tag<'a>(
         if req.cipher.len() < sodoken::secretbox::XSALSA_MACBYTES {
             return Err("InvalidCipherLength".into());
         }
+
+        let msg_id = req.msg_id.clone();
+
         let message = if let Some(seed) = full_entry.seed {
-            tokio::task::spawn_blocking(move || {
+            tokio::task::spawn_blocking(move || -> LairResult<_> {
                 let mut message = vec![
                     0;
                     req.cipher.len()
@@ -1209,7 +1230,7 @@ pub(crate) fn priv_req_secret_box_xsalsa_open_by_tag<'a>(
 
         send.send(
             LairApiResSecretBoxXSalsaOpenByTag {
-                msg_id: req.msg_id,
+                msg_id,
                 message: message.into(),
             }
             .into_api_enum(),

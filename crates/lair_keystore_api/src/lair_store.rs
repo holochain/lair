@@ -3,7 +3,6 @@
 use crate::*;
 use futures::future::BoxFuture;
 use parking_lot::Mutex;
-use std::convert::TryInto;
 use std::future::Future;
 use std::sync::Arc;
 
@@ -258,7 +257,7 @@ impl LairStore {
             >::new()?;
             sodoken::sign::seed_keypair(
                 &mut ed_pk,
-                &mut *ed_sk.lock(),
+                &mut ed_sk.lock(),
                 &seed.lock(),
             )?;
 
@@ -269,7 +268,7 @@ impl LairStore {
             >::new()?;
             sodoken::crypto_box::xsalsa_seed_keypair(
                 &mut x_pk,
-                &mut *x_sk.lock(),
+                &mut x_sk.lock(),
                 &seed.lock(),
             )?;
 

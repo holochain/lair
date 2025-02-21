@@ -5,6 +5,7 @@ use futures::future::{BoxFuture, FutureExt};
 use futures::stream::{BoxStream, Stream, StreamExt};
 use one_err::*;
 use parking_lot::Mutex;
+use std::convert::TryInto;
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
 
@@ -136,54 +137,66 @@ where
     R: 'static + tokio::io::AsyncRead + Send + Unpin,
 {
     async move {
-        use sodoken::kx;
-        use sodoken::secretbox as cbox;
-
         // box these up into trait objects so we can easily refer to their types.
         let mut send: PrivRawSend = Box::new(send);
         let mut recv: PrivRawRecv = Box::new(recv);
 
         // read the sealed initiator message
-        let mut cipher: [u8; 64 + cbox::SEALBYTES] = [0; 64 + cbox::SEALBYTES];
+        let mut cipher = [0; 64 + sodoken::crypto_box::XSALSA_SEALBYTES];
         recv.read_exact(&mut cipher).await?;
-        let cipher = sodoken::BufReadSized::from(cipher);
-        let msg = <sodoken::BufWriteSized<64>>::new_no_lock();
-        cbox::seal_open(msg.clone(), cipher, srv_id_pub_key, srv_id_sec_key)
-            .await?;
-        let msg = msg.try_unwrap_sized().unwrap();
+        let mut msg = [0; 64];
+        sodoken::crypto_box::xsalsa_seal_open(
+            &mut msg,
+            &cipher,
+            &srv_id_pub_key,
+            &srv_id_sec_key.lock().lock(),
+        )?;
 
-        let oth_cbox_pub = sodoken::BufReadSized::from(&msg[..32]);
-        let oth_kx_pub = sodoken::BufReadSized::from(&msg[32..]);
+        let oth_cbox_pub: &[u8; 32] = (&msg[..32]).try_into().unwrap();
+        let oth_kx_pub: &[u8; 32] = (&msg[32..]).try_into().unwrap();
 
         // generate an ephemeral kx keypair
-        let eph_kx_pub = sodoken::BufWriteSized::new_no_lock();
-        let eph_kx_sec = sodoken::BufWriteSized::new_mem_locked()?;
-        kx::keypair(eph_kx_pub.clone(), eph_kx_sec.clone())?;
+        let mut eph_kx_pub = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+        let mut eph_kx_sec = sodoken::SizedLockedArray::<
+            { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+        >::new()?;
+        sodoken::crypto_box::xsalsa_keypair(
+            &mut eph_kx_pub,
+            &mut eph_kx_sec.lock(),
+        )?;
 
         // seal our ephemeral kx pub key
-        let cipher =
-            <sodoken::BufWriteSized<{ 32 + cbox::SEALBYTES }>>::new_no_lock();
-        cbox::seal(cipher.clone(), eph_kx_pub.clone(), oth_cbox_pub).await?;
-        let cipher = cipher.try_unwrap_sized().unwrap();
+        let mut cipher = sodoken::SizedLockedArray::<
+            { 32 + sodoken::crypto_box::XSALSA_SEALBYTES },
+        >::new()?;
+        sodoken::crypto_box::xsalsa_seal(
+            &mut *cipher.lock(),
+            &eph_kx_pub,
+            oth_cbox_pub,
+        )?;
 
         // write the sealed response
-        send.write_all(&cipher).await?;
+        send.write_all(&*cipher.lock()).await?;
 
         // prepare our transport secrets
-        let rx = sodoken::BufWriteSized::new_mem_locked()?;
-        let tx = sodoken::BufWriteSized::new_mem_locked()?;
+        let mut rx = sodoken::SizedLockedArray::<
+            { sodoken::kx::SESSIONKEYBYTES },
+        >::new()?;
+        let mut tx = sodoken::SizedLockedArray::<
+            { sodoken::kx::SESSIONKEYBYTES },
+        >::new()?;
 
         // derive our secretstream keys
         sodoken::kx::client_session_keys(
-            rx.clone(),
-            tx.clone(),
-            eph_kx_pub,
-            eph_kx_sec,
+            &mut rx.lock(),
+            &mut tx.lock(),
+            &eph_kx_pub,
+            &eph_kx_sec.lock(),
             oth_kx_pub,
         )?;
 
-        let rx = rx.to_read_sized();
-        let tx = tx.to_read_sized();
+        let rx = Arc::new(Mutex::new(rx));
+        let tx = Arc::new(Mutex::new(tx));
 
         // perform a secretstream init handshake with the remote.
         let (enc, dec) =
@@ -219,64 +232,78 @@ where
     R: 'static + tokio::io::AsyncRead + Send + Unpin,
 {
     async move {
-        use sodoken::crypto_box::curve25519xchacha20poly1305 as cbox;
-        use sodoken::kx;
-
         // box these up into trait objects so we can easily refer to their types.
         let mut send: PrivRawSend = Box::new(send);
         let mut recv: PrivRawRecv = Box::new(recv);
 
         // generate an ephemeral cbox keypair
-        let eph_cbox_pub = sodoken::BufWriteSized::new_no_lock();
-        let eph_cbox_sec = sodoken::BufWriteSized::new_mem_locked()?;
-        cbox::keypair(eph_cbox_pub.clone(), eph_cbox_sec.clone()).await?;
+        let mut eph_cbox_pub = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+        let mut eph_cbox_sec = sodoken::SizedLockedArray::<
+            { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+        >::new()?;
+        // TODO Should be a crypto_kx_keypair?
+        sodoken::crypto_box::xsalsa_keypair(
+            &mut eph_cbox_pub,
+            &mut eph_cbox_sec.lock(),
+        )?;
 
         // generate an ephemeral kx keypair
-        let eph_kx_pub = sodoken::BufWriteSized::new_no_lock();
-        let eph_kx_sec = sodoken::BufWriteSized::new_mem_locked()?;
-        kx::keypair(eph_kx_pub.clone(), eph_kx_sec.clone())?;
+        let mut eph_kx_pub = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+        let mut eph_kx_sec = sodoken::SizedLockedArray::<
+            { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+        >::new()?;
+        sodoken::crypto_box::xsalsa_keypair(
+            &mut eph_kx_pub,
+            &mut eph_kx_sec.lock(),
+        )?;
 
         // sealed initiator message
         let mut message: [u8; 64] = [0; 64];
-        message[..32].copy_from_slice(&eph_cbox_pub.read_lock());
-        message[32..].copy_from_slice(&eph_kx_pub.read_lock());
-        let message = sodoken::BufReadSized::from(message);
-        let cipher =
-            <sodoken::BufWriteSized<{ 64 + cbox::SEALBYTES }>>::new_no_lock();
-        cbox::seal(cipher.clone(), message, srv_id_pub_key).await?;
-        let cipher = cipher.try_unwrap_sized().unwrap();
+        message[..32].copy_from_slice(&eph_cbox_pub);
+        message[32..].copy_from_slice(&eph_kx_pub);
+        let mut cipher = sodoken::SizedLockedArray::<
+            { 64 + sodoken::crypto_box::XSALSA_SEALBYTES },
+        >::new()?;
+        sodoken::crypto_box::xsalsa_seal(
+            &mut *cipher.lock(),
+            &message,
+            &srv_id_pub_key,
+        )?;
 
         // write the sealed initiator
-        send.write_all(&cipher).await?;
+        send.write_all(&*cipher.lock()).await?;
 
         // read the sealed response ephemeral kx pub key
-        let mut cipher: [u8; 32 + cbox::SEALBYTES] = [0; 32 + cbox::SEALBYTES];
+        let mut cipher = [0; 32 + sodoken::crypto_box::XSALSA_SEALBYTES];
         recv.read_exact(&mut cipher).await?;
-        let cipher = sodoken::BufReadSized::from(cipher);
-        let oth_eph_kx_pub = sodoken::BufWriteSized::new_no_lock();
-        cbox::seal_open(
-            oth_eph_kx_pub.clone(),
-            cipher,
-            eph_cbox_pub,
-            eph_cbox_sec,
-        )
-        .await?;
+        // TODO kx size?
+        let mut oth_eph_kx_pub = [0; 32];
+        sodoken::crypto_box::xsalsa_seal_open(
+            &mut oth_eph_kx_pub,
+            &cipher,
+            &eph_cbox_pub,
+            &eph_cbox_sec.lock(),
+        )?;
 
         // prepare our transport secrets
-        let rx = sodoken::BufWriteSized::new_mem_locked()?;
-        let tx = sodoken::BufWriteSized::new_mem_locked()?;
+        let mut rx = sodoken::SizedLockedArray::<
+            { sodoken::kx::SESSIONKEYBYTES },
+        >::new()?;
+        let mut tx = sodoken::SizedLockedArray::<
+            { sodoken::kx::SESSIONKEYBYTES },
+        >::new()?;
 
         // derive our secretstream keys
         sodoken::kx::server_session_keys(
-            rx.clone(),
-            tx.clone(),
-            eph_kx_pub,
-            eph_kx_sec,
-            oth_eph_kx_pub,
+            &mut rx.lock(),
+            &mut tx.lock(),
+            &eph_kx_pub,
+            &eph_kx_sec.lock(),
+            &oth_eph_kx_pub,
         )?;
 
-        let rx = rx.to_read_sized();
-        let tx = tx.to_read_sized();
+        let rx = Arc::new(Mutex::new(rx));
+        let tx = Arc::new(Mutex::new(tx));
 
         // perform a secretstream init handshake with the remote.
         let (enc, dec) =
@@ -315,36 +342,39 @@ mod crypt;
 use crypt::*;
 
 mod inner;
+use crate::types::SharedSizedLockedArray;
 use inner::*;
 
 /// use secret keys to initialize secretstream encryption / decryption.
 fn priv_init_ss<'a>(
     send: &'a mut PrivRawSend,
-    tx: sodoken::BufReadSized<{ sodoken::secretstream::KEYBYTES }>,
+    tx: SharedSizedLockedArray<{ sodoken::secretstream::KEYBYTES }>,
     recv: &'a mut PrivRawRecv,
-    rx: sodoken::BufReadSized<{ sodoken::secretstream::KEYBYTES }>,
+    rx: SharedSizedLockedArray<{ sodoken::secretstream::KEYBYTES }>,
 ) -> impl Future<
     Output = LairResult<(
-        sodoken::secretstream::SecretStreamEncrypt,
-        sodoken::secretstream::SecretStreamDecrypt,
+        sodoken::secretstream::State,
+        sodoken::secretstream::State,
     )>,
 >
        + 'a
        + Send {
     async move {
         // for our sender, initialize encryption by generating / sending header.
-        let header = sodoken::BufWriteSized::new_no_lock();
-        let enc = sodoken::secretstream::SecretStreamEncrypt::new(
-            tx,
-            header.clone(),
+        let mut header = [0; sodoken::secretstream::HEADERBYTES];
+        let mut enc = sodoken::secretstream::State::default();
+        sodoken::secretstream::init_push(
+            &mut enc,
+            &mut header,
+            &tx.lock().lock(),
         )?;
-        // clone to keep this future 'Send'
-        let mut header2 = *header.read_lock_sized();
-        send.write_all(&header2).await?;
+
+        send.write_all(&header).await?;
 
         // for our receiver, parse the incoming header
-        recv.read_exact(&mut header2).await?;
-        let dec = sodoken::secretstream::SecretStreamDecrypt::new(rx, header2)?;
+        recv.read_exact(&mut header).await?;
+        let mut dec = sodoken::secretstream::State::default();
+        sodoken::secretstream::init_pull(&mut dec, &header, &rx.lock().lock())?;
 
         Ok((enc, dec))
     }
@@ -356,14 +386,18 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_sodium_secretstream() {
-        use sodoken::crypto_box::curve25519xchacha20poly1305::*;
-        let srv_id_pub = sodoken::BufWriteSized::new_no_lock();
-        let srv_id_sec = sodoken::BufWriteSized::new_mem_locked().unwrap();
-        keypair(srv_id_pub.clone(), srv_id_sec.clone())
-            .await
-            .unwrap();
-        let srv_id_pub = srv_id_pub.to_read_sized();
-        let srv_id_sec = srv_id_sec.to_read_sized();
+        let mut srv_id_pub = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+        let mut srv_id_sec = sodoken::SizedLockedArray::<
+            { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+        >::new()
+        .unwrap();
+        sodoken::crypto_box::xsalsa_keypair(
+            &mut srv_id_pub,
+            &mut srv_id_sec.lock(),
+        )
+        .unwrap();
+        let srv_id_pub = Arc::new(srv_id_pub);
+        let srv_id_sec = Arc::new(Mutex::new(srv_id_sec));
 
         // make a memory channel for testing.
         let (alice, bob) = tokio::io::duplex(4096);
@@ -373,7 +407,7 @@ mod tests {
         let alice_fut = new_s3_client::<usize, _, _>(
             alice_send,
             alice_recv,
-            srv_id_pub.clone(),
+            srv_id_pub.clone().into(),
         );
 
         // split bob up and get a new s3 pair for his side.
@@ -387,13 +421,13 @@ mod tests {
             futures::future::try_join(alice_fut, bob_fut).await.unwrap();
 
         assert_eq!(
-            &*alice_send.get_enc_ctx_key().read_lock(),
-            &*bob_send.get_dec_ctx_key().read_lock(),
+            &*alice_send.get_enc_ctx_key().lock().lock(),
+            &*bob_send.get_dec_ctx_key().lock().lock(),
         );
 
         assert_eq!(
-            &*alice_send.get_dec_ctx_key().read_lock(),
-            &*bob_send.get_enc_ctx_key().read_lock(),
+            &*alice_send.get_dec_ctx_key().lock().lock(),
+            &*bob_send.get_enc_ctx_key().lock().lock(),
         );
 
         // try out sending

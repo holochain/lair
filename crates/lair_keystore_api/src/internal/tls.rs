@@ -1,11 +1,10 @@
 //! Utilities for generating / managing TLS certificates and keypairs.
 
+use crate::dependencies::one_err::OneErr;
 use crate::*;
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
-use std::convert::TryInto;
 use std::sync::Arc;
-use crate::dependencies::one_err::OneErr;
 
 /// The well-known CA keypair in plaintext pem format.
 /// Some TLS clients require CA roots to validate client-side certificates.
@@ -114,7 +113,8 @@ pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
         let root_cert = &**WK_CA_RCGEN_CERT;
         let cert_der: Arc<[u8]> = cert
             .serialize_der_with_signer(root_cert)
-            .map_err(one_err::OneErr::new)?.into();
+            .map_err(one_err::OneErr::new)?
+            .into();
 
         LairResult::Ok((sni, priv_key, cert_der))
     })
@@ -123,23 +123,20 @@ pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
 
     let digest = tokio::task::spawn_blocking({
         let cert = cert.clone();
-        move || -> LairResult<[u8; 32]> {
+        move || -> LairResult<_> {
             let mut digest = [0; 32];
-            sodoken::blake2b::blake2b_hash(
-                &mut digest,
-                &cert,
-                None,
-            )?;
+            sodoken::blake2b::blake2b_hash(&mut digest, &cert, None)?;
 
             Ok(digest)
         }
     })
-    .await.map_err(OneErr::new)??;
+    .await
+    .map_err(OneErr::new)??;
 
     Ok(TlsCertGenResult {
         sni: sni.into(),
         priv_key: Arc::new(Mutex::new(priv_key)),
-        cert: cert.into(),
+        cert,
         digest: digest.into(),
     })
 }

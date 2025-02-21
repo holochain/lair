@@ -53,7 +53,7 @@ impl Srv {
                 Arc::new(Mutex::new(sodoken::SizedLockedArray::<64>::new()?));
             tokio::task::spawn_blocking({
                 let pw_hash = pw_hash.clone();
-                move || -> LairResult<()> {
+                move || -> LairResult<_> {
                     sodoken::blake2b::blake2b_hash(
                         &mut *pw_hash.lock().lock(),
                         &passphrase.lock().lock(),
@@ -78,21 +78,23 @@ impl Srv {
 
             // calculate pre_secret from argon2id passphrase hash
 
-            let mut pre_secret = tokio::task::spawn_blocking(move || {
-                let mut pre_secret = sodoken::SizedLockedArray::<32>::new()?;
+            let mut pre_secret =
+                tokio::task::spawn_blocking(move || -> LairResult<_> {
+                    let mut pre_secret =
+                        sodoken::SizedLockedArray::<32>::new()?;
 
-                sodoken::argon2::blocking_argon2id(
-                    &mut *pre_secret.lock(),
-                    pw_hash.lock().lock().as_slice(),
-                    &salt.lock(),
-                    ops_limit,
-                    mem_limit,
-                )?;
+                    sodoken::argon2::blocking_argon2id(
+                        &mut *pre_secret.lock(),
+                        pw_hash.lock().lock().as_slice(),
+                        &salt.lock(),
+                        ops_limit,
+                        mem_limit,
+                    )?;
 
-                Ok(pre_secret)
-            })
-            .await
-            .map_err(OneErr::new)??;
+                    Ok(pre_secret)
+                })
+                .await
+                .map_err(OneErr::new)??;
 
             // derive ctx (db) decryption secret
             let mut ctx_secret = sodoken::SizedLockedArray::<32>::new()?;
@@ -125,19 +127,23 @@ impl Srv {
                 .await?;
 
             // derive the signature keypair from the signature seed
-            let (id_pk, id_sk) = tokio::task::spawn_blocking(move || -> LairResult<([u8; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES], sodoken::SizedLockedArray<{ sodoken::crypto_box::XSALSA_SECRETKEYBYTES }>)> {
-                let mut id_pk =
-                    [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
-                let mut id_sk = sodoken::SizedLockedArray::<{sodoken::crypto_box::XSALSA_SECRETKEYBYTES}>::new()?;
-                sodoken::crypto_box::xsalsa_seed_keypair(
-                    &mut id_pk,
-                    &mut *id_sk.lock(),
-                    &id_seed.lock(),
-                )?;
+            let (id_pk, id_sk) =
+                tokio::task::spawn_blocking(move || -> LairResult<_> {
+                    let mut id_pk =
+                        [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+                    let mut id_sk = sodoken::SizedLockedArray::<
+                        { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+                    >::new()?;
+                    sodoken::crypto_box::xsalsa_seed_keypair(
+                        &mut id_pk,
+                        &mut id_sk.lock(),
+                        &id_seed.lock(),
+                    )?;
 
-                Ok((id_pk, id_sk))
-            })
-            .await.map_err(OneErr::new)??;
+                    Ok((id_pk, id_sk))
+                })
+                .await
+                .map_err(OneErr::new)??;
 
             // generate a lair_store instance using the database key
             let store = store_factory.connect_to_store(context_key).await?;
@@ -224,37 +230,44 @@ pub(crate) fn priv_srv_accept(
             let enc_ctx_key = Arc::new(Mutex::new(enc_ctx_key));
             let dec_ctx_key = Arc::new(Mutex::new(dec_ctx_key));
             let unlocked = &unlocked;
-            recv.for_each_concurrent(4096, move |incoming| async move {
-                let incoming = match incoming {
-                    Err(e) => {
-                        tracing::warn!("incoming channel error: {:?}", e);
-                        return;
-                    }
-                    Ok(incoming) => incoming,
-                };
+            recv.for_each_concurrent(4096, move |incoming| {
+                let enc_ctx_key = enc_ctx_key.clone();
+                let dec_ctx_key = dec_ctx_key.clone();
+                async move {
+                    let incoming = match incoming {
+                        Err(e) => {
+                            tracing::warn!("incoming channel error: {:?}", e);
+                            return;
+                        }
+                        Ok(incoming) => incoming,
+                    };
 
-                let msg_id = incoming.msg_id();
+                    let msg_id = incoming.msg_id();
 
-                // dispatch the message to the appropriate api handler
-                if let Err(e) = priv_dispatch_incoming(
-                    inner,
-                    send,
-                    enc_ctx_key,
-                    dec_ctx_key,
-                    unlocked,
-                    incoming,
-                )
-                .await
-                {
-                    // if we get an error - send the error back to the client
-                    if let Err(e) = send
-                        .send(LairApiEnum::ResError(LairApiResError {
-                            msg_id,
-                            error: e,
-                        }))
-                        .await
+                    // dispatch the message to the appropriate api handler
+                    if let Err(e) = priv_dispatch_incoming(
+                        inner,
+                        send,
+                        enc_ctx_key,
+                        dec_ctx_key,
+                        unlocked,
+                        incoming,
+                    )
+                    .await
                     {
-                        tracing::warn!("error sending error response: {:?}", e);
+                        // if we get an error - send the error back to the client
+                        if let Err(e) = send
+                            .send(LairApiEnum::ResError(LairApiResError {
+                                msg_id,
+                                error: e,
+                            }))
+                            .await
+                        {
+                            tracing::warn!(
+                                "error sending error response: {:?}",
+                                e
+                            );
+                        }
                     }
                 }
             })
