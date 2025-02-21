@@ -9,14 +9,10 @@ pub(crate) struct PrivSendInner {
     send: Option<PrivCryptSend>,
 
     /// Our transmit encryption key
-    tx: Arc<
-        Mutex<sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>>,
-    >,
+    tx: SharedSizedLockedArray<{ sodoken::secretstream::KEYBYTES }>,
 
     /// Our receive decryption key
-    rx: Arc<
-        Mutex<sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>>,
-    >,
+    rx: SharedSizedLockedArray<{ sodoken::secretstream::KEYBYTES }>,
 }
 
 /// Typed sender.
@@ -83,17 +79,13 @@ where
 
     fn get_enc_ctx_key(
         &self,
-    ) -> Arc<
-        Mutex<sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>>,
-    > {
+    ) -> SharedSizedLockedArray<{ sodoken::secretstream::KEYBYTES }> {
         self.0.lock().tx.clone()
     }
 
     fn get_dec_ctx_key(
         &self,
-    ) -> Arc<
-        Mutex<sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>>,
-    > {
+    ) -> SharedSizedLockedArray<{ sodoken::secretstream::KEYBYTES }> {
         self.0.lock().rx.clone()
     }
 
