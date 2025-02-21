@@ -1,3 +1,5 @@
+//! Common types used in the Lair keystore API.
+
 use crate::dependencies::sodoken;
 use parking_lot::Mutex;
 use std::sync::Arc;

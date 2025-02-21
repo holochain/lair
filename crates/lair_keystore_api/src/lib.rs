@@ -122,7 +122,7 @@ pub mod lair_server;
 pub mod lair_store;
 pub mod mem_store;
 pub mod sodium_secretstream;
-mod types;
+pub mod types;
 
 /// Re-export module of types generally used with lair.
 pub mod prelude {

@@ -1,5 +1,5 @@
 use super::*;
-use crate::dependencies::one_err::OneErr;
+use one_err::OneErr;
 use parking_lot::Mutex;
 
 /// A [`LairEntry`], including some precomputed values if the entry corresponds to a non-deep-locked seed.
@@ -49,28 +49,16 @@ impl Srv {
     ) -> impl Future<Output = LairResult<Self>> + 'static + Send {
         async move {
             // pre-hash the passphrase
-            let pw_hash =
-                Arc::new(Mutex::new(sodoken::SizedLockedArray::<64>::new()?));
-            tokio::task::spawn_blocking({
-                let pw_hash = pw_hash.clone();
-                move || -> LairResult<_> {
-                    sodoken::blake2b::blake2b_hash(
-                        &mut *pw_hash.lock().lock(),
-                        &passphrase.lock().lock(),
-                        None,
-                    )?;
-
-                    Ok(())
-                }
-            })
-            .await
-            .map_err(OneErr::new)??;
+            let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
+            sodoken::blake2b::blake2b_hash(
+                &mut *pw_hash.lock(),
+                &passphrase.lock().lock(),
+                None,
+            )?;
+            let pw_hash = Arc::new(Mutex::new(pw_hash));
 
             // read salt from config
-            let mut salt = sodoken::SizedLockedArray::<16>::new()?;
-            salt.lock().copy_from_slice(
-                config.runtime_secrets_salt.cloned_inner().as_ref(),
-            );
+            let salt = config.runtime_secrets_salt.cloned_inner();
 
             // read limits from config
             let ops_limit = config.runtime_secrets_ops_limit;
@@ -86,7 +74,7 @@ impl Srv {
                     sodoken::argon2::blocking_argon2id(
                         &mut *pre_secret.lock(),
                         pw_hash.lock().lock().as_slice(),
-                        &salt.lock(),
+                        &salt,
                         ops_limit,
                         mem_limit,
                     )?;
@@ -106,13 +94,20 @@ impl Srv {
             )?;
 
             // derive signature decryption secret
-            let mut id_secret = sodoken::SizedLockedArray::<32>::new()?;
-            sodoken::kdf::derive_from_key(
-                &mut *id_secret.lock(),
-                142,
-                b"IdnSecKy",
-                &pre_secret.lock(),
-            )?;
+            let id_secret =
+                tokio::task::spawn_blocking(move || -> LairResult<_> {
+                    let mut id_secret = sodoken::SizedLockedArray::<32>::new()?;
+                    sodoken::kdf::derive_from_key(
+                        &mut *id_secret.lock(),
+                        142,
+                        b"IdnSecKy",
+                        &pre_secret.lock(),
+                    )?;
+
+                    Ok(id_secret)
+                })
+                .await
+                .map_err(OneErr::new)??;
 
             // decrypt the context (database) key
             let context_key = config
@@ -201,22 +196,38 @@ pub(crate) fn priv_srv_accept(
             .await?;
 
         // derive our encryption (to client) secret
-        let mut enc_ctx_key = sodoken::SizedLockedArray::<32>::new()?;
-        sodoken::kdf::derive_from_key(
-            &mut *enc_ctx_key.lock(),
-            42,
-            b"ToCliCxK",
-            &send.get_enc_ctx_key().lock().lock(),
-        )?;
+        let send_enc_ctx_key = send.get_enc_ctx_key();
+        let enc_ctx_key =
+            tokio::task::spawn_blocking(move || -> LairResult<_> {
+                let mut enc_ctx_key = sodoken::SizedLockedArray::<32>::new()?;
+                sodoken::kdf::derive_from_key(
+                    &mut *enc_ctx_key.lock(),
+                    42,
+                    b"ToCliCxK",
+                    &send_enc_ctx_key.lock().lock(),
+                )?;
+
+                Ok(enc_ctx_key)
+            })
+            .await
+            .map_err(OneErr::new)??;
 
         // derive our decryption (from client) secret
-        let mut dec_ctx_key = sodoken::SizedLockedArray::<32>::new()?;
-        sodoken::kdf::derive_from_key(
-            &mut *dec_ctx_key.lock(),
-            142,
-            b"ToSrvCxK",
-            &send.get_dec_ctx_key().lock().lock(),
-        )?;
+        let send_dec_ctx_key = send.get_dec_ctx_key();
+        let dec_ctx_key =
+            tokio::task::spawn_blocking(move || -> LairResult<_> {
+                let mut dec_ctx_key = sodoken::SizedLockedArray::<32>::new()?;
+                sodoken::kdf::derive_from_key(
+                    &mut *dec_ctx_key.lock(),
+                    142,
+                    b"ToSrvCxK",
+                    &send_dec_ctx_key.lock().lock(),
+                )?;
+
+                Ok(dec_ctx_key)
+            })
+            .await
+            .map_err(OneErr::new)??;
 
         // even if our core inner state is unlocked, we still need
         // every connection to go through the process, so this is

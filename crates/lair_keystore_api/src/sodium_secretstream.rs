@@ -31,20 +31,12 @@ pub mod traits {
         /// Get outgoing encryption context key.
         fn get_enc_ctx_key(
             &self,
-        ) -> Arc<
-            Mutex<
-                sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>,
-            >,
-        >;
+        ) -> SharedSizedLockedArray<{ sodoken::secretstream::KEYBYTES }>;
 
         /// Get incoming decryption context key.
         fn get_dec_ctx_key(
             &self,
-        ) -> Arc<
-            Mutex<
-                sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>,
-            >,
-        >;
+        ) -> SharedSizedLockedArray<{ sodoken::secretstream::KEYBYTES }>;
 
         /// Shutdown the channel.
         fn shutdown(&self) -> BoxFuture<'static, LairResult<()>>;
@@ -84,18 +76,14 @@ where
     /// Get outgoing encryption context key.
     pub fn get_enc_ctx_key(
         &self,
-    ) -> Arc<
-        Mutex<sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>>,
-    > {
+    ) -> SharedSizedLockedArray<{ sodoken::secretstream::KEYBYTES }> {
         AsS3Sender::get_enc_ctx_key(&*self.0)
     }
 
     /// Get incoming decryption context key.
     pub fn get_dec_ctx_key(
         &self,
-    ) -> Arc<
-        Mutex<sodoken::SizedLockedArray<{ sodoken::secretstream::KEYBYTES }>>,
-    > {
+    ) -> SharedSizedLockedArray<{ sodoken::secretstream::KEYBYTES }> {
         AsS3Sender::get_dec_ctx_key(&*self.0)
     }
 

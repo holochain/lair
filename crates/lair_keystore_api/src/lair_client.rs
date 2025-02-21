@@ -1,11 +1,11 @@
 //! Items for connecting and interacting with a lair keystore as a client.
 
-use crate::dependencies::one_err::OneErr;
 use crate::lair_api::api_traits::*;
 use crate::*;
 use client_traits::*;
 use futures::future::{BoxFuture, FutureExt};
 use futures::stream::StreamExt;
+use one_err::OneErr;
 use parking_lot::{Mutex, RwLock};
 use std::collections::HashMap;
 use std::future::Future;
@@ -567,18 +567,12 @@ async fn encrypt_passphrase(
     key: SharedSizedLockedArray<32>,
 ) -> LairResult<DeepLockPassphraseBytes> {
     // pre-hash the passphrase
-    let pw_hash = tokio::task::spawn_blocking(move || -> LairResult<_> {
-        let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
-        sodoken::blake2b::blake2b_hash(
-            &mut *pw_hash.lock(),
-            &pass.lock().lock(),
-            None,
-        )?;
-
-        Ok(pw_hash)
-    })
-    .await
-    .map_err(OneErr::new)??;
+    let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
+    sodoken::blake2b::blake2b_hash(
+        &mut *pw_hash.lock(),
+        &pass.lock().lock(),
+        None,
+    )?;
 
     let pw_hash = Arc::new(Mutex::new(pw_hash));
 

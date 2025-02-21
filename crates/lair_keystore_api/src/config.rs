@@ -1,8 +1,8 @@
 //! Lair server configuration types. You only need this module if you are
 //! configuring a standalone or in-process lair keystore server.
 
-use crate::dependencies::one_err::OneErr;
 use crate::*;
+use one_err::OneErr;
 use parking_lot::Mutex;
 use std::future::Future;
 use std::sync::Arc;

@@ -1,9 +1,9 @@
 //! Helper types for dealing with serialization.
 
-use crate::dependencies::one_err::OneErr;
 use crate::types::{SharedLockedArray, SharedSizedLockedArray};
 use crate::*;
 use base64::Engine;
+use one_err::OneErr;
 use std::convert::TryInto;
 use std::sync::Arc;
 
@@ -316,32 +316,29 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
         &self,
         key: SharedSizedLockedArray<32>,
     ) -> LairResult<sodoken::SizedLockedArray<M>> {
-        let mut header = sodoken::SizedLockedArray::<24>::new()?;
-        header
-            .lock()
-            .copy_from_slice(self.0.cloned_inner().as_slice());
+        let header = self.0.clone();
+        let cipher = self.1.clone();
 
-        let mut cipher = sodoken::SizedLockedArray::<C>::new()?;
-        cipher
-            .lock()
-            .copy_from_slice(self.1.cloned_inner().as_slice());
+        tokio::task::spawn_blocking(move || {
+            let mut state = sodoken::secretstream::State::default();
+            sodoken::secretstream::init_pull(
+                &mut state,
+                &header,
+                &key.lock().lock(),
+            )?;
 
-        let mut state = sodoken::secretstream::State::default();
-        sodoken::secretstream::init_pull(
-            &mut state,
-            &header.lock(),
-            &key.lock().lock(),
-        )?;
+            let mut out = sodoken::SizedLockedArray::<M>::new()?;
+            sodoken::secretstream::pull(
+                &mut state,
+                &mut *out.lock(),
+                cipher.as_slice(),
+                None,
+            )?;
 
-        let mut out = sodoken::SizedLockedArray::<M>::new()?;
-        sodoken::secretstream::pull(
-            &mut state,
-            &mut *out.lock(),
-            &*cipher.lock(),
-            None,
-        )?;
-
-        Ok(out)
+            Ok(out)
+        })
+        .await
+        .map_err(OneErr::new)?
     }
 }
 

@@ -1,6 +1,6 @@
 use super::*;
-use crate::dependencies::one_err::OneErr;
 use crate::types::SharedSizedLockedArray;
+use one_err::OneErr;
 use parking_lot::Mutex;
 use std::convert::TryInto;
 
@@ -80,28 +80,45 @@ pub(crate) fn priv_req_unlock<'a>(
 
         // derive signature decryption secret
         let id_secret =
-            Arc::new(Mutex::new(sodoken::SizedLockedArray::<32>::new()?));
-        sodoken::kdf::derive_from_key(
-            &mut *id_secret.lock().lock(),
-            142,
-            b"IdnSecKy",
-            &pre_secret.lock(),
-        )?;
+            tokio::task::spawn_blocking(move || -> LairResult<_> {
+                let mut id_secret = sodoken::SizedLockedArray::<32>::new()?;
+
+                sodoken::kdf::derive_from_key(
+                    &mut *id_secret.lock(),
+                    142,
+                    b"IdnSecKy",
+                    &pre_secret.lock(),
+                )?;
+
+                Ok(id_secret)
+            })
+            .await
+            .map_err(OneErr::new)??;
+        let id_secret = Arc::new(Mutex::new(id_secret));
 
         // decrypt the signature seed
         let mut id_seed =
             config.runtime_secrets_id_seed.decrypt(id_secret).await?;
 
         // derive the signature keypair from the signature seed
-        let mut d_id_pk = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
-        let mut d_id_sk = sodoken::SizedLockedArray::<
-            { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
-        >::new()?;
-        sodoken::crypto_box::xsalsa_seed_keypair(
-            &mut d_id_pk,
-            &mut d_id_sk.lock(),
-            &id_seed.lock(),
-        )?;
+        let (d_id_pk, _) =
+            tokio::task::spawn_blocking(move || -> LairResult<_> {
+                let mut d_id_pk =
+                    [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+                let mut d_id_sk = sodoken::SizedLockedArray::<
+                    { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+                >::new()?;
+
+                sodoken::crypto_box::xsalsa_seed_keypair(
+                    &mut d_id_pk,
+                    &mut d_id_sk.lock(),
+                    &id_seed.lock(),
+                )?;
+
+                Ok((d_id_pk, d_id_sk))
+            })
+            .await
+            .map_err(OneErr::new)??;
 
         if *id_pk.as_slice() != *d_id_pk.as_slice() {
             return Err("InvalidPassphrase".into());
@@ -283,18 +300,25 @@ pub(crate) fn priv_req_derive_seed<'a>(
             (LairEntryInner::DeepLockedSeed { .. }, None) => return Err("A `src_passphrase` is needed to unlock the source seed which is deep-locked.".into()),
         };
 
-        let mut parent = src_seed;
+        let derivation_path = req.derivation_path.clone();
+        let parent = tokio::task::spawn_blocking(move || -> LairResult<_> {
+            let mut parent = src_seed;
 
-        for index in req.derivation_path.iter() {
-            let mut derived = sodoken::SizedLockedArray::<32>::new()?;
-            sodoken::kdf::derive_from_key(
-                &mut *derived.lock(),
-                *index as u64,
-                b"SeedBndl",
-                &parent.lock(),
-            )?;
-            parent = derived;
-        }
+            for index in derivation_path.iter() {
+                let mut derived = sodoken::SizedLockedArray::<32>::new()?;
+                sodoken::kdf::derive_from_key(
+                    &mut *derived.lock(),
+                    *index as u64,
+                    b"SeedBndl",
+                    &parent.lock(),
+                )?;
+                parent = derived;
+            }
+
+            Ok(parent)
+        })
+        .await
+        .map_err(OneErr::new)??;
 
         let dst_seed = Arc::new(Mutex::new(parent));
         let dst_dlp = req.dst_deep_lock_passphrase;

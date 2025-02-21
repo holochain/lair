@@ -1,8 +1,8 @@
 //! Utilities for generating / managing TLS certificates and keypairs.
 
-use crate::dependencies::one_err::OneErr;
 use crate::*;
 use once_cell::sync::Lazy;
+use one_err::OneErr;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -103,8 +103,8 @@ pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
             format!("Lair Pseudo-Self-Signed Cert {}", &sni),
         );
 
-        let cert = rcgen::Certificate::from_params(params)
-            .map_err(one_err::OneErr::new)?;
+        let cert =
+            rcgen::Certificate::from_params(params).map_err(OneErr::new)?;
 
         let cert_pk = zeroize::Zeroizing::new(cert.serialize_private_key_der());
         let mut priv_key = sodoken::LockedArray::new(cert_pk.len())?;
@@ -113,25 +113,16 @@ pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
         let root_cert = &**WK_CA_RCGEN_CERT;
         let cert_der: Arc<[u8]> = cert
             .serialize_der_with_signer(root_cert)
-            .map_err(one_err::OneErr::new)?
+            .map_err(OneErr::new)?
             .into();
 
         LairResult::Ok((sni, priv_key, cert_der))
     })
     .await
-    .map_err(one_err::OneErr::new)??;
-
-    let digest = tokio::task::spawn_blocking({
-        let cert = cert.clone();
-        move || -> LairResult<_> {
-            let mut digest = [0; 32];
-            sodoken::blake2b::blake2b_hash(&mut digest, &cert, None)?;
-
-            Ok(digest)
-        }
-    })
-    .await
     .map_err(OneErr::new)??;
+
+    let mut digest = [0; 32];
+    sodoken::blake2b::blake2b_hash(&mut digest, &cert, None)?;
 
     Ok(TlsCertGenResult {
         sni: sni.into(),
