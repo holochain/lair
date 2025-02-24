@@ -892,8 +892,6 @@ pub(crate) async fn derive_x(
         { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
     >::new()?;
 
-    // we're using the chacha sodium keypair api here, but the
-    // keypairs are valid also for salsa.
     sodoken::crypto_box::xsalsa_seed_keypair(
         &mut x_pk,
         &mut x_sk.lock(),

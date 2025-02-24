@@ -38,22 +38,19 @@ impl PrivCryptSend {
             let len = data.len() + sodoken::secretstream::ABYTES;
 
             // initialize the cipher buffer
-            let mut cipher = sodoken::LockedArray::new(len)?;
+            let mut cipher = vec![0; len];
 
             // encrypt the message
             sodoken::secretstream::push(
                 &mut self.enc,
-                &mut cipher.lock(),
+                cipher.as_mut_slice(),
                 data.as_ref(),
                 None,
                 Tag::Message,
             )?;
 
-            // extract the raw cipher data
-            let cipher = (*cipher.lock()).into();
-
             // send the cipher to the remote
-            self.send.send(cipher).await?;
+            self.send.send(cipher.into()).await?;
 
             Ok(())
         }
@@ -83,21 +80,17 @@ impl PrivCryptRecv {
                     None => return Ok(None),
                     Some(cipher) => cipher?,
                 };
-                let mut cipher = sodoken::LockedArray::from(cipher);
-                let mut msg = sodoken::LockedArray::new(
-                    cipher.lock().len() - sodoken::secretstream::ABYTES,
-                )?;
 
+                let mut msg =
+                    vec![0; cipher.len() - sodoken::secretstream::ABYTES];
                 sodoken::secretstream::pull(
                     &mut dec,
-                    &mut msg.lock(),
-                    &cipher.lock(),
+                    msg.as_mut_slice(),
+                    &cipher,
                     None,
                 )?;
 
-                let out = Box::<[u8]>::from(&*msg.lock());
-
-                Ok(Some((out, (recv, dec))))
+                Ok(Some((msg.into(), (recv, dec))))
             },
         );
         Self(recv.boxed())

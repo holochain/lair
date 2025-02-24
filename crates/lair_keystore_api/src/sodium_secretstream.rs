@@ -154,17 +154,15 @@ where
         )?;
 
         // seal our ephemeral kx pub key
-        let mut cipher = sodoken::SizedLockedArray::<
-            { 32 + sodoken::crypto_box::XSALSA_SEALBYTES },
-        >::new()?;
+        let mut cipher = [0; 32 + sodoken::crypto_box::XSALSA_SEALBYTES];
         sodoken::crypto_box::xsalsa_seal(
-            &mut *cipher.lock(),
+            &mut cipher,
             &eph_kx_pub,
             &oth_cbox_pub,
         )?;
 
         // write the sealed response
-        send.write_all(&*cipher.lock()).await?;
+        send.write_all(&cipher).await?;
 
         // prepare our transport secrets
         let mut rx = sodoken::SizedLockedArray::<
@@ -249,20 +247,17 @@ where
         message[..32].copy_from_slice(&eph_cbox_pub);
         message[32..].copy_from_slice(&eph_kx_pub);
 
-        let mut cipher = sodoken::SizedLockedArray::<
-            { 64 + sodoken::crypto_box::XSALSA_SEALBYTES },
-        >::new()?;
+        let mut cipher = [0; 64 + sodoken::crypto_box::XSALSA_SEALBYTES];
         sodoken::crypto_box::xsalsa_seal(
-            &mut *cipher.lock(),
+            &mut cipher,
             &message,
             &srv_id_pub_key,
         )?;
 
         // write the sealed initiator
-        send.write_all(&*cipher.lock()).await?;
+        send.write_all(&cipher).await?;
 
         // read the sealed response ephemeral kx pub key
-        // Todo Blank cipher on unseal??
         let mut cipher = [0; 32 + sodoken::crypto_box::XSALSA_SEALBYTES];
         recv.read_exact(&mut cipher).await?;
 
