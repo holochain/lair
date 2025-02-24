@@ -190,41 +190,24 @@ impl LairServerConfigInner {
 
             // derive our context secret
             // this will be used to encrypt the context_key
-            let ctx_secret = tokio::task::spawn_blocking({
-                let pre_secret = pre_secret.clone();
-                move || -> LairResult<_> {
-                    let mut ctx_secret =
-                        sodoken::SizedLockedArray::<32>::new()?;
-                    sodoken::kdf::derive_from_key(
-                        &mut *ctx_secret.lock(),
-                        42,
-                        b"CtxSecKy",
-                        &pre_secret.lock().unwrap().lock(),
-                    )?;
-
-                    Ok(ctx_secret)
-                }
-            })
-            .await
-            .map_err(OneErr::new)??;
+            let mut ctx_secret = sodoken::SizedLockedArray::<32>::new()?;
+            sodoken::kdf::derive_from_key(
+                &mut *ctx_secret.lock(),
+                42,
+                b"CtxSecKy",
+                &pre_secret.lock().unwrap().lock(),
+            )?;
             let ctx_secret = Arc::new(Mutex::new(ctx_secret));
 
             // derive our signature secret
             // this will be used to encrypt the signature seed
-            let id_secret =
-                tokio::task::spawn_blocking(move || -> LairResult<_> {
-                    let mut id_secret = sodoken::SizedLockedArray::<32>::new()?;
-                    sodoken::kdf::derive_from_key(
-                        &mut *id_secret.lock(),
-                        142,
-                        b"IdnSecKy",
-                        &pre_secret.lock().unwrap().lock(),
-                    )?;
-
-                    Ok(id_secret)
-                })
-                .await
-                .map_err(OneErr::new)??;
+            let mut id_secret = sodoken::SizedLockedArray::<32>::new()?;
+            sodoken::kdf::derive_from_key(
+                &mut *id_secret.lock(),
+                142,
+                b"IdnSecKy",
+                &pre_secret.lock().unwrap().lock(),
+            )?;
             let id_secret = Arc::new(Mutex::new(id_secret));
 
             // the context key is used to encrypt our store_file

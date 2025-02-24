@@ -33,24 +33,15 @@ impl UnlockedSeedBundle {
         let seed = Arc::new(Mutex::new(seed));
 
         // generate the deterministic signature keypair represented by this seed
-        let (pk, sk) = tokio::task::spawn_blocking({
-            let seed = seed.clone();
-            move || -> Result<_, OneErr> {
-                let mut pk = [0; sodoken::sign::PUBLICKEYBYTES];
-                let mut sk = sodoken::SizedLockedArray::<
-                    { sodoken::sign::SECRETKEYBYTES },
-                >::new()?;
-                sodoken::sign::seed_keypair(
-                    &mut pk,
-                    &mut sk.lock(),
-                    &seed.lock().unwrap().lock(),
-                )?;
-
-                Ok((pk, sk))
-            }
-        })
-        .await
-        .map_err(OneErr::new)??;
+        let mut pk = [0; sodoken::sign::PUBLICKEYBYTES];
+        let mut sk = sodoken::SizedLockedArray::<
+            { sodoken::sign::SECRETKEYBYTES },
+        >::new()?;
+        sodoken::sign::seed_keypair(
+            &mut pk,
+            &mut sk.lock(),
+            &seed.lock().unwrap().lock(),
+        )?;
 
         // generate the full struct bundle with blank app_data
         Ok(Self {
@@ -88,20 +79,13 @@ impl UnlockedSeedBundle {
     ) -> impl Future<Output = Result<Self, OneErr>> + 'static + Send {
         let seed = self.seed.clone();
         async move {
-            let new_seed =
-                tokio::task::spawn_blocking(move || -> Result<_, OneErr> {
-                    let mut new_seed = sodoken::SizedLockedArray::new()?;
-                    sodoken::kdf::derive_from_key(
-                        new_seed.lock().as_mut_slice(),
-                        index as u64,
-                        KDF_CONTEXT,
-                        &seed.lock().unwrap().lock(),
-                    )?;
-
-                    Ok(new_seed)
-                })
-                .await
-                .map_err(OneErr::new)??;
+            let mut new_seed = sodoken::SizedLockedArray::new()?;
+            sodoken::kdf::derive_from_key(
+                new_seed.lock().as_mut_slice(),
+                index as u64,
+                KDF_CONTEXT,
+                &seed.lock().unwrap().lock(),
+            )?;
 
             Self::priv_from_seed(new_seed).await
         }
@@ -121,18 +105,14 @@ impl UnlockedSeedBundle {
            + Send {
         let sign_sec_key = self.sign_sec_key.clone();
         async move {
-            tokio::task::spawn_blocking(move || -> Result<_, OneErr> {
-                let mut sig = [0; sodoken::sign::SIGNATUREBYTES];
-                sodoken::sign::sign_detached(
-                    &mut sig,
-                    &message,
-                    &sign_sec_key.lock().unwrap().lock(),
-                )?;
+            let mut sig = [0; sodoken::sign::SIGNATUREBYTES];
+            sodoken::sign::sign_detached(
+                &mut sig,
+                &message,
+                &sign_sec_key.lock().unwrap().lock(),
+            )?;
 
-                Ok(sig)
-            })
-            .await
-            .map_err(OneErr::new)?
+            Ok(sig)
         }
     }
 

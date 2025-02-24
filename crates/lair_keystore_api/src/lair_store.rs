@@ -247,45 +247,26 @@ impl LairStore {
         let inner = self.0.clone();
         async move {
             // derive the ed25519 signature keypair from this seed
-            let (ed_pk, _) = tokio::task::spawn_blocking({
-                let seed = seed.clone();
-                move || -> LairResult<_> {
-                    let mut ed_pk = [0; sodoken::sign::PUBLICKEYBYTES];
-                    let mut ed_sk = sodoken::SizedLockedArray::<
-                        { sodoken::sign::SECRETKEYBYTES },
-                    >::new()?;
-                    sodoken::sign::seed_keypair(
-                        &mut ed_pk,
-                        &mut ed_sk.lock(),
-                        &seed.lock().unwrap().lock(),
-                    )?;
-
-                    Ok((ed_pk, ed_sk))
-                }
-            })
-            .await
-            .map_err(OneErr::new)??;
+            let mut ed_pk = [0; sodoken::sign::PUBLICKEYBYTES];
+            let mut ed_sk = sodoken::SizedLockedArray::<
+                { sodoken::sign::SECRETKEYBYTES },
+            >::new()?;
+            sodoken::sign::seed_keypair(
+                &mut ed_pk,
+                &mut ed_sk.lock(),
+                &seed.lock().unwrap().lock(),
+            )?;
 
             // derive the x25519 encryption keypair from this seed
-            let (x_pk, _) = tokio::task::spawn_blocking({
-                let seed = seed.clone();
-                move || -> LairResult<_> {
-                    let mut x_pk =
-                        [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
-                    let mut x_sk = sodoken::SizedLockedArray::<
-                        { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
-                    >::new()?;
-                    sodoken::crypto_box::xsalsa_seed_keypair(
-                        &mut x_pk,
-                        &mut x_sk.lock(),
-                        &seed.lock().unwrap().lock(),
-                    )?;
-
-                    Ok((x_pk, x_sk))
-                }
-            })
-            .await
-            .map_err(OneErr::new)??;
+            let mut x_pk = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+            let mut x_sk = sodoken::SizedLockedArray::<
+                { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+            >::new()?;
+            sodoken::crypto_box::xsalsa_seed_keypair(
+                &mut x_pk,
+                &mut x_sk.lock(),
+                &seed.lock().unwrap().lock(),
+            )?;
 
             // encrypt the seed with our bidi context key
             let key = inner.get_bidi_ctx_key();
@@ -350,45 +331,26 @@ impl LairStore {
         let inner = self.0.clone();
         async move {
             // derive the ed25519 signature keypair from this seed
-            let (ed_pk, _) = tokio::task::spawn_blocking({
-                let seed = seed.clone();
-                move || -> LairResult<_> {
-                    let mut ed_pk = [0; sodoken::sign::PUBLICKEYBYTES];
-                    let mut ed_sk = sodoken::SizedLockedArray::<
-                        { sodoken::sign::SECRETKEYBYTES },
-                    >::new()?;
-                    sodoken::sign::seed_keypair(
-                        &mut ed_pk,
-                        &mut ed_sk.lock(),
-                        &seed.lock().unwrap().lock(),
-                    )?;
-
-                    Ok((ed_pk, ed_sk))
-                }
-            })
-            .await
-            .map_err(OneErr::new)??;
+            let mut ed_pk = [0; sodoken::sign::PUBLICKEYBYTES];
+            let mut ed_sk = sodoken::SizedLockedArray::<
+                { sodoken::sign::SECRETKEYBYTES },
+            >::new()?;
+            sodoken::sign::seed_keypair(
+                &mut ed_pk,
+                &mut ed_sk.lock(),
+                &seed.lock().unwrap().lock(),
+            )?;
 
             // derive the x25519 encryption keypair from this seed
-            let (x_pk, _) = tokio::task::spawn_blocking({
-                let seed = seed.clone();
-                move || -> LairResult<_> {
-                    let mut x_pk =
-                        [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
-                    let mut x_sk = sodoken::SizedLockedArray::<
-                        { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
-                    >::new()?;
-                    sodoken::crypto_box::xsalsa_seed_keypair(
-                        &mut x_pk,
-                        &mut x_sk.lock(),
-                        &seed.lock().unwrap().lock(),
-                    )?;
-
-                    Ok((x_pk, x_sk))
-                }
-            })
-            .await
-            .map_err(OneErr::new)??;
+            let mut x_pk = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+            let mut x_sk = sodoken::SizedLockedArray::<
+                { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+            >::new()?;
+            sodoken::crypto_box::xsalsa_seed_keypair(
+                &mut x_pk,
+                &mut x_sk.lock(),
+                &seed.lock().unwrap().lock(),
+            )?;
 
             // generate the deep lock key from the passphrase
             let (salt, key) = tokio::task::spawn_blocking({

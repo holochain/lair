@@ -129,19 +129,13 @@ where
         // read the sealed initiator message
         let mut cipher = [0; 64 + sodoken::crypto_box::XSALSA_SEALBYTES];
         recv.read_exact(&mut cipher).await?;
-        let msg = tokio::task::spawn_blocking(move || -> LairResult<_> {
-            let mut msg = [0; 64];
-            sodoken::crypto_box::xsalsa_seal_open(
-                &mut msg,
-                &cipher,
-                &srv_id_pub_key,
-                &srv_id_sec_key.lock().unwrap().lock(),
-            )?;
-
-            Ok(msg)
-        })
-        .await
-        .map_err(OneErr::new)??;
+        let mut msg = [0; 64];
+        sodoken::crypto_box::xsalsa_seal_open(
+            &mut msg,
+            &cipher,
+            &srv_id_pub_key,
+            &srv_id_sec_key.lock().unwrap().lock(),
+        )?;
 
         let mut oth_cbox_pub: [u8; 32] = [0; 32];
         oth_cbox_pub.copy_from_slice(&msg[..32]);
@@ -150,65 +144,44 @@ where
         oth_kx_pub.copy_from_slice(&msg[32..]);
 
         // generate an ephemeral kx keypair
-        let (eph_kx_pub, mut eph_kx_sec) =
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut eph_kx_pub =
-                    [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
-                let mut eph_kx_sec = sodoken::SizedLockedArray::<
-                    { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
-                >::new()?;
-                sodoken::crypto_box::xsalsa_keypair(
-                    &mut eph_kx_pub,
-                    &mut eph_kx_sec.lock(),
-                )?;
-
-                Ok((eph_kx_pub, eph_kx_sec))
-            })
-            .await
-            .map_err(OneErr::new)??;
+        let mut eph_kx_pub = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+        let mut eph_kx_sec = sodoken::SizedLockedArray::<
+            { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+        >::new()?;
+        sodoken::crypto_box::xsalsa_keypair(
+            &mut eph_kx_pub,
+            &mut eph_kx_sec.lock(),
+        )?;
 
         // seal our ephemeral kx pub key
-        let mut cipher =
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut cipher = sodoken::SizedLockedArray::<
-                    { 32 + sodoken::crypto_box::XSALSA_SEALBYTES },
-                >::new()?;
-                sodoken::crypto_box::xsalsa_seal(
-                    &mut *cipher.lock(),
-                    &eph_kx_pub,
-                    &oth_cbox_pub,
-                )?;
-
-                Ok(cipher)
-            })
-            .await
-            .map_err(OneErr::new)??;
+        let mut cipher = sodoken::SizedLockedArray::<
+            { 32 + sodoken::crypto_box::XSALSA_SEALBYTES },
+        >::new()?;
+        sodoken::crypto_box::xsalsa_seal(
+            &mut *cipher.lock(),
+            &eph_kx_pub,
+            &oth_cbox_pub,
+        )?;
 
         // write the sealed response
         send.write_all(&*cipher.lock()).await?;
 
-        let (rx, tx) = tokio::task::spawn_blocking(move || -> LairResult<_> {
-            // prepare our transport secrets
-            let mut rx = sodoken::SizedLockedArray::<
-                { sodoken::kx::SESSIONKEYBYTES },
-            >::new()?;
-            let mut tx = sodoken::SizedLockedArray::<
-                { sodoken::kx::SESSIONKEYBYTES },
-            >::new()?;
+        // prepare our transport secrets
+        let mut rx = sodoken::SizedLockedArray::<
+            { sodoken::kx::SESSIONKEYBYTES },
+        >::new()?;
+        let mut tx = sodoken::SizedLockedArray::<
+            { sodoken::kx::SESSIONKEYBYTES },
+        >::new()?;
 
-            // derive our secretstream keys
-            sodoken::kx::client_session_keys(
-                &mut rx.lock(),
-                &mut tx.lock(),
-                &eph_kx_pub,
-                &eph_kx_sec.lock(),
-                &oth_kx_pub,
-            )?;
-
-            Ok((rx, tx))
-        })
-        .await
-        .map_err(OneErr::new)??;
+        // derive our secretstream keys
+        sodoken::kx::client_session_keys(
+            &mut rx.lock(),
+            &mut tx.lock(),
+            &eph_kx_pub,
+            &eph_kx_sec.lock(),
+            &oth_kx_pub,
+        )?;
 
         let rx = Arc::new(Mutex::new(rx));
         let tx = Arc::new(Mutex::new(tx));
@@ -252,61 +225,38 @@ where
         let mut recv: PrivRawRecv = Box::new(recv);
 
         // generate an ephemeral cbox keypair
-        let (eph_cbox_pub, mut eph_cbox_sec) =
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut eph_cbox_pub =
-                    [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
-                let mut eph_cbox_sec = sodoken::SizedLockedArray::<
-                    { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
-                >::new()?;
-                sodoken::crypto_box::xsalsa_keypair(
-                    &mut eph_cbox_pub,
-                    &mut eph_cbox_sec.lock(),
-                )?;
-
-                Ok((eph_cbox_pub, eph_cbox_sec))
-            })
-            .await
-            .map_err(OneErr::new)??;
+        let mut eph_cbox_pub = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+        let mut eph_cbox_sec = sodoken::SizedLockedArray::<
+            { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+        >::new()?;
+        sodoken::crypto_box::xsalsa_keypair(
+            &mut eph_cbox_pub,
+            &mut eph_cbox_sec.lock(),
+        )?;
 
         // generate an ephemeral kx keypair
-        let (eph_kx_pub, mut eph_kx_sec) =
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut eph_kx_pub =
-                    [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
-                let mut eph_kx_sec = sodoken::SizedLockedArray::<
-                    { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
-                >::new()?;
-                sodoken::crypto_box::xsalsa_keypair(
-                    &mut eph_kx_pub,
-                    &mut eph_kx_sec.lock(),
-                )?;
-
-                Ok((eph_kx_pub, eph_kx_sec))
-            })
-            .await
-            .map_err(OneErr::new)??;
+        let mut eph_kx_pub = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+        let mut eph_kx_sec = sodoken::SizedLockedArray::<
+            { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+        >::new()?;
+        sodoken::crypto_box::xsalsa_keypair(
+            &mut eph_kx_pub,
+            &mut eph_kx_sec.lock(),
+        )?;
 
         // sealed initiator message
         let mut message: [u8; 64] = [0; 64];
         message[..32].copy_from_slice(&eph_cbox_pub);
         message[32..].copy_from_slice(&eph_kx_pub);
 
-        let mut cipher =
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut cipher = sodoken::SizedLockedArray::<
-                    { 64 + sodoken::crypto_box::XSALSA_SEALBYTES },
-                >::new()?;
-                sodoken::crypto_box::xsalsa_seal(
-                    &mut *cipher.lock(),
-                    &message,
-                    &srv_id_pub_key,
-                )?;
-
-                Ok(cipher)
-            })
-            .await
-            .map_err(OneErr::new)??;
+        let mut cipher = sodoken::SizedLockedArray::<
+            { 64 + sodoken::crypto_box::XSALSA_SEALBYTES },
+        >::new()?;
+        sodoken::crypto_box::xsalsa_seal(
+            &mut *cipher.lock(),
+            &message,
+            &srv_id_pub_key,
+        )?;
 
         // write the sealed initiator
         send.write_all(&*cipher.lock()).await?;
@@ -316,43 +266,30 @@ where
         let mut cipher = [0; 32 + sodoken::crypto_box::XSALSA_SEALBYTES];
         recv.read_exact(&mut cipher).await?;
 
-        let oth_eph_kx_pub =
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut oth_eph_kx_pub = [0; 32];
-                sodoken::crypto_box::xsalsa_seal_open(
-                    &mut oth_eph_kx_pub,
-                    &cipher,
-                    &eph_cbox_pub,
-                    &eph_cbox_sec.lock(),
-                )?;
+        let mut oth_eph_kx_pub = [0; 32];
+        sodoken::crypto_box::xsalsa_seal_open(
+            &mut oth_eph_kx_pub,
+            &cipher,
+            &eph_cbox_pub,
+            &eph_cbox_sec.lock(),
+        )?;
 
-                Ok(oth_eph_kx_pub)
-            })
-            .await
-            .map_err(OneErr::new)??;
+        // prepare our transport secrets
+        let mut rx = sodoken::SizedLockedArray::<
+            { sodoken::kx::SESSIONKEYBYTES },
+        >::new()?;
+        let mut tx = sodoken::SizedLockedArray::<
+            { sodoken::kx::SESSIONKEYBYTES },
+        >::new()?;
 
-        let (rx, tx) = tokio::task::spawn_blocking(move || -> LairResult<_> {
-            // prepare our transport secrets
-            let mut rx = sodoken::SizedLockedArray::<
-                { sodoken::kx::SESSIONKEYBYTES },
-            >::new()?;
-            let mut tx = sodoken::SizedLockedArray::<
-                { sodoken::kx::SESSIONKEYBYTES },
-            >::new()?;
-
-            // derive our secretstream keys
-            sodoken::kx::server_session_keys(
-                &mut rx.lock(),
-                &mut tx.lock(),
-                &eph_kx_pub,
-                &eph_kx_sec.lock(),
-                &oth_eph_kx_pub,
-            )?;
-
-            Ok((rx, tx))
-        })
-        .await
-        .map_err(OneErr::new)??;
+        // derive our secretstream keys
+        sodoken::kx::server_session_keys(
+            &mut rx.lock(),
+            &mut tx.lock(),
+            &eph_kx_pub,
+            &eph_kx_sec.lock(),
+            &oth_eph_kx_pub,
+        )?;
 
         let rx = Arc::new(Mutex::new(rx));
         let tx = Arc::new(Mutex::new(tx));

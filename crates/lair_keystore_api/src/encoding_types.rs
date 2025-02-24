@@ -210,32 +210,28 @@ impl SecretData {
         key: SharedSizedLockedArray<32>,
         data: SharedLockedArray,
     ) -> LairResult<Self> {
-        tokio::task::spawn_blocking(move || {
-            let mut data_guard = data.lock().unwrap();
-            let data_lock = data_guard.lock();
-            let mut header = [0; sodoken::secretstream::HEADERBYTES];
-            let mut cipher =
-                vec![0; data_lock.len() + sodoken::secretstream::ABYTES];
+        let mut data_guard = data.lock().unwrap();
+        let data_lock = data_guard.lock();
+        let mut header = [0; sodoken::secretstream::HEADERBYTES];
+        let mut cipher =
+            vec![0; data_lock.len() + sodoken::secretstream::ABYTES];
 
-            let mut enc = sodoken::secretstream::State::default();
-            sodoken::secretstream::init_push(
-                &mut enc,
-                &mut header,
-                &key.lock().unwrap().lock(),
-            )?;
+        let mut enc = sodoken::secretstream::State::default();
+        sodoken::secretstream::init_push(
+            &mut enc,
+            &mut header,
+            &key.lock().unwrap().lock(),
+        )?;
 
-            sodoken::secretstream::push(
-                &mut enc,
-                &mut cipher,
-                &data_lock,
-                None,
-                sodoken::secretstream::Tag::Final,
-            )?;
+        sodoken::secretstream::push(
+            &mut enc,
+            &mut cipher,
+            &data_lock,
+            None,
+            sodoken::secretstream::Tag::Final,
+        )?;
 
-            Ok(Self(header.into(), cipher.into_boxed_slice().into()))
-        })
-        .await
-        .map_err(OneErr::new)?
+        Ok(Self(header.into(), cipher.into_boxed_slice().into()))
     }
 
     /// Decrypt some data as a 'SecretData' object with given context key.
@@ -246,28 +242,19 @@ impl SecretData {
         let header = self.0.clone();
         let data = self.1.clone();
 
-        tokio::task::spawn_blocking(move || {
-            let mut dec = sodoken::secretstream::State::default();
-            sodoken::secretstream::init_pull(
-                &mut dec,
-                &header,
-                &key.lock().unwrap().lock(),
-            )?;
+        let mut dec = sodoken::secretstream::State::default();
+        sodoken::secretstream::init_pull(
+            &mut dec,
+            &header,
+            &key.lock().unwrap().lock(),
+        )?;
 
-            let mut out = sodoken::LockedArray::new(
-                data.len() - sodoken::secretstream::ABYTES,
-            )?;
-            sodoken::secretstream::pull(
-                &mut dec,
-                &mut out.lock(),
-                &data,
-                None,
-            )?;
+        let mut out = sodoken::LockedArray::new(
+            data.len() - sodoken::secretstream::ABYTES,
+        )?;
+        sodoken::secretstream::pull(&mut dec, &mut out.lock(), &data, None)?;
 
-            Ok(out)
-        })
-        .await
-        .map_err(OneErr::new)?
+        Ok(out)
     }
 }
 
@@ -322,26 +309,22 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
         let header = self.0.clone();
         let cipher = self.1.clone();
 
-        tokio::task::spawn_blocking(move || {
-            let mut state = sodoken::secretstream::State::default();
-            sodoken::secretstream::init_pull(
-                &mut state,
-                &header,
-                &key.lock().unwrap().lock(),
-            )?;
+        let mut state = sodoken::secretstream::State::default();
+        sodoken::secretstream::init_pull(
+            &mut state,
+            &header,
+            &key.lock().unwrap().lock(),
+        )?;
 
-            let mut out = sodoken::SizedLockedArray::<M>::new()?;
-            sodoken::secretstream::pull(
-                &mut state,
-                &mut *out.lock(),
-                cipher.as_slice(),
-                None,
-            )?;
+        let mut out = sodoken::SizedLockedArray::<M>::new()?;
+        sodoken::secretstream::pull(
+            &mut state,
+            &mut *out.lock(),
+            cipher.as_slice(),
+            None,
+        )?;
 
-            Ok(out)
-        })
-        .await
-        .map_err(OneErr::new)?
+        Ok(out)
     }
 }
 

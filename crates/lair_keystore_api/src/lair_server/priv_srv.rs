@@ -89,20 +89,13 @@ impl Srv {
             )?;
 
             // derive signature decryption secret
-            let id_secret =
-                tokio::task::spawn_blocking(move || -> LairResult<_> {
-                    let mut id_secret = sodoken::SizedLockedArray::<32>::new()?;
-                    sodoken::kdf::derive_from_key(
-                        &mut *id_secret.lock(),
-                        142,
-                        b"IdnSecKy",
-                        &pre_secret.lock(),
-                    )?;
-
-                    Ok(id_secret)
-                })
-                .await
-                .map_err(OneErr::new)??;
+            let mut id_secret = sodoken::SizedLockedArray::<32>::new()?;
+            sodoken::kdf::derive_from_key(
+                &mut *id_secret.lock(),
+                142,
+                b"IdnSecKy",
+                &pre_secret.lock(),
+            )?;
 
             // decrypt the context (database) key
             let context_key = config
@@ -117,23 +110,15 @@ impl Srv {
                 .await?;
 
             // derive the signature keypair from the signature seed
-            let (id_pk, id_sk) =
-                tokio::task::spawn_blocking(move || -> LairResult<_> {
-                    let mut id_pk =
-                        [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
-                    let mut id_sk = sodoken::SizedLockedArray::<
-                        { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
-                    >::new()?;
-                    sodoken::crypto_box::xsalsa_seed_keypair(
-                        &mut id_pk,
-                        &mut id_sk.lock(),
-                        &id_seed.lock(),
-                    )?;
-
-                    Ok((id_pk, id_sk))
-                })
-                .await
-                .map_err(OneErr::new)??;
+            let mut id_pk = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+            let mut id_sk = sodoken::SizedLockedArray::<
+                { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+            >::new()?;
+            sodoken::crypto_box::xsalsa_seed_keypair(
+                &mut id_pk,
+                &mut id_sk.lock(),
+                &id_seed.lock(),
+            )?;
 
             // generate a lair_store instance using the database key
             let store = store_factory.connect_to_store(context_key).await?;
@@ -192,37 +177,23 @@ pub(crate) fn priv_srv_accept(
 
         // derive our encryption (to client) secret
         let send_enc_ctx_key = send.get_enc_ctx_key();
-        let enc_ctx_key =
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut enc_ctx_key = sodoken::SizedLockedArray::<32>::new()?;
-                sodoken::kdf::derive_from_key(
-                    &mut *enc_ctx_key.lock(),
-                    42,
-                    b"ToCliCxK",
-                    &send_enc_ctx_key.lock().unwrap().lock(),
-                )?;
-
-                Ok(enc_ctx_key)
-            })
-            .await
-            .map_err(OneErr::new)??;
+        let mut enc_ctx_key = sodoken::SizedLockedArray::<32>::new()?;
+        sodoken::kdf::derive_from_key(
+            &mut *enc_ctx_key.lock(),
+            42,
+            b"ToCliCxK",
+            &send_enc_ctx_key.lock().unwrap().lock(),
+        )?;
 
         // derive our decryption (from client) secret
         let send_dec_ctx_key = send.get_dec_ctx_key();
-        let dec_ctx_key =
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut dec_ctx_key = sodoken::SizedLockedArray::<32>::new()?;
-                sodoken::kdf::derive_from_key(
-                    &mut *dec_ctx_key.lock(),
-                    142,
-                    b"ToSrvCxK",
-                    &send_dec_ctx_key.lock().unwrap().lock(),
-                )?;
-
-                Ok(dec_ctx_key)
-            })
-            .await
-            .map_err(OneErr::new)??;
+        let mut dec_ctx_key = sodoken::SizedLockedArray::<32>::new()?;
+        sodoken::kdf::derive_from_key(
+            &mut *dec_ctx_key.lock(),
+            142,
+            b"ToSrvCxK",
+            &send_dec_ctx_key.lock().unwrap().lock(),
+        )?;
 
         // even if our core inner state is unlocked, we still need
         // every connection to go through the process, so this is

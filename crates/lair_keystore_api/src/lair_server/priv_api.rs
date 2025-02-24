@@ -79,21 +79,13 @@ pub(crate) fn priv_req_unlock<'a>(
             .map_err(OneErr::new)??;
 
         // derive signature decryption secret
-        let id_secret =
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut id_secret = sodoken::SizedLockedArray::<32>::new()?;
-
-                sodoken::kdf::derive_from_key(
-                    &mut *id_secret.lock(),
-                    142,
-                    b"IdnSecKy",
-                    &pre_secret.lock(),
-                )?;
-
-                Ok(id_secret)
-            })
-            .await
-            .map_err(OneErr::new)??;
+        let mut id_secret = sodoken::SizedLockedArray::<32>::new()?;
+        sodoken::kdf::derive_from_key(
+            &mut *id_secret.lock(),
+            142,
+            b"IdnSecKy",
+            &pre_secret.lock(),
+        )?;
         let id_secret = Arc::new(Mutex::new(id_secret));
 
         // decrypt the signature seed
@@ -101,30 +93,21 @@ pub(crate) fn priv_req_unlock<'a>(
             config.runtime_secrets_id_seed.decrypt(id_secret).await?;
 
         // derive the signature keypair from the signature seed
-        let (d_id_pk, _) =
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut d_id_pk =
-                    [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
-                let mut d_id_sk = sodoken::SizedLockedArray::<
-                    { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
-                >::new()?;
-
-                sodoken::crypto_box::xsalsa_seed_keypair(
-                    &mut d_id_pk,
-                    &mut d_id_sk.lock(),
-                    &id_seed.lock(),
-                )?;
-
-                Ok((d_id_pk, d_id_sk))
-            })
-            .await
-            .map_err(OneErr::new)??;
+        let mut d_id_pk = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+        let mut d_id_sk = sodoken::SizedLockedArray::<
+            { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+        >::new()?;
+        sodoken::crypto_box::xsalsa_seed_keypair(
+            &mut d_id_pk,
+            &mut d_id_sk.lock(),
+            &id_seed.lock(),
+        )?;
 
         if *id_pk.as_slice() != *d_id_pk.as_slice() {
             return Err("InvalidPassphrase".into());
         }
 
-        // if that was successfull, we can also set the connection level
+        // if that was successful, we can also set the connection level
         // unlock state to unlocked
         unlocked.store(true, atomic::Ordering::Relaxed);
 
@@ -301,24 +284,18 @@ pub(crate) fn priv_req_derive_seed<'a>(
         };
 
         let derivation_path = req.derivation_path.clone();
-        let parent = tokio::task::spawn_blocking(move || -> LairResult<_> {
-            let mut parent = src_seed;
+        let mut parent = src_seed;
 
-            for index in derivation_path.iter() {
-                let mut derived = sodoken::SizedLockedArray::<32>::new()?;
-                sodoken::kdf::derive_from_key(
-                    &mut *derived.lock(),
-                    *index as u64,
-                    b"SeedBndl",
-                    &parent.lock(),
-                )?;
-                parent = derived;
-            }
-
-            Ok(parent)
-        })
-        .await
-        .map_err(OneErr::new)??;
+        for index in derivation_path.iter() {
+            let mut derived = sodoken::SizedLockedArray::<32>::new()?;
+            sodoken::kdf::derive_from_key(
+                &mut *derived.lock(),
+                *index as u64,
+                b"SeedBndl",
+                &parent.lock(),
+            )?;
+            parent = derived;
+        }
 
         let dst_seed = Arc::new(Mutex::new(parent));
         let dst_dlp = req.dst_deep_lock_passphrase;
@@ -394,30 +371,26 @@ pub(crate) fn priv_req_export_seed_by_tag<'a>(
                     return Err("seed is not exportable".into());
                 }
 
-                tokio::task::spawn_blocking(move || -> LairResult<_> {
-                    let mut nonce = [0; sodoken::crypto_box::XSALSA_NONCEBYTES];
-                    sodoken::random::randombytes_buf(&mut nonce)?;
+                let mut nonce = [0; sodoken::crypto_box::XSALSA_NONCEBYTES];
+                sodoken::random::randombytes_buf(&mut nonce)?;
 
-                    let mut seed_guard = seed.lock().unwrap();
-                    let seed_guard = seed_guard.lock();
+                let mut seed_guard = seed.lock().unwrap();
+                let seed_guard = seed_guard.lock();
 
-                    let mut cipher = vec![
-                        0;
-                        seed_guard.len()
-                            + sodoken::crypto_box::XSALSA_MACBYTES
-                    ];
-                    sodoken::crypto_box::xsalsa_easy(
-                        cipher.as_mut_slice(),
-                        seed_guard.as_slice(),
-                        &nonce,
-                        &req.recipient_pub_key.cloned_inner(),
-                        &x_sk.lock().unwrap().lock(),
-                    )?;
+                let mut cipher = vec![
+                    0;
+                    seed_guard.len()
+                        + sodoken::crypto_box::XSALSA_MACBYTES
+                ];
+                sodoken::crypto_box::xsalsa_easy(
+                    cipher.as_mut_slice(),
+                    seed_guard.as_slice(),
+                    &nonce,
+                    &req.recipient_pub_key.cloned_inner(),
+                    &x_sk.lock().unwrap().lock(),
+                )?;
 
-                    Ok((nonce, cipher))
-                })
-                .await
-                .map_err(OneErr::new)??
+                (nonce, cipher)
             } else {
                 return Err("deep_seed crypto_box not yet implemented".into());
             }
@@ -470,21 +443,17 @@ pub(crate) fn priv_req_import_seed<'a>(
         let deep_lock_passphrase = req.deep_lock_passphrase.clone();
 
         let seed = if let Some(x_sk) = full_entry.x_sk {
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut seed = sodoken::SizedLockedArray::<32>::new()?;
+            let mut seed = sodoken::SizedLockedArray::<32>::new()?;
 
-                sodoken::crypto_box::xsalsa_open_easy(
-                    &mut *seed.lock(),
-                    &req.cipher,
-                    &req.nonce,
-                    &req.sender_pub_key.cloned_inner(),
-                    &x_sk.lock().unwrap().lock(),
-                )?;
+            sodoken::crypto_box::xsalsa_open_easy(
+                &mut *seed.lock(),
+                &req.cipher,
+                &req.nonce,
+                &req.sender_pub_key.cloned_inner(),
+                &x_sk.lock().unwrap().lock(),
+            )?;
 
-                Ok(seed)
-            })
-            .await
-            .map_err(OneErr::new)??
+            seed
         } else {
             return Err("deep_seed crypto_box not yet implemented".into());
         };
@@ -599,22 +568,18 @@ pub(crate) fn priv_req_sign_by_pub_key<'a>(
 
                 let msg_id = req.msg_id.clone();
 
-                let signature =
-                    tokio::task::spawn_blocking(move || -> LairResult<_> {
-                        let mut signature = [0; sodoken::sign::SIGNATUREBYTES];
+                let mut signature = [0; sodoken::sign::SIGNATUREBYTES];
 
-                        sodoken::sign::sign_detached(
-                            &mut signature,
-                            &req.data,
-                            &ed_sk.lock().unwrap().lock(),
-                        )?;
+                sodoken::sign::sign_detached(
+                    &mut signature,
+                    &req.data,
+                    &ed_sk.lock().unwrap().lock(),
+                )?;
 
-                        Ok(signature.into())
-                    })
-                    .await
-                    .map_err(OneErr::new)??;
-
-                LairApiResSignByPubKey { msg_id, signature }
+                LairApiResSignByPubKey {
+                    msg_id,
+                    signature: signature.into(),
+                }
             }
             Err(e) => {
                 // we don't have this key, let's see if we should invoke
@@ -654,27 +619,20 @@ pub(crate) fn priv_req_crypto_box_xsalsa_by_pub_key<'a>(
         let msg_id = req.msg_id.clone();
 
         let (nonce, cipher) = if let Some(x_sk) = full_entry.x_sk {
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut nonce = [0; sodoken::crypto_box::XSALSA_NONCEBYTES];
-                sodoken::random::randombytes_buf(&mut nonce)?;
+            let mut nonce = [0; sodoken::crypto_box::XSALSA_NONCEBYTES];
+            sodoken::random::randombytes_buf(&mut nonce)?;
 
-                let mut cipher = vec![
-                    0;
-                    req.data.len()
-                        + sodoken::crypto_box::XSALSA_MACBYTES
-                ];
-                sodoken::crypto_box::xsalsa_easy(
-                    &mut cipher,
-                    &req.data,
-                    &nonce,
-                    &req.recipient_pub_key.cloned_inner(),
-                    &x_sk.lock().unwrap().lock(),
-                )?;
+            let mut cipher =
+                vec![0; req.data.len() + sodoken::crypto_box::XSALSA_MACBYTES];
+            sodoken::crypto_box::xsalsa_easy(
+                &mut cipher,
+                &req.data,
+                &nonce,
+                &req.recipient_pub_key.cloned_inner(),
+                &x_sk.lock().unwrap().lock(),
+            )?;
 
-                Ok((nonce, cipher))
-            })
-            .await
-            .map_err(OneErr::new)??
+            (nonce, cipher)
         } else {
             return Err("deep_seed crypto_box not yet implemented".into());
         };
@@ -718,21 +676,20 @@ pub(crate) fn priv_req_crypto_box_xsalsa_open_by_pub_key<'a>(
         let msg_id = req.msg_id.clone();
 
         let message = if let Some(x_sk) = full_entry.x_sk {
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut message = vec![0;
-                    req.cipher.len() - sodoken::crypto_box::XSALSA_MACBYTES];
-                sodoken::crypto_box::xsalsa_open_easy(
-                    &mut message,
-                    &req.cipher,
-                    &req.nonce,
-                    &req.sender_pub_key.cloned_inner(),
-                    &x_sk.lock().unwrap().lock(),
-                )?;
+            let mut message = vec![
+                0;
+                req.cipher.len()
+                    - sodoken::crypto_box::XSALSA_MACBYTES
+            ];
+            sodoken::crypto_box::xsalsa_open_easy(
+                &mut message,
+                &req.cipher,
+                &req.nonce,
+                &req.sender_pub_key.cloned_inner(),
+                &x_sk.lock().unwrap().lock(),
+            )?;
 
-                Ok(message)
-            })
-            .await
-            .map_err(OneErr::new)??
+            message
         } else {
             return Err("deep_seed crypto_box not yet implemented".into());
         };
@@ -782,27 +739,20 @@ pub(crate) fn priv_req_crypto_box_xsalsa_by_sign_pub_key<'a>(
                 &ed_sk.lock().unwrap().lock(),
             )?;
 
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut nonce = [0; sodoken::crypto_box::XSALSA_NONCEBYTES];
-                sodoken::random::randombytes_buf(&mut nonce)?;
+            let mut nonce = [0; sodoken::crypto_box::XSALSA_NONCEBYTES];
+            sodoken::random::randombytes_buf(&mut nonce)?;
 
-                let mut cipher = vec![
-                    0;
-                    req.data.len()
-                        + sodoken::crypto_box::XSALSA_MACBYTES
-                ];
-                sodoken::crypto_box::xsalsa_easy(
-                    cipher.as_mut_slice(),
-                    &req.data,
-                    &nonce,
-                    x_pk.as_slice().try_into().unwrap(),
-                    &x_sk.lock(),
-                )?;
+            let mut cipher =
+                vec![0; req.data.len() + sodoken::crypto_box::XSALSA_MACBYTES];
+            sodoken::crypto_box::xsalsa_easy(
+                cipher.as_mut_slice(),
+                &req.data,
+                &nonce,
+                x_pk.as_slice().try_into().unwrap(),
+                &x_sk.lock(),
+            )?;
 
-                Ok((nonce, cipher))
-            })
-            .await
-            .map_err(OneErr::new)??
+            (nonce, cipher)
         } else {
             return Err("deep_seed crypto_box not yet implemented".into());
         };
@@ -859,23 +809,20 @@ pub(crate) fn priv_req_crypto_box_xsalsa_open_by_sign_pub_key<'a>(
                 &ed_sk.lock().unwrap().lock(),
             )?;
 
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut message = vec![
-                        0;
-                        req.cipher.len() - sodoken::crypto_box::XSALSA_MACBYTES
-                    ];
-                sodoken::crypto_box::xsalsa_open_easy(
-                    &mut message,
-                    &req.cipher,
-                    &req.nonce,
-                    x_pk.as_slice().try_into().unwrap(),
-                    &x_sk.lock(),
-                )?;
+            let mut message = vec![
+                0;
+                req.cipher.len()
+                    - sodoken::crypto_box::XSALSA_MACBYTES
+            ];
+            sodoken::crypto_box::xsalsa_open_easy(
+                &mut message,
+                &req.cipher,
+                &req.nonce,
+                x_pk.as_slice().try_into().unwrap(),
+                &x_sk.lock(),
+            )?;
 
-                Ok(message)
-            })
-            .await
-            .map_err(OneErr::new)??
+            message
         } else {
             return Err("deep_seed crypto_box not yet implemented".into());
         };
@@ -922,24 +869,16 @@ pub(crate) fn priv_req_new_wka_tls_cert<'a>(
 pub(crate) async fn derive_ed(
     seed: SharedSizedLockedArray<32>,
 ) -> LairResult<(Ed25519PubKey, sodoken::SizedLockedArray<64>)> {
-    let (ed_pk, ed_sk) =
-        tokio::task::spawn_blocking(move || -> LairResult<_> {
-            // get the signature keypair
-            let mut ed_pk = [0; sodoken::sign::PUBLICKEYBYTES];
-            let mut ed_sk = sodoken::SizedLockedArray::<
-                { sodoken::sign::SECRETKEYBYTES },
-            >::new()?;
+    // get the signature keypair
+    let mut ed_pk = [0; sodoken::sign::PUBLICKEYBYTES];
+    let mut ed_sk =
+        sodoken::SizedLockedArray::<{ sodoken::sign::SECRETKEYBYTES }>::new()?;
 
-            sodoken::sign::seed_keypair(
-                &mut ed_pk,
-                &mut ed_sk.lock(),
-                &seed.lock().unwrap().lock(),
-            )?;
-
-            Ok((ed_pk, ed_sk))
-        })
-        .await
-        .map_err(OneErr::new)??;
+    sodoken::sign::seed_keypair(
+        &mut ed_pk,
+        &mut ed_sk.lock(),
+        &seed.lock().unwrap().lock(),
+    )?;
 
     Ok((ed_pk.into(), ed_sk))
 }
@@ -947,25 +886,19 @@ pub(crate) async fn derive_ed(
 pub(crate) async fn derive_x(
     seed: SharedSizedLockedArray<32>,
 ) -> LairResult<(X25519PubKey, sodoken::SizedLockedArray<32>)> {
-    let (x_pk, x_sk) = tokio::task::spawn_blocking(move || -> LairResult<_> {
-        // get the encryption keypair
-        let mut x_pk = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
-        let mut x_sk = sodoken::SizedLockedArray::<
-            { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
-        >::new()?;
+    // get the encryption keypair
+    let mut x_pk = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+    let mut x_sk = sodoken::SizedLockedArray::<
+        { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+    >::new()?;
 
-        // we're using the chacha sodium keypair api here, but the
-        // keypairs are valid also for salsa.
-        sodoken::crypto_box::xsalsa_seed_keypair(
-            &mut x_pk,
-            &mut x_sk.lock(),
-            &seed.lock().unwrap().lock(),
-        )?;
-
-        Ok((x_pk, x_sk))
-    })
-    .await
-    .map_err(OneErr::new)??;
+    // we're using the chacha sodium keypair api here, but the
+    // keypairs are valid also for salsa.
+    sodoken::crypto_box::xsalsa_seed_keypair(
+        &mut x_pk,
+        &mut x_sk.lock(),
+        &seed.lock().unwrap().lock(),
+    )?;
 
     Ok((x_pk.into(), x_sk))
 }
@@ -1173,26 +1106,19 @@ pub(crate) fn priv_req_secret_box_xsalsa_by_tag<'a>(
         let msg_id = req.msg_id.clone();
 
         let (nonce, cipher) = if let Some(seed) = full_entry.seed {
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut nonce = [0; sodoken::secretbox::XSALSA_NONCEBYTES];
-                sodoken::random::randombytes_buf(&mut nonce)?;
+            let mut nonce = [0; sodoken::secretbox::XSALSA_NONCEBYTES];
+            sodoken::random::randombytes_buf(&mut nonce)?;
 
-                let mut cipher = vec![
-                    0;
-                    req.data.len()
-                        + sodoken::secretbox::XSALSA_MACBYTES
-                ];
-                sodoken::secretbox::xsalsa_easy(
-                    &mut cipher,
-                    &nonce,
-                    &req.data,
-                    &seed.lock().unwrap().lock(),
-                )?;
+            let mut cipher =
+                vec![0; req.data.len() + sodoken::secretbox::XSALSA_MACBYTES];
+            sodoken::secretbox::xsalsa_easy(
+                &mut cipher,
+                &nonce,
+                &req.data,
+                &seed.lock().unwrap().lock(),
+            )?;
 
-                Ok((nonce, cipher))
-            })
-            .await
-            .map_err(OneErr::new)??
+            (nonce, cipher)
         } else {
             return Err("deep_seed secretbox not yet implemented".into());
         };
@@ -1233,23 +1159,16 @@ pub(crate) fn priv_req_secret_box_xsalsa_open_by_tag<'a>(
         let msg_id = req.msg_id.clone();
 
         let message = if let Some(seed) = full_entry.seed {
-            tokio::task::spawn_blocking(move || -> LairResult<_> {
-                let mut message = vec![
-                    0;
-                    req.cipher.len()
-                        - sodoken::secretbox::XSALSA_MACBYTES
-                ];
-                sodoken::secretbox::xsalsa_open_easy(
-                    &mut message,
-                    &req.cipher,
-                    &req.nonce,
-                    &seed.lock().unwrap().lock(),
-                )?;
+            let mut message =
+                vec![0; req.cipher.len() - sodoken::secretbox::XSALSA_MACBYTES];
+            sodoken::secretbox::xsalsa_open_easy(
+                &mut message,
+                &req.cipher,
+                &req.nonce,
+                &seed.lock().unwrap().lock(),
+            )?;
 
-                Ok(message)
-            })
-            .await
-            .map_err(OneErr::new)??
+            message
         } else {
             return Err("deep_seed secretbox not yet implemented".into());
         };
