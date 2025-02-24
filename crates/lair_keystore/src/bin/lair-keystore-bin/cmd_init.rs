@@ -1,5 +1,5 @@
 use super::*;
-use parking_lot::Mutex;
+use std::sync::Mutex;
 use tokio::io::AsyncWriteExt;
 
 pub(crate) async fn exec(

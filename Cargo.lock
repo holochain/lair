@@ -541,7 +541,6 @@ dependencies = [
  "base64 0.22.1",
  "futures",
  "one_err",
- "parking_lot",
  "rmp-serde",
  "rmpv",
  "serde",
@@ -755,7 +754,6 @@ version = "0.5.3"
 dependencies = [
  "assert_cmd",
  "lair_keystore_api",
- "parking_lot",
  "pretty_assertions",
  "rpassword",
  "rusqlite",
@@ -778,7 +776,6 @@ dependencies = [
  "nanoid",
  "once_cell",
  "one_err",
- "parking_lot",
  "rcgen",
  "serde",
  "serde_json",

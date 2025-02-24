@@ -4,12 +4,10 @@ use crate::*;
 use futures::future::{BoxFuture, FutureExt};
 use futures::stream::{BoxStream, Stream, StreamExt};
 use one_err::*;
-use parking_lot::Mutex;
+use std::future::Future;
+use std::sync::{Arc, Mutex};
 use tokio::io::AsyncReadExt;
 use tokio::io::AsyncWriteExt;
-
-use std::future::Future;
-use std::sync::Arc;
 
 /// Throw errors on the streams if a single message is > 8 KiB
 const MAX_FRAME: usize = 1024 * 8; // 8 KiB
@@ -137,7 +135,7 @@ where
                 &mut msg,
                 &cipher,
                 &srv_id_pub_key,
-                &srv_id_sec_key.lock().lock(),
+                &srv_id_sec_key.lock().unwrap().lock(),
             )?;
 
             Ok(msg)
@@ -420,7 +418,7 @@ fn priv_init_ss<'a>(
         sodoken::secretstream::init_push(
             &mut enc,
             &mut header,
-            &tx.lock().lock(),
+            &tx.lock().unwrap().lock(),
         )?;
 
         send.write_all(&header).await?;
@@ -428,7 +426,11 @@ fn priv_init_ss<'a>(
         // for our receiver, parse the incoming header
         recv.read_exact(&mut header).await?;
         let mut dec = sodoken::secretstream::State::default();
-        sodoken::secretstream::init_pull(&mut dec, &header, &rx.lock().lock())?;
+        sodoken::secretstream::init_pull(
+            &mut dec,
+            &header,
+            &rx.lock().unwrap().lock(),
+        )?;
 
         Ok((enc, dec))
     }
@@ -475,13 +477,13 @@ mod tests {
             futures::future::try_join(alice_fut, bob_fut).await.unwrap();
 
         assert_eq!(
-            &*alice_send.get_enc_ctx_key().lock().lock(),
-            &*bob_send.get_dec_ctx_key().lock().lock(),
+            &*alice_send.get_enc_ctx_key().lock().unwrap().lock(),
+            &*bob_send.get_dec_ctx_key().lock().unwrap().lock(),
         );
 
         assert_eq!(
-            &*alice_send.get_dec_ctx_key().lock().lock(),
-            &*bob_send.get_enc_ctx_key().lock().lock(),
+            &*alice_send.get_dec_ctx_key().lock().unwrap().lock(),
+            &*bob_send.get_enc_ctx_key().lock().unwrap().lock(),
         );
 
         // try out sending

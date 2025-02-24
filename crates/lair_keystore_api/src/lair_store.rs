@@ -4,9 +4,8 @@ use crate::types::SharedSizedLockedArray;
 use crate::*;
 use futures::future::BoxFuture;
 use one_err::OneErr;
-use parking_lot::Mutex;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 fn is_false(b: impl std::borrow::Borrow<bool>) -> bool {
     !b.borrow()
@@ -258,7 +257,7 @@ impl LairStore {
                     sodoken::sign::seed_keypair(
                         &mut ed_pk,
                         &mut ed_sk.lock(),
-                        &seed.lock().lock(),
+                        &seed.lock().unwrap().lock(),
                     )?;
 
                     Ok((ed_pk, ed_sk))
@@ -279,7 +278,7 @@ impl LairStore {
                     sodoken::crypto_box::xsalsa_seed_keypair(
                         &mut x_pk,
                         &mut x_sk.lock(),
-                        &seed.lock().lock(),
+                        &seed.lock().unwrap().lock(),
                     )?;
 
                     Ok((x_pk, x_sk))
@@ -361,7 +360,7 @@ impl LairStore {
                     sodoken::sign::seed_keypair(
                         &mut ed_pk,
                         &mut ed_sk.lock(),
-                        &seed.lock().lock(),
+                        &seed.lock().unwrap().lock(),
                     )?;
 
                     Ok((ed_pk, ed_sk))
@@ -382,7 +381,7 @@ impl LairStore {
                     sodoken::crypto_box::xsalsa_seed_keypair(
                         &mut x_pk,
                         &mut x_sk.lock(),
-                        &seed.lock().lock(),
+                        &seed.lock().unwrap().lock(),
                     )?;
 
                     Ok((x_pk, x_sk))

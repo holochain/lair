@@ -1,7 +1,6 @@
 //! Wrap a raw tokio::io::Async{Read, Write} channel into a LairClient.
 
 use super::*;
-use parking_lot::Mutex;
 
 /// Wrap a raw tokio::io::Async{Read, Write} channel into a LairClient.
 pub fn new_async_io_lair_client<S, R>(
@@ -28,7 +27,7 @@ where
             &mut *enc_ctx_key.lock(),
             142,
             b"ToSrvCxK",
-            &send.get_enc_ctx_key().lock().lock(),
+            &send.get_enc_ctx_key().lock().unwrap().lock(),
         )?;
 
         // derive our decryption (from server) secret context key
@@ -37,7 +36,7 @@ where
             &mut *dec_ctx_key.lock(),
             42,
             b"ToCliCxK",
-            &send.get_dec_ctx_key().lock().lock(),
+            &send.get_dec_ctx_key().lock().unwrap().lock(),
         )?;
 
         // build up our inner item
@@ -68,7 +67,9 @@ where
 
                     // if we were waiting for this response, match up / respond.
                     let msg_id = incoming.msg_id();
-                    if let Some(resp) = inner.write().pending.remove(&msg_id) {
+                    if let Some(resp) =
+                        inner.write().unwrap().pending.remove(&msg_id)
+                    {
                         let _ = resp.send(incoming);
                     }
                 })
@@ -79,7 +80,7 @@ where
                 tracing::warn!("lair connection recv loop ended");
 
                 // kill any pending requests - they won't ever get responses.
-                inner.write().pending.clear();
+                inner.write().unwrap().pending.clear();
             });
         }
 
@@ -100,15 +101,15 @@ struct Cli(Arc<RwLock<CliInner>>);
 
 impl AsLairClient for Cli {
     fn get_enc_ctx_key(&self) -> SharedSizedLockedArray<32> {
-        self.0.read().enc_ctx_key.clone()
+        self.0.read().unwrap().enc_ctx_key.clone()
     }
 
     fn get_dec_ctx_key(&self) -> SharedSizedLockedArray<32> {
-        self.0.read().dec_ctx_key.clone()
+        self.0.read().unwrap().dec_ctx_key.clone()
     }
 
     fn shutdown(&self) -> BoxFuture<'static, LairResult<()>> {
-        let send = self.0.read().send.clone();
+        let send = self.0.read().unwrap().send.clone();
         send.shutdown().boxed()
     }
 
@@ -125,14 +126,14 @@ impl AsLairClient for Cli {
 
         impl Drop for Clean {
             fn drop(&mut self) {
-                let _ = self.0.write().pending.remove(&self.1);
+                let _ = self.0.write().unwrap().pending.remove(&self.1);
             }
         }
 
         let clean = Clean(self.0.clone(), msg_id.clone());
 
         let send = {
-            let mut lock = self.0.write();
+            let mut lock = self.0.write().unwrap();
             lock.pending.insert(msg_id, s);
             lock.send.clone()
         };

@@ -1,6 +1,6 @@
 use super::*;
 use lair_keystore_api::dependencies::base64::Engine;
-use parking_lot::Mutex;
+use std::sync::Mutex;
 
 pub(crate) async fn exec(
     config: LairServerConfig,

@@ -1,7 +1,6 @@
 use common::{connect_with_config, create_config};
 use lair_keystore_api::dependencies::{sodoken, tokio};
-use parking_lot::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 mod common;
 

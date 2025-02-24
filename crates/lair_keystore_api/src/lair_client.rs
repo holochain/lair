@@ -6,10 +6,9 @@ use client_traits::*;
 use futures::future::{BoxFuture, FutureExt};
 use futures::stream::StreamExt;
 use one_err::OneErr;
-use parking_lot::{Mutex, RwLock};
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, RwLock};
 
 /// Traits related to LairClient. Unless you're writing a new
 /// implementation, you probably don't need these.
@@ -570,7 +569,7 @@ async fn encrypt_passphrase(
     let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
     sodoken::blake2b::blake2b_hash(
         &mut *pw_hash.lock(),
-        &pass.lock().lock(),
+        &pass.lock().unwrap().lock(),
         None,
     )?;
 

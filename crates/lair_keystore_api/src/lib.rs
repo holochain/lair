@@ -36,8 +36,7 @@
 //! use lair_keystore_api::ipc_keystore::*;
 //! # use lair_keystore_api::dependencies::*;
 //! # use lair_keystore_api::mem_store::*;
-//! # use std::sync::Arc;
-//! # use parking_lot::Mutex;
+//! # use std::sync::{Arc, Mutex};
 //! # let tmp_dir = tempdir::TempDir::new("lair_ipc_doc_test").unwrap();
 //! # let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(b"passphrase".to_vec())));
 //! # let config = Arc::new(
@@ -98,7 +97,6 @@ pub mod dependencies {
     pub use hc_seed_bundle::dependencies::*;
     pub use nanoid;
     pub use once_cell;
-    pub use parking_lot;
     pub use serde_json;
     pub use serde_yaml;
     pub use tokio;

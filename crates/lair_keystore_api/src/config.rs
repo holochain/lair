@@ -3,9 +3,8 @@
 
 use crate::*;
 use one_err::OneErr;
-use parking_lot::Mutex;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 const PID_FILE_NAME: &str = "pid_file";
 const STORE_FILE_NAME: &str = "store_file";
@@ -157,7 +156,7 @@ impl LairServerConfigInner {
             let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
             sodoken::blake2b::blake2b_hash(
                 &mut *pw_hash.lock(),
-                &passphrase.lock().lock(),
+                &passphrase.lock().unwrap().lock(),
                 None,
             )?;
 
@@ -200,7 +199,7 @@ impl LairServerConfigInner {
                         &mut *ctx_secret.lock(),
                         42,
                         b"CtxSecKy",
-                        &pre_secret.lock().lock(),
+                        &pre_secret.lock().unwrap().lock(),
                     )?;
 
                     Ok(ctx_secret)
@@ -219,7 +218,7 @@ impl LairServerConfigInner {
                         &mut *id_secret.lock(),
                         142,
                         b"IdnSecKy",
-                        &pre_secret.lock().lock(),
+                        &pre_secret.lock().unwrap().lock(),
                     )?;
 
                     Ok(id_secret)

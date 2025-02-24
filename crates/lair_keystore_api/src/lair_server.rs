@@ -5,9 +5,8 @@ use crate::*;
 use base64::Engine;
 use futures::future::{BoxFuture, FutureExt};
 use futures::stream::StreamExt;
-use parking_lot::RwLock;
 use std::future::Future;
-use std::sync::{atomic, Arc};
+use std::sync::{atomic, Arc, Mutex, RwLock};
 
 /// Traits related to LairServer. Unless you're writing a new
 /// implementation, you probably don't need these.
@@ -133,7 +132,7 @@ impl FallbackCmd {
         let inner = self.inner.clone();
         async move {
             let (send, mut recv, mut stdin, stdout, id) = {
-                let mut lock = inner.write();
+                let mut lock = inner.write().unwrap();
 
                 if let Some(inner) = &mut *lock {
                     if let Ok(None) = inner.child.try_wait() {
@@ -206,7 +205,6 @@ impl FallbackCmd {
                 >,
             }
 
-            use parking_lot::Mutex;
             let pending = Arc::new(Mutex::new(Pending {
                 running: true,
                 pending: HashMap::new(),
@@ -219,7 +217,7 @@ impl FallbackCmd {
             tokio::task::spawn(async move {
                 while let Some((req, res)) = recv.recv().await {
                     {
-                        let mut lock = pending2.lock();
+                        let mut lock = pending2.lock().unwrap();
                         if !lock.running {
                             tracing::warn!("@sig_fb@ exit write loop due to shutdown from read side");
                             let _ = res.send(Err(
@@ -247,8 +245,11 @@ impl FallbackCmd {
                         let e =
                             format!("signature_fallback write error: {e:?}");
                         tracing::error!("@sig_fb@ {}", e);
-                        let respond =
-                            pending2.lock().pending.remove(&req.msg_id);
+                        let respond = pending2
+                            .lock()
+                            .unwrap()
+                            .pending
+                            .remove(&req.msg_id);
                         if let Some(respond) = respond {
                             let _ = respond.send(Err(e.into()));
                         }
@@ -258,7 +259,7 @@ impl FallbackCmd {
 
                 tracing::warn!("@sig_fb@ write loop exiting");
 
-                let mut lock = inner2.write();
+                let mut lock = inner2.write().unwrap();
                 let remove = if let Some(inner) = &mut *lock {
                     inner.id == id2
                 } else {
@@ -295,7 +296,8 @@ impl FallbackCmd {
                     };
 
                     // send the response back to the requesting logic
-                    let respond = pending.lock().pending.remove(&res.msg_id);
+                    let respond =
+                        pending.lock().unwrap().pending.remove(&res.msg_id);
                     if let Some(respond) = respond {
                         if let Some(error) = res.error {
                             let _ = respond.send(Err(error.into()));
@@ -334,7 +336,7 @@ impl FallbackCmd {
                 tracing::warn!("@sig_fb@ read loop exiting");
 
                 {
-                    let mut lock = inner.write();
+                    let mut lock = inner.write().unwrap();
                     let remove = if let Some(inner) = &mut *lock {
                         inner.id == id
                     } else {
@@ -345,7 +347,7 @@ impl FallbackCmd {
                     }
                 }
 
-                let mut lock = pending.lock();
+                let mut lock = pending.lock().unwrap();
                 lock.running = false;
                 for (_, respond) in lock.pending.drain() {
                     let _ =

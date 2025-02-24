@@ -59,18 +59,18 @@ where
             let t = se.into_inner().into_boxed_slice();
 
             // capture a resource permit
-            let limit = inner.lock().limit.clone();
+            let limit = inner.lock().unwrap().limit.clone();
             let _permit = limit.acquire_owned().await.map_err(OneErr::new)?;
 
             // we have a permit, get the sender
-            let mut send = inner.lock().send.take().unwrap();
+            let mut send = inner.lock().unwrap().send.take().unwrap();
 
             // send the data
             let r = send.send(t).await;
 
             // return our sender resource,
             // the permit will drop as this future ends.
-            inner.lock().send = Some(send);
+            inner.lock().unwrap().send = Some(send);
 
             r
         }
@@ -80,30 +80,30 @@ where
     fn get_enc_ctx_key(
         &self,
     ) -> SharedSizedLockedArray<{ sodoken::secretstream::KEYBYTES }> {
-        self.0.lock().tx.clone()
+        self.0.lock().unwrap().tx.clone()
     }
 
     fn get_dec_ctx_key(
         &self,
     ) -> SharedSizedLockedArray<{ sodoken::secretstream::KEYBYTES }> {
-        self.0.lock().rx.clone()
+        self.0.lock().unwrap().rx.clone()
     }
 
     fn shutdown(&self) -> BoxFuture<'static, LairResult<()>> {
         let inner = self.0.clone();
         async move {
             // capture a resource permit
-            let limit = inner.lock().limit.clone();
+            let limit = inner.lock().unwrap().limit.clone();
             let _permit = limit.acquire_owned().await.map_err(OneErr::new)?;
 
             // we have a permit, get the sender
-            let mut send = inner.lock().send.take().unwrap();
+            let mut send = inner.lock().unwrap().send.take().unwrap();
 
             // shutdown the sender
             let r = send.shutdown().await;
 
             // return it so errors can still propagate up
-            inner.lock().send = Some(send);
+            inner.lock().unwrap().send = Some(send);
 
             r
         }

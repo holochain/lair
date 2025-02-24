@@ -2,8 +2,7 @@ use lair_keystore_api::dependencies::*;
 use lair_keystore_api::in_proc_keystore::*;
 use lair_keystore_api::mem_store::*;
 use lair_keystore_api::prelude::*;
-use parking_lot::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 fn init_tracing() {
     let _ = tracing::subscriber::set_global_default(

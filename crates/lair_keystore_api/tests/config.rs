@@ -1,7 +1,6 @@
 use hc_seed_bundle::dependencies::sodoken;
 use lair_keystore_api::prelude::*;
-use parking_lot::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{env::current_dir, path::PathBuf};
 use tempdir::TempDir;
 

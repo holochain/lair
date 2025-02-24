@@ -108,8 +108,7 @@ impl InProcKeystore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use parking_lot::Mutex;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     #[tokio::test(flavor = "multi_thread")]
     async fn in_proc_happy_path() {

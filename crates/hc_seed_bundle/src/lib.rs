@@ -141,8 +141,7 @@
 //! - `secretstream_xchacha20poly1305`
 //!   - single `push_final/pull_final` with entire contents
 
-use parking_lot::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// re-exported dependencies
 pub mod dependencies {

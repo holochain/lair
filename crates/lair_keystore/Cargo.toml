@@ -27,7 +27,6 @@ rusqlite = { workspace = true }
 structopt = { workspace = true }
 sysinfo = { workspace = true }
 tracing-subscriber = { workspace = true }
-parking_lot = { workspace = true }
 
 [build-dependencies]
 lair_keystore_api = { workspace = true }

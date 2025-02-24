@@ -211,7 +211,7 @@ impl SecretData {
         data: SharedLockedArray,
     ) -> LairResult<Self> {
         tokio::task::spawn_blocking(move || {
-            let mut data_guard = data.lock();
+            let mut data_guard = data.lock().unwrap();
             let data_lock = data_guard.lock();
             let mut header = [0; sodoken::secretstream::HEADERBYTES];
             let mut cipher =
@@ -221,7 +221,7 @@ impl SecretData {
             sodoken::secretstream::init_push(
                 &mut enc,
                 &mut header,
-                &key.lock().lock(),
+                &key.lock().unwrap().lock(),
             )?;
 
             sodoken::secretstream::push(
@@ -251,7 +251,7 @@ impl SecretData {
             sodoken::secretstream::init_pull(
                 &mut dec,
                 &header,
-                &key.lock().lock(),
+                &key.lock().unwrap().lock(),
             )?;
 
             let mut out = sodoken::LockedArray::new(
@@ -288,19 +288,22 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
         data: SharedSizedLockedArray<M>,
     ) -> LairResult<Self> {
         let mut header = [0; sodoken::secretstream::HEADERBYTES];
-        let mut cipher =
-            vec![0; data.lock().lock().len() + sodoken::secretstream::ABYTES];
+        let mut cipher = vec![
+            0;
+            data.lock().unwrap().lock().len()
+                + sodoken::secretstream::ABYTES
+        ];
         let mut enc = sodoken::secretstream::State::default();
         sodoken::secretstream::init_push(
             &mut enc,
             &mut header,
-            &key.lock().lock(),
+            &key.lock().unwrap().lock(),
         )?;
 
         sodoken::secretstream::push(
             &mut enc,
             cipher.as_mut_slice(),
-            &*data.lock().lock(),
+            &*data.lock().unwrap().lock(),
             None,
             sodoken::secretstream::Tag::Final,
         )?;
@@ -324,7 +327,7 @@ impl<const M: usize, const C: usize> SecretDataSized<M, C> {
             sodoken::secretstream::init_pull(
                 &mut state,
                 &header,
-                &key.lock().lock(),
+                &key.lock().unwrap().lock(),
             )?;
 
             let mut out = sodoken::SizedLockedArray::<M>::new()?;

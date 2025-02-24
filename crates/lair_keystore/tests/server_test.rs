@@ -1,8 +1,7 @@
 use common::connect;
 use lair_keystore::dependencies::*;
 use lair_keystore_api::prelude::*;
-use parking_lot::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 mod common;
 

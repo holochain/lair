@@ -1,6 +1,6 @@
 use super::*;
 use one_err::OneErr;
-use parking_lot::Mutex;
+use std::sync::Mutex;
 
 /// A [`LairEntry`], including some precomputed values if the entry corresponds to a non-deep-locked seed.
 #[derive(Clone)]
@@ -23,13 +23,8 @@ pub(crate) struct SrvInner {
     pub(crate) server_version: Arc<str>,
     pub(crate) store: LairStore,
     pub(crate) id_pk: Arc<[u8; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES]>,
-    pub(crate) id_sk: Arc<
-        Mutex<
-            sodoken::SizedLockedArray<
-                { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
-            >,
-        >,
-    >,
+    pub(crate) id_sk:
+        SharedSizedLockedArray<{ sodoken::crypto_box::XSALSA_SECRETKEYBYTES }>,
     pub(crate) entries_by_tag: lru::LruCache<Arc<str>, FullLairEntry>,
     pub(crate) entries_by_ed: lru::LruCache<Ed25519PubKey, FullLairEntry>,
     #[allow(dead_code)]
@@ -52,7 +47,7 @@ impl Srv {
             let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
             sodoken::blake2b::blake2b_hash(
                 &mut *pw_hash.lock(),
-                &passphrase.lock().lock(),
+                &passphrase.lock().unwrap().lock(),
                 None,
             )?;
             let pw_hash = Arc::new(Mutex::new(pw_hash));
@@ -73,7 +68,7 @@ impl Srv {
 
                     sodoken::argon2::blocking_argon2id(
                         &mut *pre_secret.lock(),
-                        pw_hash.lock().lock().as_slice(),
+                        pw_hash.lock().unwrap().lock().as_slice(),
                         &salt,
                         ops_limit,
                         mem_limit,
@@ -184,7 +179,7 @@ pub(crate) fn priv_srv_accept(
 ) -> BoxFuture<'static, LairResult<()>> {
     async move {
         let (id_pk, id_sk) = {
-            let lock = inner.read();
+            let lock = inner.read().unwrap();
             (lock.id_pk.clone(), lock.id_sk.clone())
         };
 
@@ -204,7 +199,7 @@ pub(crate) fn priv_srv_accept(
                     &mut *enc_ctx_key.lock(),
                     42,
                     b"ToCliCxK",
-                    &send_enc_ctx_key.lock().lock(),
+                    &send_enc_ctx_key.lock().unwrap().lock(),
                 )?;
 
                 Ok(enc_ctx_key)
@@ -221,7 +216,7 @@ pub(crate) fn priv_srv_accept(
                     &mut *dec_ctx_key.lock(),
                     142,
                     b"ToSrvCxK",
-                    &send_dec_ctx_key.lock().lock(),
+                    &send_dec_ctx_key.lock().unwrap().lock(),
                 )?;
 
                 Ok(dec_ctx_key)
@@ -420,7 +415,7 @@ pub(crate) fn priv_get_store(
         return Err("KeystoreLocked".into());
     }
 
-    Ok(inner.read().store.clone())
+    Ok(inner.read().unwrap().store.clone())
 }
 
 impl AsLairServer for Srv {
@@ -433,7 +428,7 @@ impl AsLairServer for Srv {
     }
 
     fn store(&self) -> BoxFuture<'static, LairResult<LairStore>> {
-        let store = self.0.read().store.clone();
+        let store = self.0.read().unwrap().store.clone();
         async move { Ok(store) }.boxed()
     }
 }

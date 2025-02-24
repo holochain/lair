@@ -4,9 +4,8 @@
 use crate::lair_store::traits::*;
 use crate::*;
 use futures::future::{BoxFuture, FutureExt};
-use parking_lot::RwLock;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 /// Create an in-memory LairStoreFactory - This does not provide any
 /// peristance, and should generally only be used for testing.
@@ -56,7 +55,7 @@ struct PrivMemStore(Arc<RwLock<PrivMemStoreInner>>);
 
 impl AsLairStore for PrivMemStore {
     fn get_bidi_ctx_key(&self) -> SharedSizedLockedArray<32> {
-        self.0.read().bidi_key.clone()
+        self.0.read().unwrap().bidi_key.clone()
     }
 
     fn list_entries(
@@ -66,6 +65,7 @@ impl AsLairStore for PrivMemStore {
         let list = self
             .0
             .read()
+            .unwrap()
             .entry_by_tag
             .values()
             .map(|e| match &**e {
@@ -111,7 +111,7 @@ impl AsLairStore for PrivMemStore {
             LairEntryInner::WkaTlsCert { tag, .. } => (tag.clone(), None, None),
         };
 
-        let mut lock = self.0.write();
+        let mut lock = self.0.write().unwrap();
 
         // refuse to overwrite entries
         if lock.entry_by_tag.contains_key(&tag) {
@@ -157,6 +157,7 @@ impl AsLairStore for PrivMemStore {
         let res = self
             .0
             .read()
+            .unwrap()
             .entry_by_tag
             .get(&tag)
             .cloned()
@@ -171,7 +172,7 @@ impl AsLairStore for PrivMemStore {
         // look up / return an entry by signature pub key
         let inner = self.0.clone();
         async move {
-            let lock = inner.read();
+            let lock = inner.read().unwrap();
             let tag = lock
                 .ed_pk_to_tag
                 .get(&ed25519_pub_key)
@@ -192,7 +193,7 @@ impl AsLairStore for PrivMemStore {
         // look up / return an entry by signature pub key
         let inner = self.0.clone();
         async move {
-            let lock = inner.read();
+            let lock = inner.read().unwrap();
             let tag = lock
                 .x_pk_to_tag
                 .get(&x25519_pub_key)

@@ -18,7 +18,6 @@ rmpv = { workspace = true }        # Version 1.0.1 requires Rust 1.70.0
 serde = { workspace = true }
 serde_bytes = { workspace = true }
 sodoken = { workspace = true }
-parking_lot = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 [dev-dependencies]

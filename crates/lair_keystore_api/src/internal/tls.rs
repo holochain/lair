@@ -3,8 +3,7 @@
 use crate::*;
 use once_cell::sync::Lazy;
 use one_err::OneErr;
-use parking_lot::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// The well-known CA keypair in plaintext pem format.
 /// Some TLS clients require CA roots to validate client-side certificates.

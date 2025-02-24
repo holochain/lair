@@ -3,10 +3,9 @@
 use crate::*;
 use futures::future::{BoxFuture, FutureExt};
 use lair_keystore_api::lair_store::traits::*;
-use parking_lot::Mutex;
 use rusqlite::params;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 const READ_CON_COUNT: usize = 3;
@@ -59,7 +58,7 @@ struct SqlCon {
 impl Drop for SqlCon {
     fn drop(&mut self) {
         if let Some(con) = self.con.take() {
-            let mut lock = self.pool.lock();
+            let mut lock = self.pool.lock().unwrap();
             if self.is_write {
                 lock.write_con = Some(con);
             } else {
@@ -150,7 +149,7 @@ impl SqlPool {
             &mut *ctx_secret.lock(),
             42,
             b"CtxSecKy",
-            &db_key.lock().lock(),
+            &db_key.lock().unwrap().lock(),
         )?;
 
         // derive a key to use for the sqlcipher encryption
@@ -159,7 +158,7 @@ impl SqlPool {
             &mut *dbk_secret.lock(),
             142,
             b"DbKSecKy",
-            &db_key.lock().lock(),
+            &db_key.lock().unwrap().lock(),
         )?;
 
         // initialize the sqlcipher key pragma
@@ -270,12 +269,12 @@ impl SqlPool {
     fn read(&self) -> impl Future<Output = SqlCon> + 'static + Send {
         let inner = self.0.clone();
         async move {
-            let permit = inner.lock().read_limit.clone();
+            let permit = inner.lock().unwrap().read_limit.clone();
             let permit = permit.acquire_owned().await.unwrap();
 
             let mut con = None;
             {
-                let mut lock = inner.lock();
+                let mut lock = inner.lock().unwrap();
                 for rc in lock.read_cons.iter_mut() {
                     if rc.is_some() {
                         con = rc.take();
@@ -297,10 +296,10 @@ impl SqlPool {
     fn write(&self) -> impl Future<Output = SqlCon> + 'static + Send {
         let inner = self.0.clone();
         async move {
-            let permit = inner.lock().write_limit.clone();
+            let permit = inner.lock().unwrap().write_limit.clone();
             let permit = permit.acquire_owned().await.unwrap();
 
-            let con = inner.lock().write_con.take();
+            let con = inner.lock().unwrap().write_con.take();
 
             SqlCon {
                 _permit: permit,
@@ -336,7 +335,7 @@ fn create_configured_db_connection(
 
 impl AsLairStore for SqlPool {
     fn get_bidi_ctx_key(&self) -> SharedSizedLockedArray<32> {
-        self.0.lock().ctx_secret.clone()
+        self.0.lock().unwrap().ctx_secret.clone()
     }
 
     fn list_entries(
@@ -564,7 +563,7 @@ fn set_pragmas(
     con.busy_timeout(std::time::Duration::from_millis(30_000))?;
 
     con.execute_optional(
-        std::str::from_utf8(&*key_pragma.lock().lock()).unwrap(),
+        std::str::from_utf8(&*key_pragma.lock().unwrap().lock()).unwrap(),
         [],
     )?;
 
@@ -624,7 +623,7 @@ fn encrypt_unencrypted_database(
             .map_err(one_err::OneErr::new)?;
 
         {
-            let mut lock = key_pragma.lock();
+            let mut lock = key_pragma.lock().unwrap();
             conn.execute(
                 "ATTACH DATABASE :db_name AS encrypted KEY :key",
                 rusqlite::named_params! {

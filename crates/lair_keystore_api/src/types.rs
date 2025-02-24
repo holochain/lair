@@ -1,8 +1,7 @@
 //! Common types used in the Lair keystore API.
 
 use crate::dependencies::sodoken;
-use parking_lot::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// SharedLockedArray type alias for a [sodoken::LockedArray] wrapped in an [Arc] and [Mutex].
 pub type SharedLockedArray = Arc<Mutex<sodoken::LockedArray>>;

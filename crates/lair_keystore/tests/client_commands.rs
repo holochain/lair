@@ -3,8 +3,7 @@ mod common;
 use assert_cmd::Command;
 use common::create_config;
 use lair_keystore::dependencies::*;
-use parking_lot::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{fs::File, io::Write};
 
 #[tokio::test(flavor = "multi_thread")]

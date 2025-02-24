@@ -155,8 +155,7 @@ fn priv_check_hello_ver(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use parking_lot::Mutex;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     async fn connect(tmp_dir: &tempdir::TempDir) -> crate::LairClient {
         // set up a passphrase

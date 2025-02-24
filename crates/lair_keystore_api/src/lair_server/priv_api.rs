@@ -1,8 +1,8 @@
 use super::*;
 use crate::types::SharedSizedLockedArray;
 use one_err::OneErr;
-use parking_lot::Mutex;
 use std::convert::TryInto;
+use std::sync::Mutex;
 
 pub(crate) fn priv_req_hello<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
@@ -15,7 +15,7 @@ pub(crate) fn priv_req_hello<'a>(
         // before we unlock the individual connection.
 
         let (id_pk, server_name, server_version) = {
-            let lock = inner.read();
+            let lock = inner.read().unwrap();
             (
                 lock.id_pk.clone(),
                 lock.server_name.clone(),
@@ -50,7 +50,7 @@ pub(crate) fn priv_req_unlock<'a>(
         let mut passphrase = req.passphrase.decrypt(dec_ctx_key).await?;
 
         let (config, id_pk) = {
-            let lock = inner.read();
+            let lock = inner.read().unwrap();
             (lock.config.clone(), lock.id_pk.clone())
         };
 
@@ -398,7 +398,7 @@ pub(crate) fn priv_req_export_seed_by_tag<'a>(
                     let mut nonce = [0; sodoken::crypto_box::XSALSA_NONCEBYTES];
                     sodoken::random::randombytes_buf(&mut nonce)?;
 
-                    let mut seed_guard = seed.lock();
+                    let mut seed_guard = seed.lock().unwrap();
                     let seed_guard = seed_guard.lock();
 
                     let mut cipher = vec![
@@ -411,7 +411,7 @@ pub(crate) fn priv_req_export_seed_by_tag<'a>(
                         seed_guard.as_slice(),
                         &nonce,
                         &req.recipient_pub_key.cloned_inner(),
-                        &x_sk.lock().lock(),
+                        &x_sk.lock().unwrap().lock(),
                     )?;
 
                     Ok((nonce, cipher))
@@ -478,7 +478,7 @@ pub(crate) fn priv_req_import_seed<'a>(
                     &req.cipher,
                     &req.nonce,
                     &req.sender_pub_key.cloned_inner(),
-                    &x_sk.lock().lock(),
+                    &x_sk.lock().unwrap().lock(),
                 )?;
 
                 Ok(seed)
@@ -606,7 +606,7 @@ pub(crate) fn priv_req_sign_by_pub_key<'a>(
                         sodoken::sign::sign_detached(
                             &mut signature,
                             &req.data,
-                            &ed_sk.lock().lock(),
+                            &ed_sk.lock().unwrap().lock(),
                         )?;
 
                         Ok(signature.into())
@@ -619,7 +619,7 @@ pub(crate) fn priv_req_sign_by_pub_key<'a>(
             Err(e) => {
                 // we don't have this key, let's see if we should invoke
                 // a signature fallback command
-                let fallback_cmd = inner.read().fallback_cmd.clone();
+                let fallback_cmd = inner.read().unwrap().fallback_cmd.clone();
                 if let Some(fallback_cmd) = fallback_cmd {
                     fallback_cmd.sign_by_pub_key(req).await?
                 } else {
@@ -668,7 +668,7 @@ pub(crate) fn priv_req_crypto_box_xsalsa_by_pub_key<'a>(
                     &req.data,
                     &nonce,
                     &req.recipient_pub_key.cloned_inner(),
-                    &x_sk.lock().lock(),
+                    &x_sk.lock().unwrap().lock(),
                 )?;
 
                 Ok((nonce, cipher))
@@ -726,7 +726,7 @@ pub(crate) fn priv_req_crypto_box_xsalsa_open_by_pub_key<'a>(
                     &req.cipher,
                     &req.nonce,
                     &req.sender_pub_key.cloned_inner(),
-                    &x_sk.lock().lock(),
+                    &x_sk.lock().unwrap().lock(),
                 )?;
 
                 Ok(message)
@@ -779,7 +779,7 @@ pub(crate) fn priv_req_crypto_box_xsalsa_by_sign_pub_key<'a>(
             let mut x_sk = sodoken::SizedLockedArray::<32>::new()?;
             sodoken::sign::sk_to_curve25519(
                 &mut x_sk.lock(),
-                &ed_sk.lock().lock(),
+                &ed_sk.lock().unwrap().lock(),
             )?;
 
             tokio::task::spawn_blocking(move || -> LairResult<_> {
@@ -856,7 +856,7 @@ pub(crate) fn priv_req_crypto_box_xsalsa_open_by_sign_pub_key<'a>(
             >::new()?;
             sodoken::sign::sk_to_curve25519(
                 &mut x_sk.lock(),
-                &ed_sk.lock().lock(),
+                &ed_sk.lock().unwrap().lock(),
             )?;
 
             tokio::task::spawn_blocking(move || -> LairResult<_> {
@@ -933,7 +933,7 @@ pub(crate) async fn derive_ed(
             sodoken::sign::seed_keypair(
                 &mut ed_pk,
                 &mut ed_sk.lock(),
-                &seed.lock().lock(),
+                &seed.lock().unwrap().lock(),
             )?;
 
             Ok((ed_pk, ed_sk))
@@ -959,7 +959,7 @@ pub(crate) async fn derive_x(
         sodoken::crypto_box::xsalsa_seed_keypair(
             &mut x_pk,
             &mut x_sk.lock(),
-            &seed.lock().lock(),
+            &seed.lock().unwrap().lock(),
         )?;
 
         Ok((x_pk, x_sk))
@@ -1020,7 +1020,7 @@ pub(crate) fn priv_gen_and_register_entry<'a>(
             x_sk,
         };
 
-        let mut lock = inner.write();
+        let mut lock = inner.write().unwrap();
 
         // add full entry to our LRU caches
         lock.entries_by_tag
@@ -1043,7 +1043,7 @@ pub(crate) fn priv_get_full_entry_by_tag<'a>(
 ) -> impl Future<Output = LairResult<(FullLairEntry, LairStore)>> + 'a + Send {
     async move {
         let store = {
-            let mut lock = inner.write();
+            let mut lock = inner.write().unwrap();
             let store = lock.store.clone();
             if let Some(full_entry) = lock.entries_by_tag.get(&tag) {
                 return Ok((full_entry.clone(), store));
@@ -1068,7 +1068,7 @@ pub(crate) fn priv_get_full_entry_by_ed_pub_key<'a>(
 ) -> impl Future<Output = LairResult<(FullLairEntry, LairStore)>> + 'a + Send {
     async move {
         let store = {
-            let mut lock = inner.write();
+            let mut lock = inner.write().unwrap();
             let store = lock.store.clone();
             if let Some(full_entry) = lock.entries_by_ed.get(&ed_pub_key) {
                 return Ok((full_entry.clone(), store));
@@ -1093,7 +1093,7 @@ pub(crate) fn priv_get_full_entry_by_x_pub_key<'a>(
 ) -> impl Future<Output = LairResult<(FullLairEntry, LairStore)>> + 'a + Send {
     async move {
         let store = {
-            let mut lock = inner.write();
+            let mut lock = inner.write().unwrap();
             let store = lock.store.clone();
             if let Some(full_entry) = lock.entries_by_x.get(&x_pub_key) {
                 return Ok((full_entry.clone(), store));
@@ -1186,7 +1186,7 @@ pub(crate) fn priv_req_secret_box_xsalsa_by_tag<'a>(
                     &mut cipher,
                     &nonce,
                     &req.data,
-                    &seed.lock().lock(),
+                    &seed.lock().unwrap().lock(),
                 )?;
 
                 Ok((nonce, cipher))
@@ -1243,7 +1243,7 @@ pub(crate) fn priv_req_secret_box_xsalsa_open_by_tag<'a>(
                     &mut message,
                     &req.cipher,
                     &req.nonce,
-                    &seed.lock().lock(),
+                    &seed.lock().unwrap().lock(),
                 )?;
 
                 Ok(message)

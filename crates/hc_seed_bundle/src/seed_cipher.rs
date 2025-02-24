@@ -3,8 +3,7 @@
 use crate::{SharedLockedArray, SharedSizedLockedArray};
 use futures::future::{BoxFuture, FutureExt};
 use one_err::*;
-use parking_lot::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 mod u8array;
 use u8array::*;

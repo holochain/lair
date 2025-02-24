@@ -72,7 +72,7 @@ pub(crate) async fn pw_enc(
     let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
     sodoken::blake2b::blake2b_hash(
         pw_hash.lock().as_mut_slice(),
-        &passphrase.lock().lock(),
+        &passphrase.lock().unwrap().lock(),
         None,
     )?;
 
@@ -110,7 +110,7 @@ pub(crate) async fn pw_enc(
     sodoken::secretstream::push(
         &mut enc,
         &mut cipher,
-        &*seed.lock().lock(),
+        &*seed.lock().unwrap().lock(),
         None,
         sodoken::secretstream::Tag::Final,
     )?;
@@ -136,7 +136,7 @@ pub(crate) async fn pw_dec(
     let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
     sodoken::blake2b::blake2b_hash(
         pw_hash.lock().as_mut_slice(),
-        &passphrase.lock().lock(),
+        &passphrase.lock().unwrap().lock(),
         None,
     )?;
 

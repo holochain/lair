@@ -1,8 +1,7 @@
 use crate::SharedSizedLockedArray;
 use one_err::*;
-use parking_lot::Mutex;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// The hcSeedBundle spec specifies a fixed KDF context of b"SeedBndl".
 const KDF_CONTEXT: &[u8; 8] = b"SeedBndl";
@@ -44,7 +43,7 @@ impl UnlockedSeedBundle {
                 sodoken::sign::seed_keypair(
                     &mut pk,
                     &mut sk.lock(),
-                    &seed.lock().lock(),
+                    &seed.lock().unwrap().lock(),
                 )?;
 
                 Ok((pk, sk))
@@ -96,7 +95,7 @@ impl UnlockedSeedBundle {
                         new_seed.lock().as_mut_slice(),
                         index as u64,
                         KDF_CONTEXT,
-                        &seed.lock().lock(),
+                        &seed.lock().unwrap().lock(),
                     )?;
 
                     Ok(new_seed)
@@ -127,7 +126,7 @@ impl UnlockedSeedBundle {
                 sodoken::sign::sign_detached(
                     &mut sig,
                     &message,
-                    &sign_sec_key.lock().lock(),
+                    &sign_sec_key.lock().unwrap().lock(),
                 )?;
 
                 Ok(sig)
@@ -179,8 +178,7 @@ impl UnlockedSeedBundle {
 #[cfg(test)]
 mod tests {
     use crate::*;
-    use parking_lot::Mutex;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_pwhash_cipher() {

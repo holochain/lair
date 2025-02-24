@@ -1,8 +1,7 @@
 use base64::Engine;
 use hc_seed_bundle::*;
-use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 const FIXTURES: &str = include_str!("fixtures/seed_bundle_test_fixtures.json");
 
