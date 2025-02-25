@@ -1,5 +1,9 @@
 ## Unreleased
 
+- Update to Rust 1.85 [#144](https://github.com/holochain/lair/pull/144)
+- Update to latest `sodoken` version, comes with breaking changes to the Lair API to switch from read buffers to locked 
+  arrays. See the documentation for updated usage examples. [#143](https://github.com/holochain/lair/pull/143)
+
 ## 0.5.3
 
 - Upgrade `sysinfo` dependency to resolve an issue with building against a recent libc [#140](https://github.com/holochain/lair/pull/140)
