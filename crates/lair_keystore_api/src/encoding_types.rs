@@ -1,8 +1,10 @@
 //! Helper types for dealing with serialization.
 
+use crate::types::{SharedLockedArray, SharedSizedLockedArray};
 use crate::*;
 use base64::Engine;
-use sodoken::secretstream::xchacha20poly1305 as sss;
+use one_err::OneErr;
+use std::convert::TryInto;
 use std::sync::Arc;
 
 fn to_base64_url<B: AsRef<[u8]>>(b: B) -> String {
@@ -179,21 +181,16 @@ impl<'de, const N: usize> serde::Deserialize<'de> for BinDataSized<N> {
 impl BinDataSized<32> {
     /// Treat this bin data as an ed25519 public key,
     /// and use it to verify a signature over a given message.
-    pub async fn verify_detached<M>(
+    pub async fn verify_detached(
         &self,
         signature: BinDataSized<64>,
-        message: M,
-    ) -> LairResult<bool>
-    where
-        M: Into<sodoken::BufRead> + 'static + Send,
-    {
-        let pub_key = sodoken::BufReadSized::from(self.0.clone());
+        message: Arc<[u8]>,
+    ) -> bool {
         sodoken::sign::verify_detached(
-            signature.cloned_inner(),
-            message,
-            pub_key,
+            &signature.cloned_inner(),
+            &message,
+            &self.0,
         )
-        .await
     }
 }
 
@@ -208,40 +205,56 @@ pub struct SecretData(
 );
 
 impl SecretData {
-    /// Encrypt some data as a 'SecretData' object with given context key.
+    /// Encrypt some secret data as a 'SecretData' object with given context key.
     pub async fn encrypt(
-        key: sodoken::BufReadSized<32>,
-        data: sodoken::BufRead,
+        key: SharedSizedLockedArray<32>,
+        data: SharedLockedArray,
     ) -> LairResult<Self> {
-        let header =
-            <sodoken::BufWriteSized<{ sss::HEADERBYTES }>>::new_no_lock();
-        let cipher = sodoken::BufExtend::new_no_lock(data.len() + sss::ABYTES);
-        let mut enc = sss::SecretStreamEncrypt::new(key, header.clone())?;
-        enc.push_final(data, <Option<sodoken::BufRead>>::None, cipher.clone())
-            .await?;
+        let mut data_guard = data.lock().unwrap();
+        let data_lock = data_guard.lock();
+        let mut header = [0; sodoken::secretstream::HEADERBYTES];
+        let mut cipher =
+            vec![0; data_lock.len() + sodoken::secretstream::ABYTES];
 
-        let header = header.try_unwrap_sized().unwrap();
+        let mut enc = sodoken::secretstream::State::default();
+        sodoken::secretstream::init_push(
+            &mut enc,
+            &mut header,
+            &key.lock().unwrap().lock(),
+        )?;
 
-        let cipher_r = cipher.to_read();
-        drop(cipher);
-        let cipher_r = cipher_r.try_unwrap().unwrap();
+        sodoken::secretstream::push(
+            &mut enc,
+            &mut cipher,
+            &data_lock,
+            None,
+            sodoken::secretstream::Tag::Final,
+        )?;
 
-        Ok(Self(header.into(), cipher_r.into()))
+        Ok(Self(header.into(), cipher.into_boxed_slice().into()))
     }
 
     /// Decrypt some data as a 'SecretData' object with given context key.
     pub async fn decrypt(
         &self,
-        key: sodoken::BufReadSized<32>,
-    ) -> LairResult<sodoken::BufRead> {
-        let header = sodoken::BufReadSized::from(self.0.cloned_inner());
-        let cipher = sodoken::BufRead::from(self.1.cloned_inner());
-        let mut dec = sss::SecretStreamDecrypt::new(key, header)?;
-        let out =
-            sodoken::BufWrite::new_mem_locked(cipher.len() - sss::ABYTES)?;
-        dec.pull(cipher, <Option<sodoken::BufRead>>::None, out.clone())
-            .await?;
-        Ok(out.to_read())
+        key: SharedSizedLockedArray<32>,
+    ) -> LairResult<sodoken::LockedArray> {
+        let header = self.0.clone();
+        let data = self.1.clone();
+
+        let mut dec = sodoken::secretstream::State::default();
+        sodoken::secretstream::init_pull(
+            &mut dec,
+            &header,
+            &key.lock().unwrap().lock(),
+        )?;
+
+        let mut out = sodoken::LockedArray::new(
+            data.len() - sodoken::secretstream::ABYTES,
+        )?;
+        sodoken::secretstream::pull(&mut dec, &mut out.lock(), &data, None)?;
+
+        Ok(out)
     }
 }
 
@@ -258,34 +271,60 @@ pub struct SecretDataSized<const M: usize, const C: usize>(
 impl<const M: usize, const C: usize> SecretDataSized<M, C> {
     /// Encrypt some data as a 'SecretDataSized' object with given context key.
     pub async fn encrypt(
-        key: sodoken::BufReadSized<32>,
-        data: sodoken::BufReadSized<M>,
+        key: SharedSizedLockedArray<32>,
+        data: SharedSizedLockedArray<M>,
     ) -> LairResult<Self> {
-        let header =
-            <sodoken::BufWriteSized<{ sss::HEADERBYTES }>>::new_no_lock();
-        let cipher = sodoken::BufWriteSized::new_no_lock();
-        let mut enc = sss::SecretStreamEncrypt::new(key, header.clone())?;
-        enc.push_final(data, <Option<sodoken::BufRead>>::None, cipher.clone())
-            .await?;
+        let mut header = [0; sodoken::secretstream::HEADERBYTES];
+        let mut cipher = vec![
+            0;
+            data.lock().unwrap().lock().len()
+                + sodoken::secretstream::ABYTES
+        ];
+        let mut enc = sodoken::secretstream::State::default();
+        sodoken::secretstream::init_push(
+            &mut enc,
+            &mut header,
+            &key.lock().unwrap().lock(),
+        )?;
 
-        let header = header.try_unwrap_sized().unwrap();
-        let cipher = cipher.try_unwrap_sized().unwrap();
+        sodoken::secretstream::push(
+            &mut enc,
+            cipher.as_mut_slice(),
+            &*data.lock().unwrap().lock(),
+            None,
+            sodoken::secretstream::Tag::Final,
+        )?;
 
+        let cipher: [u8; C] = cipher.try_into().map_err(|_| {
+            OneErr::new("cipher data length does not match expected size")
+        })?;
         Ok(Self(header.into(), cipher.into()))
     }
 
     /// Decrypt some data as a 'SecretDataSized' object with given context key.
     pub async fn decrypt(
         &self,
-        key: sodoken::BufReadSized<32>,
-    ) -> LairResult<sodoken::BufReadSized<M>> {
-        let header = sodoken::BufReadSized::from(self.0.cloned_inner());
-        let cipher = sodoken::BufReadSized::from(self.1.cloned_inner());
-        let mut dec = sss::SecretStreamDecrypt::new(key, header)?;
-        let out = sodoken::BufWriteSized::new_mem_locked()?;
-        dec.pull(cipher, <Option<sodoken::BufRead>>::None, out.clone())
-            .await?;
-        Ok(out.to_read_sized())
+        key: SharedSizedLockedArray<32>,
+    ) -> LairResult<sodoken::SizedLockedArray<M>> {
+        let header = self.0.clone();
+        let cipher = self.1.clone();
+
+        let mut state = sodoken::secretstream::State::default();
+        sodoken::secretstream::init_pull(
+            &mut state,
+            &header,
+            &key.lock().unwrap().lock(),
+        )?;
+
+        let mut out = sodoken::SizedLockedArray::<M>::new()?;
+        sodoken::secretstream::pull(
+            &mut state,
+            &mut *out.lock(),
+            cipher.as_slice(),
+            None,
+        )?;
+
+        Ok(out)
     }
 }
 

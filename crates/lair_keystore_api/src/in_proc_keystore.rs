@@ -9,29 +9,24 @@ use std::future::Future;
 #[derive(Clone)]
 pub struct InProcKeystore {
     config: LairServerConfig,
-    passphrase: sodoken::BufRead,
+    passphrase: SharedLockedArray,
     srv_hnd: crate::lair_server::LairServer,
 }
 
 impl InProcKeystore {
     /// Construct a new InProcKeystore instance.
     /// The internal server will already be "interactively" unlocked.
-    pub fn new<P>(
+    pub fn new(
         config: LairServerConfig,
         store_factory: LairStoreFactory,
-        passphrase: P,
-    ) -> impl Future<Output = LairResult<Self>> + 'static + Send
-    where
-        P: Into<sodoken::BufRead> + 'static + Send,
-    {
+        passphrase: SharedLockedArray,
+    ) -> impl Future<Output = LairResult<Self>> + 'static + Send {
         async move {
-            let passphrase = passphrase.into();
-
             // set up our server handler
             let srv_hnd = crate::lair_server::spawn_lair_server_task(
                 config.clone(),
                 "lair-keystore-in-proc".into(),
-                crate::LAIR_VER.into(),
+                LAIR_VER.into(),
                 store_factory,
                 passphrase.clone(),
             )
@@ -113,12 +108,14 @@ impl InProcKeystore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
+    use std::sync::{Arc, Mutex};
 
     #[tokio::test(flavor = "multi_thread")]
     async fn in_proc_happy_path() {
         // set up a passphrase
-        let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
+        let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(
+            b"passphrase".to_vec(),
+        )));
 
         // create the config for the test server
         // the path is immaterial since we'll be using an in-memory store
@@ -165,7 +162,8 @@ mod tests {
         }
 
         let tag = "test-tag-deep";
-        let passphrase = sodoken::BufRead::from(&b"deep"[..]);
+        let passphrase =
+            Arc::new(Mutex::new(sodoken::LockedArray::from(b"deep".to_vec())));
 
         // create a new deep-locked seed
         let seed_info_ref_deep = hc_seed_bundle::PwHashLimits::Interactive
@@ -237,18 +235,23 @@ mod tests {
             )
             .await
             .unwrap();
-        assert!(seed_info_ref_deep
-            .ed25519_pub_key
-            .verify_detached(signature, sodoken::BufRead::from(&data[..]))
-            .await
-            .unwrap());
+        assert!(
+            seed_info_ref_deep
+                .ed25519_pub_key
+                .verify_detached(signature, data)
+                .await
+        );
     }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn in_proc_derive_seed_happy_path() {
         // set up a passphrase
-        let passphrase1 = sodoken::BufRead::from(&b"passphrase1"[..]);
-        let passphrase2 = sodoken::BufRead::from(&b"passphrase2"[..]);
+        let passphrase1 = Arc::new(Mutex::new(sodoken::LockedArray::from(
+            b"passphrase1".to_vec(),
+        )));
+        let passphrase2 = Arc::new(Mutex::new(sodoken::LockedArray::from(
+            b"passphrase2".to_vec(),
+        )));
 
         // create the config for the test server
         // the path is immaterial since we'll be using an in-memory store

@@ -1,6 +1,7 @@
 use common::connect;
 use lair_keystore::dependencies::*;
 use lair_keystore_api::prelude::*;
+use std::sync::{Arc, Mutex};
 
 mod common;
 
@@ -54,18 +55,21 @@ async fn server_test_happy_path() {
         )
         .await
         .unwrap();
-    assert!(seed_info_ref
-        .ed25519_pub_key
-        .verify_detached(sig, &b"hello"[..])
-        .await
-        .unwrap());
+    assert!(
+        seed_info_ref
+            .ed25519_pub_key
+            .verify_detached(sig, (*b"hello").into())
+            .await
+    );
 
     // create a new deep-locked seed
     let _seed_info_ref_deep = hc_seed_bundle::PwHashLimits::Minimum
         .with_exec(|| {
             client.new_seed(
                 "test-tag-deep".into(),
-                Some(sodoken::BufRead::from(&b"deep"[..])),
+                Some(Arc::new(Mutex::new(sodoken::LockedArray::from(
+                    b"deep".to_vec(),
+                )))),
                 false,
             )
         })
@@ -76,11 +80,11 @@ async fn server_test_happy_path() {
     let cert_info = client.new_wka_tls_cert("test-cert".into()).await.unwrap();
     println!("{cert_info:#?}");
 
-    let priv_key = client
+    let mut priv_key = client
         .get_wka_tls_cert_priv_key("test-cert".into())
         .await
         .unwrap();
-    println!("got priv key: {} bytes", priv_key.len());
+    println!("got priv key: {} bytes", priv_key.lock().len());
 
     println!("{:#?}", client.list_entries().await.unwrap());
 

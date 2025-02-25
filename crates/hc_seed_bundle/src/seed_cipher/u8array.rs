@@ -5,21 +5,9 @@ use std::ops::{Deref, DerefMut};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct U8Array<const N: usize>(pub [u8; N]);
 
-impl<const N: usize> From<U8Array<N>> for sodoken::BufReadSized<N> {
-    fn from(o: U8Array<N>) -> Self {
-        o.0.into()
-    }
-}
-
 impl<const N: usize> From<[u8; N]> for U8Array<N> {
     fn from(o: [u8; N]) -> Self {
         Self(o)
-    }
-}
-
-impl<const N: usize> From<sodoken::BufReadSized<N>> for U8Array<N> {
-    fn from(o: sodoken::BufReadSized<N>) -> Self {
-        (*o.read_lock_sized()).into()
     }
 }
 

@@ -1,5 +1,6 @@
 use hc_seed_bundle::dependencies::sodoken;
 use lair_keystore_api::prelude::*;
+use std::sync::{Arc, Mutex};
 use std::{env::current_dir, path::PathBuf};
 use tempdir::TempDir;
 
@@ -9,7 +10,9 @@ async fn lair_config_connection_url_relative_root() {
     // Lair config should use an absolute path for 'connection_url'
     // when passed an relative path for 'lair_root'
 
-    let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
+    let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"passphrase".to_vec(),
+    )));
 
     let dir = TempDir::new_in(".", "example").unwrap();
 
@@ -36,7 +39,9 @@ async fn lair_config_connection_url_absolute_root() {
     // Lair config should use an absolute path for 'connection_url'
     // when passed an absolute path for 'lair_root'
 
-    let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
+    let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"passphrase".to_vec(),
+    )));
 
     let dir = TempDir::new_in(".", "example").unwrap();
     let mut absolute_lair_root = current_dir().unwrap();

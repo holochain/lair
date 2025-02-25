@@ -53,20 +53,24 @@ impl PwHashLimits {
     /// translate into mem limit
     pub fn as_mem_limit(&self) -> u32 {
         match self {
-            Self::Minimum => sodoken::hash::argon2id::MEMLIMIT_MIN,
-            Self::Interactive => sodoken::hash::argon2id::MEMLIMIT_INTERACTIVE,
-            Self::Moderate => sodoken::hash::argon2id::MEMLIMIT_MODERATE,
-            Self::Sensitive => sodoken::hash::argon2id::MEMLIMIT_SENSITIVE,
+            Self::Minimum => sodoken::argon2::ARGON2_ID_MEMLIMIT_MIN,
+            Self::Interactive => {
+                sodoken::argon2::ARGON2_ID_MEMLIMIT_INTERACTIVE
+            }
+            Self::Moderate => sodoken::argon2::ARGON2_ID_MEMLIMIT_MODERATE,
+            Self::Sensitive => sodoken::argon2::ARGON2_ID_MEMLIMIT_SENSITIVE,
         }
     }
 
     /// translate into cpu limit
     pub fn as_ops_limit(&self) -> u32 {
         match self {
-            Self::Minimum => sodoken::hash::argon2id::OPSLIMIT_MIN,
-            Self::Interactive => sodoken::hash::argon2id::OPSLIMIT_INTERACTIVE,
-            Self::Moderate => sodoken::hash::argon2id::OPSLIMIT_MODERATE,
-            Self::Sensitive => sodoken::hash::argon2id::OPSLIMIT_SENSITIVE,
+            Self::Minimum => sodoken::argon2::ARGON2_ID_OPSLIMIT_MIN,
+            Self::Interactive => {
+                sodoken::argon2::ARGON2_ID_OPSLIMIT_INTERACTIVE
+            }
+            Self::Moderate => sodoken::argon2::ARGON2_ID_OPSLIMIT_MODERATE,
+            Self::Sensitive => sodoken::argon2::ARGON2_ID_OPSLIMIT_SENSITIVE,
         }
     }
 }

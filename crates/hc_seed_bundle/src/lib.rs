@@ -141,6 +141,8 @@
 //! - `secretstream_xchacha20poly1305`
 //!   - single `push_final/pull_final` with entire contents
 
+use std::sync::{Arc, Mutex};
+
 /// re-exported dependencies
 pub mod dependencies {
     pub use futures;
@@ -157,3 +159,10 @@ pub use seed_cipher::*;
 
 mod unlocked_seed_bundle;
 pub use unlocked_seed_bundle::*;
+
+/// SharedLockedArray type alias for a [sodoken::LockedArray] wrapped in an [Arc] and [Mutex].
+pub type SharedLockedArray = Arc<Mutex<sodoken::LockedArray>>;
+
+/// SharedSizedLockedArray type alias for a [sodoken::SizedLockedArray] wrapped in an [Arc] and [Mutex].
+pub type SharedSizedLockedArray<const N: usize> =
+    Arc<Mutex<sodoken::SizedLockedArray<N>>>;

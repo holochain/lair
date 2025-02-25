@@ -2,8 +2,9 @@
 //! configuring a standalone or in-process lair keystore server.
 
 use crate::*;
+use one_err::OneErr;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 const PID_FILE_NAME: &str = "pid_file";
 const STORE_FILE_NAME: &str = "store_file";
@@ -135,7 +136,7 @@ impl LairServerConfigInner {
     /// Respects hc_seed_bundle::PwHashLimits.
     pub fn new<P>(
         root_path: P,
-        passphrase: sodoken::BufRead,
+        passphrase: SharedLockedArray,
     ) -> impl Future<Output = LairResult<Self>> + 'static + Send
     where
         P: AsRef<std::path::Path>,
@@ -152,84 +153,97 @@ impl LairServerConfigInner {
             store_file.push(STORE_FILE_NAME);
 
             // pre-hash the passphrase
-            let pw_hash = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-            sodoken::hash::blake2b::hash(pw_hash.clone(), passphrase).await?;
-
-            // generate a random salt for the sqlcipher database
-            let db_salt = <sodoken::BufWriteSized<16>>::new_no_lock();
-            sodoken::random::bytes_buf(db_salt.clone()).await?;
-
-            // generate a random salt for the pwhash
-            let salt = <sodoken::BufWriteSized<16>>::new_no_lock();
-            sodoken::random::bytes_buf(salt.clone()).await?;
+            let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
+            sodoken::blake2b::blake2b_hash(
+                &mut *pw_hash.lock(),
+                &passphrase.lock().unwrap().lock(),
+                None,
+            )?;
 
             // pull the captured argon2id limits
             let ops_limit = limits.as_ops_limit();
             let mem_limit = limits.as_mem_limit();
 
             // generate an argon2id pre_secret from the passphrase
-            let pre_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-            sodoken::hash::argon2id::hash(
-                pre_secret.clone(),
-                pw_hash,
-                salt.clone(),
-                ops_limit,
-                mem_limit,
-            )
-            .await?;
+            let (salt, pre_secret) =
+                tokio::task::spawn_blocking(move || -> LairResult<_> {
+                    // generate a random salt for the pwhash
+                    let mut salt = [0; sodoken::argon2::ARGON2_ID_SALTBYTES];
+                    sodoken::random::randombytes_buf(&mut salt)?;
+
+                    let mut pre_secret =
+                        sodoken::SizedLockedArray::<32>::new()?;
+
+                    sodoken::argon2::blocking_argon2id(
+                        &mut *pre_secret.lock(),
+                        &*pw_hash.lock(),
+                        &salt,
+                        ops_limit,
+                        mem_limit,
+                    )?;
+
+                    Ok((salt, pre_secret))
+                })
+                .await
+                .map_err(OneErr::new)??;
+            let pre_secret = Arc::new(Mutex::new(pre_secret));
 
             // derive our context secret
             // this will be used to encrypt the context_key
-            let ctx_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            let mut ctx_secret = sodoken::SizedLockedArray::<32>::new()?;
             sodoken::kdf::derive_from_key(
-                ctx_secret.clone(),
+                &mut *ctx_secret.lock(),
                 42,
-                *b"CtxSecKy",
-                pre_secret.clone(),
+                b"CtxSecKy",
+                &pre_secret.lock().unwrap().lock(),
             )?;
+            let ctx_secret = Arc::new(Mutex::new(ctx_secret));
 
             // derive our signature secret
             // this will be used to encrypt the signature seed
-            let id_secret = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
+            let mut id_secret = sodoken::SizedLockedArray::<32>::new()?;
             sodoken::kdf::derive_from_key(
-                id_secret.clone(),
+                &mut *id_secret.lock(),
                 142,
-                *b"IdnSecKy",
-                pre_secret,
+                b"IdnSecKy",
+                &pre_secret.lock().unwrap().lock(),
             )?;
+            let id_secret = Arc::new(Mutex::new(id_secret));
 
             // the context key is used to encrypt our store_file
-            let context_key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-            sodoken::random::bytes_buf(context_key.clone()).await?;
+            let mut context_key = sodoken::SizedLockedArray::<32>::new()?;
+            sodoken::random::randombytes_buf(&mut *context_key.lock())?;
 
             // the sign seed derives our signature keypair
             // which allows us to authenticate server identity
-            let id_seed = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-            sodoken::random::bytes_buf(id_seed.clone()).await?;
+            let mut id_seed = sodoken::SizedLockedArray::<32>::new()?;
+            sodoken::random::randombytes_buf(&mut *id_seed.lock())?;
 
             // server identity encryption keypair
-            let id_pk = <sodoken::BufWriteSized<32>>::new_no_lock();
-            let id_sk = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-            use sodoken::crypto_box::curve25519xchacha20poly1305::*;
-            seed_keypair(id_pk.clone(), id_sk, id_seed.clone()).await?;
+            let mut id_pk = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+            let mut id_sk = sodoken::SizedLockedArray::<32>::new()?;
+            sodoken::crypto_box::xsalsa_seed_keypair(
+                &mut id_pk,
+                &mut id_sk.lock(),
+                &id_seed.lock(),
+            )?;
 
             // lock the context key
             let context_key = SecretDataSized::encrypt(
-                ctx_secret.to_read_sized(),
-                context_key.to_read_sized(),
+                ctx_secret,
+                Arc::new(Mutex::new(context_key)),
             )
             .await?;
 
             // lock the signature seed
             let id_seed = SecretDataSized::encrypt(
-                id_secret.to_read_sized(),
-                id_seed.to_read_sized(),
+                id_secret,
+                Arc::new(Mutex::new(id_seed)),
             )
             .await?;
 
             // get the signature public key bytes for encoding in the url
-            let id_pk: BinDataSized<32> =
-                id_pk.try_unwrap_sized().unwrap().into();
+            let id_pk: BinDataSized<32> = id_pk.into();
 
             // on windows, we default to using "named pipes"
             #[cfg(windows)]
@@ -255,14 +269,18 @@ impl LairServerConfigInner {
                 .unwrap()
             };
 
+            // generate a random salt for the sqlcipher database
+            let mut db_salt = [0; 16];
+            sodoken::random::randombytes_buf(&mut db_salt)?;
+
             // put together the full server config struct
             let config = LairServerConfigInner {
                 connection_url,
                 pid_file,
                 store_file,
                 signature_fallback: LairServerSignatureFallback::None,
-                database_salt: db_salt.try_unwrap_sized().unwrap().into(),
-                runtime_secrets_salt: salt.try_unwrap_sized().unwrap().into(),
+                database_salt: db_salt.into(),
+                runtime_secrets_salt: salt.into(),
                 runtime_secrets_mem_limit: mem_limit,
                 runtime_secrets_ops_limit: ops_limit,
                 runtime_secrets_context_key: context_key,
@@ -328,7 +346,9 @@ mod tests {
     #[tokio::test(flavor = "multi_thread")]
     async fn test_config_yaml() {
         let tempdir = tempdir::TempDir::new("example").unwrap();
-        let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
+        let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(
+            b"passphrase".to_vec(),
+        )));
         let mut srv = hc_seed_bundle::PwHashLimits::Minimum
             .with_exec(|| {
                 LairServerConfigInner::new(tempdir.path(), passphrase)

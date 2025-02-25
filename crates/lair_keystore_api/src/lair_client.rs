@@ -2,13 +2,13 @@
 
 use crate::lair_api::api_traits::*;
 use crate::*;
+use client_traits::*;
 use futures::future::{BoxFuture, FutureExt};
 use futures::stream::StreamExt;
-use hc_seed_bundle::dependencies::sodoken::{BufRead, BufReadSized};
-use parking_lot::RwLock;
+use one_err::OneErr;
 use std::collections::HashMap;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, RwLock};
 
 /// Traits related to LairClient. Unless you're writing a new
 /// implementation, you probably don't need these.
@@ -19,10 +19,10 @@ pub mod client_traits {
     /// lair client backend implementation.
     pub trait AsLairClient: 'static + Send + Sync {
         /// Return the encryption context key for passphrases, etc.
-        fn get_enc_ctx_key(&self) -> sodoken::BufReadSized<32>;
+        fn get_enc_ctx_key(&self) -> SharedSizedLockedArray<32>;
 
         /// Return the decryption context key for passphrases, etc.
-        fn get_dec_ctx_key(&self) -> sodoken::BufReadSized<32>;
+        fn get_dec_ctx_key(&self) -> SharedSizedLockedArray<32>;
 
         /// Shutdown the client connection.
         fn shutdown(&self) -> BoxFuture<'static, LairResult<()>>;
@@ -34,7 +34,6 @@ pub mod client_traits {
         ) -> BoxFuture<'static, LairResult<LairApiEnum>>;
     }
 }
-use client_traits::*;
 
 /// A lair keystore client handle. Use this to make requests of the keystore.
 #[derive(Clone)]
@@ -47,7 +46,7 @@ fn priv_lair_api_request<R: AsLairRequest>(
     request: R,
 ) -> impl Future<Output = LairResult<R::Response>> + 'static + Send
 where
-    one_err::OneErr: std::convert::From<
+    OneErr: From<
         <<R as AsLairRequest>::Response as std::convert::TryFrom<
             LairApiEnum,
         >>::Error,
@@ -69,12 +68,12 @@ where
 
 impl LairClient {
     /// Return the encryption context key for passphrases, etc.
-    pub fn get_enc_ctx_key(&self) -> sodoken::BufReadSized<32> {
+    pub fn get_enc_ctx_key(&self) -> SharedSizedLockedArray<32> {
         AsLairClient::get_enc_ctx_key(&*self.0)
     }
 
     /// Return the decryption context key for passphrases, etc.
-    pub fn get_dec_ctx_key(&self) -> sodoken::BufReadSized<32> {
+    pub fn get_dec_ctx_key(&self) -> SharedSizedLockedArray<32> {
         AsLairClient::get_dec_ctx_key(&*self.0)
     }
 
@@ -91,7 +90,7 @@ impl LairClient {
         request: R,
     ) -> impl Future<Output = LairResult<R::Response>> + 'static + Send
     where
-        one_err::OneErr: std::convert::From<
+        OneErr: From<
             <<R as AsLairRequest>::Response as std::convert::TryFrom<
                 LairApiEnum,
             >>::Error,
@@ -134,7 +133,7 @@ impl LairClient {
     /// it likely handles this for you in its constructor.
     pub fn unlock(
         &self,
-        passphrase: sodoken::BufRead,
+        passphrase: SharedLockedArray,
     ) -> impl Future<Output = LairResult<()>> + 'static + Send {
         let inner = self.0.clone();
         async move {
@@ -179,10 +178,10 @@ impl LairClient {
     pub fn new_seed(
         &self,
         tag: Arc<str>,
-        deep_lock_passphrase: Option<sodoken::BufRead>,
+        deep_lock_passphrase: Option<SharedLockedArray>,
         exportable: bool,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
-        let limits = hc_seed_bundle::PwHashLimits::current();
+        let limits = PwHashLimits::current();
         let inner = self.0.clone();
         async move {
             // if this is to be a deep locked seed / encrypt the passphrase
@@ -208,7 +207,7 @@ impl LairClient {
         tag: Arc<str>,
         sender_pub_key: X25519PubKey,
         recipient_pub_key: X25519PubKey,
-        deep_lock_passphrase: Option<sodoken::BufRead>,
+        deep_lock_passphrase: Option<SharedLockedArray>,
     ) -> impl Future<Output = LairResult<([u8; 24], Arc<[u8]>)>> + 'static + Send
     {
         let inner = self.0.clone();
@@ -241,7 +240,7 @@ impl LairClient {
         &self,
         sender_pub_key: X25519PubKey,
         recipient_pub_key: X25519PubKey,
-        deep_lock_passphrase: Option<sodoken::BufRead>,
+        deep_lock_passphrase: Option<SharedLockedArray>,
         nonce: [u8; 24],
         cipher: Arc<[u8]>,
         tag: Arc<str>,
@@ -284,9 +283,9 @@ impl LairClient {
     pub fn derive_seed(
         &self,
         src_tag: Arc<str>,
-        src_deep_lock_passphrase: Option<BufRead>,
+        src_deep_lock_passphrase: Option<SharedLockedArray>,
         dst_tag: Arc<str>,
-        dst_deep_lock_passphrase: Option<BufRead>,
+        dst_deep_lock_passphrase: Option<SharedLockedArray>,
         derivation_path: Box<[u32]>,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let inner = self.0.clone();
@@ -328,7 +327,7 @@ impl LairClient {
     pub fn sign_by_pub_key(
         &self,
         pub_key: Ed25519PubKey,
-        deep_lock_passphrase: Option<sodoken::BufRead>,
+        deep_lock_passphrase: Option<SharedLockedArray>,
         data: Arc<[u8]>,
     ) -> impl Future<Output = LairResult<Ed25519Signature>> + 'static + Send
     {
@@ -353,7 +352,7 @@ impl LairClient {
         &self,
         sender_pub_key: X25519PubKey,
         recipient_pub_key: X25519PubKey,
-        deep_lock_passphrase: Option<sodoken::BufRead>,
+        deep_lock_passphrase: Option<SharedLockedArray>,
         data: Arc<[u8]>,
     ) -> impl Future<Output = LairResult<([u8; 24], Arc<[u8]>)>> + 'static + Send
     {
@@ -383,7 +382,7 @@ impl LairClient {
         &self,
         sender_pub_key: X25519PubKey,
         recipient_pub_key: X25519PubKey,
-        deep_lock_passphrase: Option<sodoken::BufRead>,
+        deep_lock_passphrase: Option<SharedLockedArray>,
         nonce: [u8; 24],
         cipher: Arc<[u8]>,
     ) -> impl Future<Output = LairResult<Arc<[u8]>>> + 'static + Send {
@@ -418,7 +417,7 @@ impl LairClient {
         &self,
         sender_pub_key: Ed25519PubKey,
         recipient_pub_key: Ed25519PubKey,
-        deep_lock_passphrase: Option<sodoken::BufRead>,
+        deep_lock_passphrase: Option<SharedLockedArray>,
         data: Arc<[u8]>,
     ) -> impl Future<Output = LairResult<([u8; 24], Arc<[u8]>)>> + 'static + Send
     {
@@ -452,7 +451,7 @@ impl LairClient {
         &self,
         sender_pub_key: Ed25519PubKey,
         recipient_pub_key: Ed25519PubKey,
-        deep_lock_passphrase: Option<sodoken::BufRead>,
+        deep_lock_passphrase: Option<SharedLockedArray>,
         nonce: [u8; 24],
         cipher: Arc<[u8]>,
     ) -> impl Future<Output = LairResult<Arc<[u8]>>> + 'static + Send {
@@ -498,7 +497,7 @@ impl LairClient {
     pub fn get_wka_tls_cert_priv_key(
         &self,
         tag: Arc<str>,
-    ) -> impl Future<Output = LairResult<sodoken::BufRead>> + 'static + Send
+    ) -> impl Future<Output = LairResult<sodoken::LockedArray>> + 'static + Send
     {
         let inner = self.0.clone();
         async move {
@@ -514,7 +513,7 @@ impl LairClient {
     pub fn secretbox_xsalsa_by_tag(
         &self,
         tag: Arc<str>,
-        deep_lock_passphrase: Option<sodoken::BufRead>,
+        deep_lock_passphrase: Option<SharedLockedArray>,
         data: Arc<[u8]>,
     ) -> impl Future<Output = LairResult<([u8; 24], Arc<[u8]>)>> + 'static + Send
     {
@@ -538,7 +537,7 @@ impl LairClient {
     pub fn secretbox_xsalsa_open_by_tag(
         &self,
         tag: Arc<str>,
-        deep_lock_passphrase: Option<sodoken::BufRead>,
+        deep_lock_passphrase: Option<SharedLockedArray>,
         nonce: [u8; 24],
         cipher: Arc<[u8]>,
     ) -> impl Future<Output = LairResult<Arc<[u8]>>> + 'static + Send {
@@ -563,13 +562,19 @@ impl LairClient {
 pub mod async_io;
 
 async fn encrypt_passphrase(
-    pass: BufRead,
-    key: BufReadSized<32>,
+    pass: SharedLockedArray,
+    key: SharedSizedLockedArray<32>,
 ) -> LairResult<DeepLockPassphraseBytes> {
     // pre-hash the passphrase
-    let pw_hash = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-    sodoken::hash::blake2b::hash(pw_hash.clone(), pass).await?;
+    let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
+    sodoken::blake2b::blake2b_hash(
+        &mut *pw_hash.lock(),
+        &pass.lock().unwrap().lock(),
+        None,
+    )?;
 
-    let secret = SecretDataSized::encrypt(key, pw_hash.to_read_sized()).await?;
+    let pw_hash = Arc::new(Mutex::new(pw_hash));
+
+    let secret = SecretDataSized::encrypt(key, pw_hash).await?;
     Ok(secret)
 }

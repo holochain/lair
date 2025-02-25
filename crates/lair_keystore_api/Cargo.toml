@@ -17,7 +17,6 @@ hc_seed_bundle = { workspace = true }
 lru = { workspace = true }
 nanoid = { workspace = true }
 once_cell = { workspace = true }
-parking_lot = { workspace = true }
 rcgen = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -27,6 +26,7 @@ toml = { workspace = true }
 tracing = { workspace = true }
 url = { workspace = true }
 zeroize = { workspace = true }
+one_err = { workspace = true}
 
 [target.'cfg(windows)'.dependencies]
 winapi = { workspace = true }

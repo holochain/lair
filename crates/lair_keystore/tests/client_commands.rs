@@ -3,12 +3,15 @@ mod common;
 use assert_cmd::Command;
 use common::create_config;
 use lair_keystore::dependencies::*;
+use std::sync::{Arc, Mutex};
 use std::{fs::File, io::Write};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_url_command_only_outputs_connection_url() {
     let tmp_dir = tempdir::TempDir::new("lair keystore test").unwrap();
-    let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
+    let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"passphrase".to_vec(),
+    )));
 
     let config = create_config(&tmp_dir, passphrase.clone()).await;
     let config_path = tmp_dir.path().join("lair-keystore-config.yaml");

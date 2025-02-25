@@ -2,7 +2,8 @@
 
 use crate::*;
 use once_cell::sync::Lazy;
-use std::sync::Arc;
+use one_err::OneErr;
+use std::sync::{Arc, Mutex};
 
 /// The well-known CA keypair in plaintext pem format.
 /// Some TLS clients require CA roots to validate client-side certificates.
@@ -52,7 +53,7 @@ pub struct TlsCertGenResult {
     /// sni used in cert
     pub sni: Arc<str>,
     /// certificate private key
-    pub priv_key: sodoken::BufRead,
+    pub priv_key: SharedLockedArray,
     /// the der encoded certificate
     pub cert: Arc<[u8]>,
     /// blake2b digest of der encoded certificate
@@ -101,32 +102,32 @@ pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
             format!("Lair Pseudo-Self-Signed Cert {}", &sni),
         );
 
-        let cert = rcgen::Certificate::from_params(params)
-            .map_err(one_err::OneErr::new)?;
+        let cert =
+            rcgen::Certificate::from_params(params).map_err(OneErr::new)?;
 
         let cert_pk = zeroize::Zeroizing::new(cert.serialize_private_key_der());
-        let priv_key = sodoken::BufWrite::new_mem_locked(cert_pk.len())?;
-        priv_key.write_lock().copy_from_slice(&cert_pk);
-        let priv_key = priv_key.to_read();
+        let mut priv_key = sodoken::LockedArray::new(cert_pk.len())?;
+        priv_key.lock().copy_from_slice(&cert_pk);
 
         let root_cert = &**WK_CA_RCGEN_CERT;
-        let cert_der = cert
+        let cert_der: Arc<[u8]> = cert
             .serialize_der_with_signer(root_cert)
-            .map_err(one_err::OneErr::new)?;
+            .map_err(OneErr::new)?
+            .into();
 
         LairResult::Ok((sni, priv_key, cert_der))
     })
     .await
-    .map_err(one_err::OneErr::new)??;
+    .map_err(OneErr::new)??;
 
-    let digest = sodoken::BufWriteSized::new_no_lock();
-    sodoken::hash::blake2b::hash(digest.clone(), cert.clone()).await?;
+    let mut digest = [0; 32];
+    sodoken::blake2b::blake2b_hash(&mut digest, &cert, None)?;
 
     Ok(TlsCertGenResult {
         sni: sni.into(),
-        priv_key,
-        cert: cert.into(),
-        digest: digest.try_unwrap_sized().unwrap().into(),
+        priv_key: Arc::new(Mutex::new(priv_key)),
+        cert,
+        digest: digest.into(),
     })
 }
 

@@ -1,5 +1,6 @@
 use super::*;
 use lair_keystore_api::dependencies::base64::Engine;
+use std::sync::Mutex;
 
 pub(crate) async fn exec(
     config: LairServerConfig,
@@ -11,13 +12,13 @@ pub(crate) async fn exec(
 
     // then capture the needed passphrases
     let (store_pass, bundle_pass, deep_pass) = if opt.piped {
-        let multi = read_piped_passphrase().await?;
-        let multi = multi.read_lock();
+        let mut multi = read_piped_passphrase().await?;
 
         // careful not to move any bytes out of protected memory
         // convert to utf8 so we can use the rust split.
+        let multi_guard = multi.lock();
         let multi =
-            std::str::from_utf8(&multi).map_err(one_err::OneErr::new)?;
+            std::str::from_utf8(&multi_guard).map_err(one_err::OneErr::new)?;
         let mut pass_list = multi
             .split('\n')
             .filter_map(|s| {
@@ -26,13 +27,13 @@ pub(crate) async fn exec(
                 if s.is_empty() {
                     None
                 } else {
-                    let n = sodoken::BufWrite::new_mem_locked(s.len())
+                    let mut n = sodoken::LockedArray::new(s.len())
                         .expect("failed to allocate locked BufWrite");
                     {
-                        let mut n = n.write_lock();
+                        let mut n = n.lock();
                         n.copy_from_slice(s);
                     }
-                    Some(n.to_read())
+                    Some(n)
                 }
             })
             .collect::<Vec<_>>();
@@ -68,7 +69,7 @@ pub(crate) async fn exec(
     };
 
     // unlock the server
-    server.run(store_pass).await?;
+    server.run(Arc::new(Mutex::new(store_pass))).await?;
 
     // load the bundle
     let bundle_bytes = base64::prelude::BASE64_URL_SAFE_NO_PAD
@@ -76,6 +77,8 @@ pub(crate) async fn exec(
         .map_err(one_err::OneErr::new)?;
     let cipher_list =
         hc_seed_bundle::UnlockedSeedBundle::from_locked(&bundle_bytes).await?;
+
+    let bundle_pass = Arc::new(Mutex::new(bundle_pass));
 
     // attempt to unlock the bundle
     let mut bundle = None;
@@ -105,14 +108,18 @@ pub(crate) async fn exec(
     let store = server.store().await?;
 
     // insert the seed depending on deep lock or not
-    let seed_info = if let Some(deep_pass) = deep_pass {
+    let seed_info = if let Some(mut deep_pass) = deep_pass {
         let limits = hc_seed_bundle::PwHashLimits::Moderate;
         let ops_limit = limits.as_ops_limit();
         let mem_limit = limits.as_mem_limit();
 
         // pre-hash the passphrase
-        let pw_hash = <sodoken::BufWriteSized<64>>::new_mem_locked()?;
-        sodoken::hash::blake2b::hash(pw_hash.clone(), deep_pass).await?;
+        let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
+        sodoken::blake2b::blake2b_hash(
+            &mut *pw_hash.lock(),
+            &deep_pass.lock(),
+            None,
+        )?;
 
         store
             .insert_deep_locked_seed(
@@ -120,7 +127,7 @@ pub(crate) async fn exec(
                 opt.tag.as_str().into(),
                 ops_limit,
                 mem_limit,
-                pw_hash.to_read_sized(),
+                pw_hash,
                 opt.exportable,
             )
             .await?

@@ -1,9 +1,11 @@
 //! Items related to securely persisting keystore secrets (e.g. to disk).
 
+use crate::types::SharedSizedLockedArray;
 use crate::*;
 use futures::future::BoxFuture;
+use one_err::OneErr;
 use std::future::Future;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 fn is_false(b: impl std::borrow::Borrow<bool>) -> bool {
     !b.borrow()
@@ -18,7 +20,7 @@ pub mod traits {
     pub trait AsLairStore: 'static + Send + Sync {
         /// Return the context key for both encryption and decryption
         /// of secret data within the store that is NOT deep_locked.
-        fn get_bidi_ctx_key(&self) -> sodoken::BufReadSized<32>;
+        fn get_bidi_ctx_key(&self) -> SharedSizedLockedArray<32>;
 
         /// List the entries tracked by the lair store.
         fn list_entries(
@@ -56,7 +58,7 @@ pub mod traits {
         /// Open a store connection with given config / passphrase.
         fn connect_to_store(
             &self,
-            unlock_secret: sodoken::BufReadSized<32>,
+            unlock_secret: SharedSizedLockedArray<32>,
         ) -> BoxFuture<'static, LairResult<LairStore>>;
     }
 }
@@ -229,7 +231,7 @@ pub struct LairStore(pub Arc<dyn AsLairStore>);
 impl LairStore {
     /// Return the context key for both encryption and decryption
     /// of secret data within the store that is NOT deep_locked.
-    pub fn get_bidi_ctx_key(&self) -> sodoken::BufReadSized<32> {
+    pub fn get_bidi_ctx_key(&self) -> SharedSizedLockedArray<32> {
         AsLairStore::get_bidi_ctx_key(&*self.0)
     }
 
@@ -238,27 +240,33 @@ impl LairStore {
     /// seed_info derived from the generated seed.
     pub fn insert_seed(
         &self,
-        seed: sodoken::BufReadSized<32>,
+        seed: SharedSizedLockedArray<32>,
         tag: Arc<str>,
         exportable: bool,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let inner = self.0.clone();
         async move {
             // derive the ed25519 signature keypair from this seed
-            let ed_pk = sodoken::BufWriteSized::new_no_lock();
-            let ed_sk = sodoken::BufWriteSized::new_mem_locked()?;
-            sodoken::sign::seed_keypair(ed_pk.clone(), ed_sk, seed.clone())
-                .await?;
+            let mut ed_pk = [0; sodoken::sign::PUBLICKEYBYTES];
+            let mut ed_sk = sodoken::SizedLockedArray::<
+                { sodoken::sign::SECRETKEYBYTES },
+            >::new()?;
+            sodoken::sign::seed_keypair(
+                &mut ed_pk,
+                &mut ed_sk.lock(),
+                &seed.lock().unwrap().lock(),
+            )?;
 
             // derive the x25519 encryption keypair from this seed
-            let x_pk = sodoken::BufWriteSized::new_no_lock();
-            let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
-            sodoken::crypto_box::curve25519xchacha20poly1305::seed_keypair(
-                x_pk.clone(),
-                x_sk,
-                seed.clone(),
-            )
-            .await?;
+            let mut x_pk = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+            let mut x_sk = sodoken::SizedLockedArray::<
+                { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+            >::new()?;
+            sodoken::crypto_box::xsalsa_seed_keypair(
+                &mut x_pk,
+                &mut x_sk.lock(),
+                &seed.lock().unwrap().lock(),
+            )?;
 
             // encrypt the seed with our bidi context key
             let key = inner.get_bidi_ctx_key();
@@ -266,8 +274,8 @@ impl LairStore {
 
             // populate our seed info with the derived public keys
             let seed_info = SeedInfo {
-                ed25519_pub_key: ed_pk.try_unwrap_sized().unwrap().into(),
-                x25519_pub_key: x_pk.try_unwrap_sized().unwrap().into(),
+                ed25519_pub_key: ed_pk.into(),
+                x25519_pub_key: x_pk.into(),
                 exportable,
             };
 
@@ -297,11 +305,12 @@ impl LairStore {
         let this = self.clone();
         async move {
             // generate a new random seed
-            let seed = sodoken::BufWriteSized::new_mem_locked()?;
-            sodoken::random::bytes_buf(seed.clone()).await?;
+            let mut seed = sodoken::SizedLockedArray::<32>::new()?;
+            sodoken::random::randombytes_buf(&mut *seed.lock())?;
 
-            this.insert_seed(seed.to_read_sized(), tag, exportable)
-                .await
+            let seed = Arc::new(Mutex::new(seed));
+
+            this.insert_seed(seed, tag, exportable).await
         }
     }
 
@@ -312,54 +321,68 @@ impl LairStore {
     /// runtime passphrase to be decrypted / used.
     pub fn insert_deep_locked_seed(
         &self,
-        seed: sodoken::BufReadSized<32>,
+        seed: SharedSizedLockedArray<32>,
         tag: Arc<str>,
         ops_limit: u32,
         mem_limit: u32,
-        deep_lock_passphrase: sodoken::BufReadSized<64>,
+        mut deep_lock_passphrase: sodoken::SizedLockedArray<64>,
         exportable: bool,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let inner = self.0.clone();
         async move {
             // derive the ed25519 signature keypair from this seed
-            let ed_pk = sodoken::BufWriteSized::new_no_lock();
-            let ed_sk = sodoken::BufWriteSized::new_mem_locked()?;
-            sodoken::sign::seed_keypair(ed_pk.clone(), ed_sk, seed.clone())
-                .await?;
+            let mut ed_pk = [0; sodoken::sign::PUBLICKEYBYTES];
+            let mut ed_sk = sodoken::SizedLockedArray::<
+                { sodoken::sign::SECRETKEYBYTES },
+            >::new()?;
+            sodoken::sign::seed_keypair(
+                &mut ed_pk,
+                &mut ed_sk.lock(),
+                &seed.lock().unwrap().lock(),
+            )?;
 
             // derive the x25519 encryption keypair from this seed
-            let x_pk = sodoken::BufWriteSized::new_no_lock();
-            let x_sk = sodoken::BufWriteSized::new_mem_locked()?;
-            sodoken::crypto_box::curve25519xchacha20poly1305::seed_keypair(
-                x_pk.clone(),
-                x_sk,
-                seed.clone(),
-            )
-            .await?;
-
-            // generate the salt for the pwhash deep locking
-            let salt = <sodoken::BufWriteSized<16>>::new_no_lock();
-            sodoken::random::bytes_buf(salt.clone()).await?;
+            let mut x_pk = [0; sodoken::crypto_box::XSALSA_PUBLICKEYBYTES];
+            let mut x_sk = sodoken::SizedLockedArray::<
+                { sodoken::crypto_box::XSALSA_SECRETKEYBYTES },
+            >::new()?;
+            sodoken::crypto_box::xsalsa_seed_keypair(
+                &mut x_pk,
+                &mut x_sk.lock(),
+                &seed.lock().unwrap().lock(),
+            )?;
 
             // generate the deep lock key from the passphrase
-            let key = <sodoken::BufWriteSized<32>>::new_mem_locked()?;
-            sodoken::hash::argon2id::hash(
-                key.clone(),
-                deep_lock_passphrase,
-                salt.clone(),
-                ops_limit,
-                mem_limit,
-            )
-            .await?;
+            let (salt, key) = tokio::task::spawn_blocking({
+                move || -> std::io::Result<([u8; sodoken::argon2::ARGON2_ID_SALTBYTES], sodoken::SizedLockedArray<32>)> {
+                    // generate the salt for the pwhash deep locking
+                    let mut salt = [0; sodoken::argon2::ARGON2_ID_SALTBYTES];
+                    sodoken::random::randombytes_buf(&mut salt)?;
+
+                    let mut key = sodoken::SizedLockedArray::<32>::new()?;
+                    sodoken::argon2::blocking_argon2id(
+                        &mut *key.lock(),
+                        &*deep_lock_passphrase.lock(),
+                        &salt,
+                        ops_limit,
+                        mem_limit,
+                    )?;
+
+                    Ok((salt, key))
+                }
+            })
+            .await
+            .map_err(OneErr::new)??;
 
             // encrypt the seed with the deep lock key
             let seed =
-                SecretDataSized::encrypt(key.to_read_sized(), seed).await?;
+                SecretDataSized::encrypt(Arc::new(Mutex::new(key)), seed)
+                    .await?;
 
             // populate our seed info with the derived public keys
             let seed_info = SeedInfo {
-                ed25519_pub_key: ed_pk.try_unwrap_sized().unwrap().into(),
-                x25519_pub_key: x_pk.try_unwrap_sized().unwrap().into(),
+                ed25519_pub_key: ed_pk.into(),
+                x25519_pub_key: x_pk.into(),
                 exportable,
             };
 
@@ -367,7 +390,7 @@ impl LairStore {
             let entry = LairEntryInner::DeepLockedSeed {
                 tag,
                 seed_info: seed_info.clone(),
-                salt: salt.try_unwrap_sized().unwrap().into(),
+                salt: salt.into(),
                 ops_limit,
                 mem_limit,
                 seed,
@@ -391,17 +414,19 @@ impl LairStore {
         tag: Arc<str>,
         ops_limit: u32,
         mem_limit: u32,
-        deep_lock_passphrase: sodoken::BufReadSized<64>,
+        deep_lock_passphrase: sodoken::SizedLockedArray<64>,
         exportable: bool,
     ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
         let this = self.clone();
         async move {
             // generate a new random seed
-            let seed = sodoken::BufWriteSized::new_mem_locked()?;
-            sodoken::random::bytes_buf(seed.clone()).await?;
+            let mut seed = sodoken::SizedLockedArray::<32>::new()?;
+            sodoken::random::randombytes_buf(&mut *seed.lock())?;
+
+            let seed = Arc::new(Mutex::new(seed));
 
             this.insert_deep_locked_seed(
-                seed.to_read_sized(),
+                seed,
                 tag,
                 ops_limit,
                 mem_limit,
@@ -499,8 +524,11 @@ impl LairStoreFactory {
     /// Connect to an existing store with the given unlock_secret.
     pub fn connect_to_store(
         &self,
-        unlock_secret: sodoken::BufReadSized<32>,
+        unlock_secret: sodoken::SizedLockedArray<32>,
     ) -> impl Future<Output = LairResult<LairStore>> + 'static + Send {
-        AsLairStoreFactory::connect_to_store(&*self.0, unlock_secret)
+        AsLairStoreFactory::connect_to_store(
+            &*self.0,
+            Arc::new(Mutex::new(unlock_secret)),
+        )
     }
 }

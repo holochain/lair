@@ -2,7 +2,7 @@ use lair_keystore_api::dependencies::*;
 use lair_keystore_api::in_proc_keystore::*;
 use lair_keystore_api::mem_store::*;
 use lair_keystore_api::prelude::*;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 fn init_tracing() {
     let _ = tracing::subscriber::set_global_default(
@@ -16,7 +16,9 @@ fn init_tracing() {
 async fn spawn_test(test_name: &str) -> LairClient {
     init_tracing();
 
-    let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
+    let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"passphrase".to_vec(),
+    )));
 
     let mut config = hc_seed_bundle::PwHashLimits::Minimum
         .with_exec(|| LairServerConfigInner::new("/", passphrase.clone()))

@@ -55,12 +55,10 @@ impl StandaloneServer {
     }
 
     /// Run the server.
-    pub async fn run<P>(&mut self, passphrase: P) -> LairResult<()>
-    where
-        P: Into<sodoken::BufRead> + 'static + Send,
-    {
-        let passphrase = passphrase.into();
-
+    pub async fn run(
+        &mut self,
+        passphrase: SharedLockedArray,
+    ) -> LairResult<()> {
         // construct our sqlite store factory
         let store_factory = crate::store_sqlite::create_sql_pool_factory(
             &self.config.store_file,

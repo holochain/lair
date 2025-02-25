@@ -1,7 +1,7 @@
-use hc_seed_bundle::*;
-
 use base64::Engine;
+use hc_seed_bundle::*;
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 
 const FIXTURES: &str = include_str!("fixtures/seed_bundle_test_fixtures.json");
 
@@ -35,8 +35,9 @@ impl Test {
         for unlock in self.unlock.iter() {
             if &unlock.r#type == "pwHash" {
                 let passphrase = unlock.passphrase.as_ref().unwrap();
-                let passphrase =
-                    sodoken::BufRead::from(passphrase.as_bytes().to_vec());
+                let passphrase = Arc::new(Mutex::new(
+                    sodoken::LockedArray::from(passphrase.as_bytes().to_vec()),
+                ));
                 cipher = PwHashLimits::Minimum
                     .with_exec(move || cipher.add_pwhash_cipher(passphrase));
             } else if &unlock.r#type == "securityQuestions" {
@@ -49,9 +50,12 @@ impl Test {
                     q_list[1].to_string(),
                     q_list[2].to_string(),
                 );
-                let a1 = sodoken::BufRead::from(a_list[0].as_bytes().to_vec());
-                let a2 = sodoken::BufRead::from(a_list[1].as_bytes().to_vec());
-                let a3 = sodoken::BufRead::from(a_list[2].as_bytes().to_vec());
+                let a1 =
+                    sodoken::LockedArray::from(a_list[0].as_bytes().to_vec());
+                let a2 =
+                    sodoken::LockedArray::from(a_list[1].as_bytes().to_vec());
+                let a3 =
+                    sodoken::LockedArray::from(a_list[2].as_bytes().to_vec());
                 cipher = PwHashLimits::Minimum.with_exec(move || {
                     cipher.add_security_question_cipher(q_list, (a1, a2, a3))
                 });
@@ -80,10 +84,12 @@ impl Test {
                         .unwrap();
                     println!("{cipher:?} with passphrase - {passphrase}");
                     let passphrase =
-                        sodoken::BufRead::from(passphrase.as_bytes().to_vec());
+                        Arc::new(Mutex::new(sodoken::LockedArray::from(
+                            passphrase.as_bytes().to_vec(),
+                        )));
                     let seed = cipher.unlock(passphrase).await.unwrap();
                     let pub_key = seed.get_sign_pub_key();
-                    assert_eq_b64(&self.sign_pub_key, &pub_key.read_lock());
+                    assert_eq_b64(&self.sign_pub_key, pub_key.as_slice());
                     out = Some(seed);
                 }
                 LockedSeedCipher::SecurityQuestions(cipher) => {
@@ -96,7 +102,7 @@ impl Test {
                         .unwrap();
                     println!("{cipher:?} with answer_list - {answer_list:?}");
                     // ensure the trimming / lcasing works
-                    let a1 = sodoken::BufRead::from(
+                    let a1 = sodoken::LockedArray::from(
                         format!(
                             "\t {} \t",
                             answer_list[0].to_string().to_ascii_uppercase()
@@ -104,15 +110,15 @@ impl Test {
                         .as_bytes()
                         .to_vec(),
                     );
-                    let a2 = sodoken::BufRead::from(
+                    let a2 = sodoken::LockedArray::from(
                         answer_list[1].as_bytes().to_vec(),
                     );
-                    let a3 = sodoken::BufRead::from(
+                    let a3 = sodoken::LockedArray::from(
                         answer_list[2].as_bytes().to_vec(),
                     );
                     let seed = cipher.unlock((a1, a2, a3)).await.unwrap();
                     let pub_key = seed.get_sign_pub_key();
-                    assert_eq_b64(&self.sign_pub_key, &pub_key.read_lock());
+                    assert_eq_b64(&self.sign_pub_key, pub_key.as_slice());
                     out = Some(seed);
                 }
                 LockedSeedCipher::UnsupportedCipher(name) => {
@@ -136,7 +142,7 @@ impl Test {
                 cur = cur.derive(subkey_id.parse().unwrap()).await.unwrap();
             }
 
-            assert_eq_b64(target, &cur.get_sign_pub_key().read_lock());
+            assert_eq_b64(target.as_str(), &cur.get_sign_pub_key().as_slice());
         }
     }
 }

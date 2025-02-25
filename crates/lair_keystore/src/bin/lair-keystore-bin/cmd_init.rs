@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::Mutex;
 use tokio::io::AsyncWriteExt;
 
 pub(crate) async fn exec(
@@ -28,7 +29,11 @@ pub(crate) async fn exec(
 
     println!("\n# lair-keystore init generating secure config...");
 
-    let config = LairServerConfigInner::new(&lair_root, passphrase).await?;
+    let config = LairServerConfigInner::new(
+        &lair_root,
+        Arc::new(Mutex::new(passphrase)),
+    )
+    .await?;
 
     let mut config_f = tokio::fs::OpenOptions::new()
         .write(true)

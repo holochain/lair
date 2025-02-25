@@ -3,23 +3,15 @@ use super::*;
 /// For SeedCipherSecurityQuestions (and the "Locked" struct)
 /// we need to be able to translate three answers into a semi-deterministic
 /// passphrase. This process involves lower-casing, trimming, and concatenating.
-pub(crate) fn process_security_answers<A1, A2, A3>(
-    a1: A1,
-    a2: A2,
-    a3: A3,
-) -> SodokenResult<sodoken::BufRead>
-where
-    A1: Into<sodoken::BufRead> + 'static + Send,
-    A2: Into<sodoken::BufRead> + 'static + Send,
-    A3: Into<sodoken::BufRead> + 'static + Send,
-{
+pub(crate) fn process_security_answers(
+    mut a1: sodoken::LockedArray,
+    mut a2: sodoken::LockedArray,
+    mut a3: sodoken::LockedArray,
+) -> Result<sodoken::LockedArray, OneErr> {
     // first, get read-locks to all our input data
-    let a1 = a1.into();
-    let a1 = a1.read_lock();
-    let a2 = a2.into();
-    let a2 = a2.read_lock();
-    let a3 = a3.into();
-    let a3 = a3.read_lock();
+    let a1 = a1.lock();
+    let a2 = a2.lock();
+    let a3 = a3.lock();
 
     // careful not to move any bytes out of protected memory
     // convert to utf8 so we can use the rust trim / lcase functions.
@@ -38,79 +30,93 @@ where
     let a3 = a3.as_bytes();
 
     // create the output buffer
-    let out =
-        sodoken::BufWrite::new_mem_locked(a1.len() + a2.len() + a3.len())?;
+    let mut out = sodoken::LockedArray::new(a1.len() + a2.len() + a3.len())?;
 
     {
         // output buffer write lock
-        let mut out = out.write_lock();
+        let mut lock = out.lock();
 
-        // copy / concatonate the three answers
-        out[0..a1.len()].copy_from_slice(a1);
-        out[a1.len()..a1.len() + a2.len()].copy_from_slice(a2);
-        out[a1.len() + a2.len()..a1.len() + a2.len() + a3.len()]
+        // copy / concatenate the three answers
+        (&mut *lock)[0..a1.len()].copy_from_slice(a1);
+        (&mut *lock)[a1.len()..a1.len() + a2.len()].copy_from_slice(a2);
+        (&mut *lock)[a1.len() + a2.len()..a1.len() + a2.len() + a3.len()]
             .copy_from_slice(a3);
 
         // we forced utf8 above, so safe to unwrap here
-        let out = std::str::from_utf8_mut(&mut out).unwrap();
+        let out_str = std::str::from_utf8_mut(&mut lock).unwrap();
 
         // this needs a mutable buffer, so we have to do this in out memory
-        out.make_ascii_lowercase();
+        out_str.make_ascii_lowercase();
     }
 
     // return the read-only concatonated passphrase
-    Ok(out.to_read())
+    Ok(out)
 }
 
 /// Use the given passphrase to generate a deterministic secret with argon.
 /// Use that secret to secretstream encrypt the given seed.
 /// Return the argon salt, and the secretstream header and cipher.
 pub(crate) async fn pw_enc(
-    seed: sodoken::BufReadSized<32>,
-    passphrase: sodoken::BufRead,
+    seed: SharedSizedLockedArray<32>,
+    passphrase: SharedLockedArray,
     limits: PwHashLimits,
-) -> SodokenResult<(
-    sodoken::BufReadSized<{ sodoken::hash::argon2id::SALTBYTES }>,
-    sodoken::BufReadSized<24>,
-    sodoken::BufReadSized<49>,
-)> {
+) -> Result<
+    (
+        [u8; sodoken::argon2::ARGON2_ID_SALTBYTES],
+        [u8; 24],
+        [u8; 49],
+    ),
+    OneErr,
+> {
     // pre-hash the passphrase
-    let pw_hash = sodoken::BufWrite::new_mem_locked(64)?;
-    sodoken::hash::blake2b::hash(pw_hash.clone(), passphrase).await?;
-
-    // generate a random salt
-    let salt = sodoken::BufWriteSized::new_no_lock();
-    sodoken::random::bytes_buf(salt.clone()).await?;
+    let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
+    sodoken::blake2b::blake2b_hash(
+        pw_hash.lock().as_mut_slice(),
+        &passphrase.lock().unwrap().lock(),
+        None,
+    )?;
 
     // generate a secret using the passphrase with argon
-    let opslimit = limits.as_ops_limit();
-    let memlimit = limits.as_mem_limit();
-    let secret = sodoken::BufWriteSized::new_mem_locked()?;
-    sodoken::hash::argon2id::hash(
-        secret.clone(),
-        pw_hash,
-        salt.clone(),
-        opslimit,
-        memlimit,
-    )
-    .await?;
+    let ops_limit = limits.as_ops_limit();
+    let mem_limit = limits.as_mem_limit();
+    let (salt, mut secret) = tokio::task::spawn_blocking({
+        move || -> Result<_, OneErr> {
+            // generate a random salt
+            let mut salt = [0; sodoken::argon2::ARGON2_ID_SALTBYTES];
+            sodoken::random::randombytes_buf(&mut salt)?;
+
+            let mut secret = sodoken::SizedLockedArray::new()?;
+            sodoken::argon2::blocking_argon2id(
+                &mut *secret.lock(),
+                &*pw_hash.lock(),
+                &salt,
+                ops_limit,
+                mem_limit,
+            )?;
+
+            Ok((salt, secret))
+        }
+    })
+    .await
+    .map_err(OneErr::new)??;
 
     // initialize the secret stream encrypt item
-    use sodoken::secretstream::xchacha20poly1305::*;
-    let header = sodoken::BufWriteSized::new_no_lock();
-    let mut enc = SecretStreamEncrypt::new(secret, header.clone())?;
+    let mut enc = sodoken::secretstream::State::default();
+    let mut header = [0; sodoken::secretstream::HEADERBYTES];
+    sodoken::secretstream::init_push(&mut enc, &mut header, &secret.lock())?;
 
     // encrypt the seed
-    let cipher = sodoken::BufWriteSized::new_no_lock();
-    enc.push_final(seed, <Option<sodoken::BufRead>>::None, cipher.clone())
-        .await?;
+    let mut cipher = [0; 49];
+    sodoken::secretstream::push(
+        &mut enc,
+        &mut cipher,
+        &*seed.lock().unwrap().lock(),
+        None,
+        sodoken::secretstream::Tag::Final,
+    )?;
 
     // Return the argon salt, and the secretstream header and cipher.
-    Ok((
-        salt.to_read_sized(),
-        header.to_read_sized(),
-        cipher.to_read_sized(),
-    ))
+    Ok((salt, header, cipher))
 }
 
 /// Use the given passphrase, salt, and limits to generate a deterministic
@@ -119,35 +125,55 @@ pub(crate) async fn pw_enc(
 /// a 32 byte secret seed.
 /// Return that seed.
 pub(crate) async fn pw_dec(
-    passphrase: sodoken::BufRead,
-    salt: sodoken::BufReadSized<{ sodoken::hash::argon2id::SALTBYTES }>,
+    passphrase: SharedLockedArray,
+    salt: U8Array<{ sodoken::argon2::ARGON2_ID_SALTBYTES }>,
     mem_limit: u32,
     ops_limit: u32,
-    header: sodoken::BufReadSized<24>,
-    cipher: sodoken::BufReadSized<49>,
-) -> SodokenResult<sodoken::BufReadSized<32>> {
+    header: U8Array<24>,
+    cipher: U8Array<49>,
+) -> Result<sodoken::SizedLockedArray<32>, OneErr> {
     // pre-hash the passphrase
-    let pw_hash = sodoken::BufWrite::new_mem_locked(64)?;
-    sodoken::hash::blake2b::hash(pw_hash.clone(), passphrase).await?;
+    let mut pw_hash = sodoken::SizedLockedArray::<64>::new()?;
+    sodoken::blake2b::blake2b_hash(
+        pw_hash.lock().as_mut_slice(),
+        &passphrase.lock().unwrap().lock(),
+        None,
+    )?;
 
     // generate the argon secret
-    let secret = sodoken::BufWriteSized::new_mem_locked()?;
-    sodoken::hash::argon2id::hash(
-        secret.clone(),
-        pw_hash,
-        salt,
-        ops_limit,
-        mem_limit,
-    )
-    .await?;
+    let mut secret = tokio::task::spawn_blocking({
+        move || -> Result<_, OneErr> {
+            let mut secret = sodoken::SizedLockedArray::new()?;
+            sodoken::argon2::blocking_argon2id(
+                &mut *secret.lock(),
+                &*pw_hash.lock(),
+                &salt,
+                ops_limit,
+                mem_limit,
+            )?;
+
+            Ok(secret)
+        }
+    })
+    .await
+    .map_err(OneErr::new)??;
 
     // decrypt the seed
-    use sodoken::secretstream::xchacha20poly1305::*;
-    let mut dec = SecretStreamDecrypt::new(secret, header)?;
-    let seed = sodoken::BufWriteSized::new_mem_locked()?;
-    dec.pull(cipher, <Option<sodoken::BufRead>>::None, seed.clone())
-        .await?;
+    let mut dec = sodoken::secretstream::State::default();
+    sodoken::secretstream::init_pull(&mut dec, &header.0, &secret.lock())?;
+
+    let mut seed = sodoken::SizedLockedArray::new()?;
+    let tag = sodoken::secretstream::pull(
+        &mut dec,
+        &mut *seed.lock(),
+        &cipher.0,
+        None,
+    )?;
+
+    if tag != sodoken::secretstream::Tag::Final {
+        return Err(OneErr::new("secretstream pull did not return final tag"));
+    }
 
     // return the seed
-    Ok(seed.to_read_sized())
+    Ok(seed)
 }

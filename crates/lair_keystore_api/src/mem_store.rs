@@ -4,9 +4,8 @@
 use crate::lair_store::traits::*;
 use crate::*;
 use futures::future::{BoxFuture, FutureExt};
-use parking_lot::RwLock;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 /// Create an in-memory LairStoreFactory - This does not provide any
 /// peristance, and should generally only be used for testing.
@@ -21,7 +20,7 @@ struct PrivMemStoreFactory;
 impl AsLairStoreFactory for PrivMemStoreFactory {
     fn connect_to_store(
         &self,
-        unlock_secret: sodoken::BufReadSized<32>,
+        unlock_secret: SharedSizedLockedArray<32>,
     ) -> BoxFuture<'static, LairResult<LairStore>> {
         async move {
             // construct a new in-memory store
@@ -43,7 +42,7 @@ impl AsLairStoreFactory for PrivMemStoreFactory {
 
 struct PrivMemStoreInner {
     /// key for encryption / decryption of secrets
-    bidi_key: sodoken::BufReadSized<32>,
+    bidi_key: SharedSizedLockedArray<32>,
     /// the actual entry store, keyed by tag
     entry_by_tag: HashMap<Arc<str>, LairEntry>,
     /// index for signature pub key to tag
@@ -55,8 +54,8 @@ struct PrivMemStoreInner {
 struct PrivMemStore(Arc<RwLock<PrivMemStoreInner>>);
 
 impl AsLairStore for PrivMemStore {
-    fn get_bidi_ctx_key(&self) -> sodoken::BufReadSized<32> {
-        self.0.read().bidi_key.clone()
+    fn get_bidi_ctx_key(&self) -> SharedSizedLockedArray<32> {
+        self.0.read().unwrap().bidi_key.clone()
     }
 
     fn list_entries(
@@ -66,6 +65,7 @@ impl AsLairStore for PrivMemStore {
         let list = self
             .0
             .read()
+            .unwrap()
             .entry_by_tag
             .values()
             .map(|e| match &**e {
@@ -111,7 +111,7 @@ impl AsLairStore for PrivMemStore {
             LairEntryInner::WkaTlsCert { tag, .. } => (tag.clone(), None, None),
         };
 
-        let mut lock = self.0.write();
+        let mut lock = self.0.write().unwrap();
 
         // refuse to overwrite entries
         if lock.entry_by_tag.contains_key(&tag) {
@@ -157,6 +157,7 @@ impl AsLairStore for PrivMemStore {
         let res = self
             .0
             .read()
+            .unwrap()
             .entry_by_tag
             .get(&tag)
             .cloned()
@@ -171,7 +172,7 @@ impl AsLairStore for PrivMemStore {
         // look up / return an entry by signature pub key
         let inner = self.0.clone();
         async move {
-            let lock = inner.read();
+            let lock = inner.read().unwrap();
             let tag = lock
                 .ed_pk_to_tag
                 .get(&ed25519_pub_key)
@@ -192,7 +193,7 @@ impl AsLairStore for PrivMemStore {
         // look up / return an entry by signature pub key
         let inner = self.0.clone();
         async move {
-            let lock = inner.read();
+            let lock = inner.read().unwrap();
             let tag = lock
                 .x_pk_to_tag
                 .get(&x25519_pub_key)
@@ -218,10 +219,10 @@ mod tests {
 
         let factory = create_mem_store_factory();
 
-        let store = factory
-            .connect_to_store(sodoken::BufReadSized::from([0xff; 32]))
-            .await
-            .unwrap();
+        let mut key = sodoken::SizedLockedArray::<32>::new().unwrap();
+        key.lock().copy_from_slice(&[0xff; 32]);
+
+        let store = factory.connect_to_store(key).await.unwrap();
 
         let seed_info =
             store.new_seed("test-seed".into(), false).await.unwrap();

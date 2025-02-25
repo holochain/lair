@@ -36,9 +36,9 @@
 //! use lair_keystore_api::ipc_keystore::*;
 //! # use lair_keystore_api::dependencies::*;
 //! # use lair_keystore_api::mem_store::*;
-//! # use std::sync::Arc;
+//! # use std::sync::{Arc, Mutex};
 //! # let tmp_dir = tempdir::TempDir::new("lair_ipc_doc_test").unwrap();
-//! # let passphrase = sodoken::BufRead::from(&b"passphrase"[..]);
+//! # let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(b"passphrase".to_vec())));
 //! # let config = Arc::new(
 //! #     hc_seed_bundle::PwHashLimits::Minimum
 //! #         .with_exec(|| {
@@ -82,8 +82,8 @@
 //! // verify the signature
 //! assert!(seed_info.ed25519_pub_key.verify_detached(
 //!     sig,
-//!     b"test-data".to_vec(),
-//! ).await.unwrap());
+//!     b"test-data".to_vec().into(),
+//! ).await);
 //! # }
 //! ```
 
@@ -97,7 +97,6 @@ pub mod dependencies {
     pub use hc_seed_bundle::dependencies::*;
     pub use nanoid;
     pub use once_cell;
-    pub use parking_lot;
     pub use serde_json;
     pub use serde_yaml;
     pub use tokio;
@@ -121,6 +120,7 @@ pub mod lair_server;
 pub mod lair_store;
 pub mod mem_store;
 pub mod sodium_secretstream;
+pub mod types;
 
 /// Re-export module of types generally used with lair.
 pub mod prelude {
@@ -130,6 +130,7 @@ pub mod prelude {
     pub use crate::lair_client::*;
     pub use crate::lair_server::*;
     pub use crate::lair_store::*;
+    pub use crate::types::*;
     pub use crate::LairResult;
     pub use hc_seed_bundle::PwHashLimits;
 }
