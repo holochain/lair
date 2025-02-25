@@ -142,7 +142,7 @@ impl Test {
                 cur = cur.derive(subkey_id.parse().unwrap()).await.unwrap();
             }
 
-            assert_eq_b64(target.as_str(), &cur.get_sign_pub_key().as_slice());
+            assert_eq_b64(target.as_str(), cur.get_sign_pub_key().as_slice());
         }
     }
 }
