@@ -1,6 +1,6 @@
 ### `lair-keystore init --help`
 ```text
-lair-keystore-init 0.5.3
+lair-keystore-init 0.6.0
 Set up a new lair private keystore.
 
 USAGE:

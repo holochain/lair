@@ -1,6 +1,6 @@
 [package]
 name = "lair_keystore_api"
-version = "0.5.3"
+version = "0.6.0"
 description = "secret lair private keystore API library"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/holochain/lair"
@@ -8,7 +8,7 @@ documentation = "https://docs.rs/lair_keystore_api"
 authors = ["Holochain Core Dev Team <devcore@holochain.org>"]
 keywords = ["holochain", "holo", "keystore", "secret", "cryptography"]
 categories = ["cryptography"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 base64 = { workspace = true }
