@@ -1,6 +1,6 @@
 [package]
 name = "hc_seed_bundle"
-version = "0.2.5"
+version = "0.3.0"
 description = "SeedBundle parsing and generation library."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/holochain/lair"
@@ -8,7 +8,7 @@ documentation = "https://docs.rs/hc_seed_bundle"
 authors = ["Holochain Core Dev Team <devcore@holochain.org>"]
 keywords = ["holochain", "holo", "keystore", "secret", "cryptography"]
 categories = ["cryptography"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 futures = { workspace = true }
