@@ -132,7 +132,7 @@ FLAGS:
                         - 1 - keystore unlock passphrase
                         - 2 - bundle unlock passphrase
                         - 3 - deep lock passphrase
-                              (if -d / --deep-lock is specified)
+                          (if -d / --deep-lock is specified)
     -V, --version       Prints version information
 
 ARGS:
