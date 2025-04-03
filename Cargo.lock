@@ -505,7 +505,7 @@ dependencies = [
 
 [[package]]
 name = "hc_seed_bundle"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "base64 0.22.1",
  "futures",
@@ -714,7 +714,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "assert_cmd",
  "lair_keystore_api",
@@ -730,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_api"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "assert_cmd",
  "base64 0.22.1",
@@ -1577,9 +1577,9 @@ dependencies = [
 
 [[package]]
 name = "sodoken"
-version = "0.0.904-alpha"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52b966ca637336703b722a90be2e5271f4d42ac8785b1efbbcdc3f5b34999148"
+checksum = "95ab775722cb2ca6da016b4d0c0efac36f9aa59e53a2dd4cdeae7a0776f1c1d3"
 dependencies = [
  "libc",
  "libsodium-sys-stable",
