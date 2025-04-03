@@ -126,7 +126,7 @@ FLAGS:
                         been imported.
     -h, --help          Prints help information
     -p, --piped         Instead of the normal "interactive" method of passphrase
-                        retreival, read the passphrase from stdin. Be careful
+                        retrieval, read the passphrase from stdin. Be careful
                         how you make use of this, as it could be less secure.
                         Passphrases are newline delimited in this order:
                         - 1 - keystore unlock passphrase
