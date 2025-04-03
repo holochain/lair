@@ -1,6 +1,6 @@
 ### `lair-keystore import-seed --help`
 ```text
-lair-keystore-import-seed 0.6.0
+lair-keystore-import-seed 0.6.1
 Load a seed bundle into this lair-keystore instance.
 Note, this operation requires capturing the pid_file,
 make sure you do not have a lair-server running.
@@ -21,13 +21,13 @@ FLAGS:
                         been imported.
     -h, --help          Prints help information
     -p, --piped         Instead of the normal "interactive" method of passphrase
-                        retreival, read the passphrase from stdin. Be careful
+                        retrieval, read the passphrase from stdin. Be careful
                         how you make use of this, as it could be less secure.
                         Passphrases are newline delimited in this order:
                         - 1 - keystore unlock passphrase
                         - 2 - bundle unlock passphrase
                         - 3 - deep lock passphrase
-                              (if -d / --deep-lock is specified)
+                          (if -d / --deep-lock is specified)
     -V, --version       Prints version information
 
 ARGS:

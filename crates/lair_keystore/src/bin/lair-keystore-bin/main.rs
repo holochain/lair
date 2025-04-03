@@ -85,13 +85,13 @@ pub(crate) struct OptServer {
 #[derive(Debug, StructOpt)]
 pub(crate) struct OptImportSeed {
     /// Instead of the normal "interactive" method of passphrase
-    /// retreival, read the passphrase from stdin. Be careful
+    /// retrieval, read the passphrase from stdin. Be careful
     /// how you make use of this, as it could be less secure.
     /// Passphrases are newline delimited in this order:
     /// - 1 - keystore unlock passphrase
     /// - 2 - bundle unlock passphrase
     /// - 3 - deep lock passphrase
-    ///       (if -d / --deep-lock is specified)
+    ///   (if -d / --deep-lock is specified)
     #[structopt(short = "p", long, verbatim_doc_comment)]
     pub piped: bool,
 

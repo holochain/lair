@@ -42,7 +42,7 @@ License: MIT OR Apache-2.0
 
 ### `lair-keystore --help`
 ```text
-lair_keystore 0.6.0
+lair_keystore 0.6.1
 secret lair private keystore
 
 USAGE:
@@ -73,7 +73,7 @@ SUBCOMMANDS:
 ```
 ### `lair-keystore init --help`
 ```text
-lair-keystore-init 0.6.0
+lair-keystore-init 0.6.1
 Set up a new lair private keystore.
 
 USAGE:
@@ -91,7 +91,7 @@ FLAGS:
 ```
 ### `lair-keystore url --help`
 ```text
-lair-keystore-url 0.6.0
+lair-keystore-url 0.6.1
 Print the connection_url for a configured lair-keystore
 server to stdout and exit.
 
@@ -105,7 +105,7 @@ FLAGS:
 ```
 ### `lair-keystore import-seed --help`
 ```text
-lair-keystore-import-seed 0.6.0
+lair-keystore-import-seed 0.6.1
 Load a seed bundle into this lair-keystore instance.
 Note, this operation requires capturing the pid_file,
 make sure you do not have a lair-server running.
@@ -126,13 +126,13 @@ FLAGS:
                         been imported.
     -h, --help          Prints help information
     -p, --piped         Instead of the normal "interactive" method of passphrase
-                        retreival, read the passphrase from stdin. Be careful
+                        retrieval, read the passphrase from stdin. Be careful
                         how you make use of this, as it could be less secure.
                         Passphrases are newline delimited in this order:
                         - 1 - keystore unlock passphrase
                         - 2 - bundle unlock passphrase
                         - 3 - deep lock passphrase
-                              (if -d / --deep-lock is specified)
+                          (if -d / --deep-lock is specified)
     -V, --version       Prints version information
 
 ARGS:
@@ -142,7 +142,7 @@ ARGS:
 ```
 ### `lair-keystore server --help`
 ```text
-lair-keystore-server 0.6.0
+lair-keystore-server 0.6.1
 Run a lair keystore server instance. Note you must
 have initialized a config file first with
 'lair-keystore init'.
