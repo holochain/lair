@@ -33,6 +33,7 @@ winapi = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
+mnemonic = { workspace = true }
 tempdir = { workspace = true }
 tracing-subscriber = { workspace = true }
 
