@@ -23,6 +23,41 @@
 //! For making use of a Lair keystore in a client application, see the
 //! [lair_keystore_api](https://crates.io/crates/lair_keystore_api) crate.
 //!
+//! # What is lair-keystore, and why does it exist?
+//!
+//! Lair Keystore is a general asymmetric cryptographic private key store
+//! project originally written for Holochain, but intended to be usable for
+//! any application.
+//!
+//! The store mainly tracks the "seed" data that for ed25519 and x25519 allow
+//! generation of keypairs, and can be thought of as synonymous with private
+//! keys.
+//!
+//! Lair allows derivation of this seed material for usage similar to HD
+//! wallets, with the intention that an end-user could create a "root" seed,
+//! from which could be deterministically derived a revocation seed and any
+//! number of device and application seeds, which would all be retrievable from
+//! a securely stored paper mnemonic of the root. (This has not yet been
+//! implemented in Holochain).
+//!
+//! Lair Keystore was originally intended to be a standalone binary.
+//! Given the overhead and security implications of having a process with access
+//! to private key material, it was originally envisioned that an end-user would
+//! run a single keystore on their system, and be prompted with a pin-entry UI
+//! that would unlock access to the private keys for a specified period of time,
+//! or every time an operation with a private key occurred in the case of "deep
+//! locked" seeds. (This has also not been implemented in Holochain, and
+//! moreover, Holochain has moved farther away from this intention by running
+//! Lair Keystore as an "in process" library which makes it easier to bundle
+//! executables).
+//!
+//! [lair_keystore_api::LairClient] is the main type that is used to access
+//! the keystore, and it mainly functions over an IPC connection (unix domain
+//! sockets on Linux and MacOs, and named pipes on Windows). This type allows
+//! you to create, access, export, and import tagged seeds, and then, using
+//! either those tags or the public keys that are derived from those seeds,
+//! perform signing, verification, encryption, and decryption operations.
+//!
 //! # Rust conventions for dashes and underscores:
 //!
 //! - Install with an underscore: `cargo install lair_keystore`

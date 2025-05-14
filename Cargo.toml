@@ -17,6 +17,7 @@ hc_seed_bundle = { version = "=0.3.1", path = "./crates/hc_seed_bundle" }
 # lair_keystore_api must be pinned to enable strict version checks
 lair_keystore_api = { version = "=0.6.1", path = "./crates/lair_keystore_api" }
 lru = "0.13.0"
+mnemonic = "1.1.1"
 nanoid = "0.4.0"
 one_err = "0.0.8"
 once_cell = "1.17.1"

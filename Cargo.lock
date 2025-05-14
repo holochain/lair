@@ -737,6 +737,7 @@ dependencies = [
  "dunce",
  "hc_seed_bundle",
  "lru",
+ "mnemonic",
  "nanoid",
  "once_cell",
  "one_err",
@@ -919,6 +920,12 @@ dependencies = [
  "wasi",
  "windows-sys 0.52.0",
 ]
+
+[[package]]
+name = "mnemonic"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2b8f3a258db515d5e91a904ce4ae3f73e091149b90cadbdb93d210bee07f63b"
 
 [[package]]
 name = "nanoid"
