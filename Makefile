@@ -1,6 +1,6 @@
 # Lair Makefile
 
-.PHONY: all publish test static docs tools tool_rust tool_fmt tool_readme
+.PHONY: all publish test static docs tools tool_rust tool_fmt
 
 SHELL = /usr/bin/env sh
 
@@ -44,44 +44,11 @@ test: tools
 release: tools
 	RUST_BACKTRACE=1 cargo build $(FEATURES) --release --all-targets
 
-static: tools docs
+static: tools
 	cargo fmt -- --check
 	cargo clippy $(FEATURES) -- -Dwarnings
 
-docs: tools
-	printf '### `lair-keystore --help`\n```text\n' > crates/lair_keystore/src/docs/help.md.tmp
-	cargo run $(FEATURES) --manifest-path=crates/lair_keystore/Cargo.toml -- --help >> crates/lair_keystore/src/docs/help.md.tmp
-	printf '\n```\n' >> crates/lair_keystore/src/docs/help.md.tmp
-	printf '### `lair-keystore init --help`\n```text\n' > crates/lair_keystore/src/docs/init-help.md.tmp
-	cargo run $(FEATURES) --manifest-path=crates/lair_keystore/Cargo.toml -- init --help >> crates/lair_keystore/src/docs/init-help.md.tmp
-	printf '\n```\n' >> crates/lair_keystore/src/docs/init-help.md.tmp
-	printf '### `lair-keystore url --help`\n```text\n' > crates/lair_keystore/src/docs/url-help.md.tmp
-	cargo run $(FEATURES) --manifest-path=crates/lair_keystore/Cargo.toml -- url --help >> crates/lair_keystore/src/docs/url-help.md.tmp
-	printf '\n```\n' >> crates/lair_keystore/src/docs/url-help.md.tmp
-	printf '### `lair-keystore import-seed --help`\n```text\n' > crates/lair_keystore/src/docs/import-seed-help.md.tmp
-	cargo run $(FEATURES) --manifest-path=crates/lair_keystore/Cargo.toml -- import-seed --help >> crates/lair_keystore/src/docs/import-seed-help.md.tmp
-	printf '\n```\n' >> crates/lair_keystore/src/docs/import-seed-help.md.tmp
-	printf '### `lair-keystore server --help`\n```text\n' > crates/lair_keystore/src/docs/server-help.md.tmp
-	cargo run $(FEATURES) --manifest-path=crates/lair_keystore/Cargo.toml -- server --help >> crates/lair_keystore/src/docs/server-help.md.tmp
-	printf '\n```\n' >> crates/lair_keystore/src/docs/server-help.md.tmp
-	mv -f crates/lair_keystore/src/docs/help.md.tmp crates/lair_keystore/src/docs/help.md
-	mv -f crates/lair_keystore/src/docs/init-help.md.tmp crates/lair_keystore/src/docs/init-help.md
-	mv -f crates/lair_keystore/src/docs/url-help.md.tmp crates/lair_keystore/src/docs/url-help.md
-	mv -f crates/lair_keystore/src/docs/import-seed-help.md.tmp crates/lair_keystore/src/docs/import-seed-help.md
-	mv -f crates/lair_keystore/src/docs/server-help.md.tmp crates/lair_keystore/src/docs/server-help.md
-	cargo readme -r crates/hc_seed_bundle -o README.md
-	cargo readme -r crates/lair_keystore_api -o README.md
-	cargo readme -r crates/lair_keystore -o README.md
-	printf '\n' >> crates/lair_keystore/README.md
-	cat crates/lair_keystore/src/docs/help.md >> crates/lair_keystore/README.md
-	cat crates/lair_keystore/src/docs/init-help.md >> crates/lair_keystore/README.md
-	cat crates/lair_keystore/src/docs/url-help.md >> crates/lair_keystore/README.md
-	cat crates/lair_keystore/src/docs/import-seed-help.md >> crates/lair_keystore/README.md
-	cat crates/lair_keystore/src/docs/server-help.md >> crates/lair_keystore/README.md
-	cp crates/lair_keystore/README.md README.md
-	@if [ "${CI}x" != "x" ]; then git diff --exit-code; fi
-
-tools: tool_rust tool_fmt tool_clippy tool_readme
+tools: tool_rust tool_fmt tool_clippy
 
 tool_rust:
 	@if rustup --version >/dev/null 2>&1; then \
@@ -117,12 +84,4 @@ tool_clippy: tool_rust
 		fi; \
 	else \
 		echo "# Makefile # clippy ok"; \
-	fi;
-
-tool_readme: tool_rust
-	@if ! (cargo readme --version); \
-	then \
-		cargo install cargo-readme; \
-	else \
-		echo "# Makefile # readme ok"; \
 	fi;
