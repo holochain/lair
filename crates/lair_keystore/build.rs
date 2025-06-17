@@ -63,12 +63,13 @@ fn check_fmt(path: &std::path::Path) {
 
     let opt = sqlformat::FormatOptions {
         indent: sqlformat::Indent::Spaces(2),
-        uppercase: true,
+        uppercase: Some(true),
         lines_between_queries: 2,
+        ..Default::default()
     };
 
     let fmt_sql =
-        sqlformat::format(src_sql, &sqlformat::QueryParams::None, opt);
+        sqlformat::format(src_sql, &sqlformat::QueryParams::None, &opt);
 
     let fmt_sql = fmt_sql.trim();
 
