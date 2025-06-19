@@ -7,7 +7,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.6.1"
+version = "0.6.2"
 homepage = "https://holochain.org"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/holochain/lair"
@@ -23,9 +23,9 @@ dunce = "1.0.4"
 futures = "0.3.28"
 # this doesn't strictly need to be pinned, but it supports the
 # determinism of the strict client/server version checks
-hc_seed_bundle = { version = "=0.6.1", path = "./crates/hc_seed_bundle" }
+hc_seed_bundle = { version = "=0.6.2", path = "./crates/hc_seed_bundle" }
 # lair_keystore_api must be pinned to enable strict version checks
-lair_keystore_api = { version = "=0.6.1", path = "./crates/lair_keystore_api" }
+lair_keystore_api = { version = "=0.6.2", path = "./crates/lair_keystore_api" }
 lru = "0.14"
 mnemonic = "1.1.1"
 nanoid = "0.4.0"
