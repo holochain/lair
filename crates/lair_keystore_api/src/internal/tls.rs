@@ -21,8 +21,9 @@ pub const WK_CA_ID: &str = "aKdjnmYOn1HVc_RwSdxR6qa.aQLW3d5D1nYiSSO2cOrcT7a";
 /// This doesn't need to be pub... We need the rcgen::Certificate
 /// with the private keys still integrated in order to sign certs.
 static WK_CA_RCGEN_CERT: Lazy<Arc<rcgen::Certificate>> = Lazy::new(|| {
-    let mut params = rcgen::CertificateParams::new(vec![WK_CA_ID.into()]);
-    params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
+    let mut params = rcgen::CertificateParams::new(vec![WK_CA_ID.into()])
+        .expect("Failed to create params");
+
     params.is_ca = rcgen::IsCa::Ca(rcgen::BasicConstraints::Unconstrained);
     params
         .extended_key_usages
@@ -35,16 +36,17 @@ static WK_CA_RCGEN_CERT: Lazy<Arc<rcgen::Certificate>> = Lazy::new(|| {
     params
         .distinguished_name
         .push(rcgen::DnType::OrganizationName, "Holochain Foundation");
-    params.key_pair =
-        Some(rcgen::KeyPair::from_pem(WK_CA_KEYPAIR_PEM).unwrap());
-    let cert = rcgen::Certificate::from_params(params).unwrap();
+    let keypair = rcgen::KeyPair::from_pem(WK_CA_KEYPAIR_PEM)
+        .expect("Failed to create keypair from existing private key PEM");
+
+    let cert = params.self_signed(&keypair).unwrap();
     Arc::new(cert)
 });
 
 /// The well-known lair CA pseudo-self-signing certificate.
 pub static WK_CA_CERT_DER: Lazy<Arc<Vec<u8>>> = Lazy::new(|| {
     let cert = WK_CA_RCGEN_CERT.as_ref();
-    let cert = cert.serialize_der().unwrap();
+    let cert = cert.der().to_vec();
     Arc::new(cert)
 });
 
@@ -60,33 +62,13 @@ pub struct TlsCertGenResult {
     pub digest: Arc<[u8; 32]>,
 }
 
-/// Generate a new random Tls keypair and self signed certificate.
+/// Generate a new random Tls keypair and self-signed certificate.
 pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
     let (sni, priv_key, cert) = tokio::task::spawn_blocking(|| {
         let sni = format!("a{}a.a{}a", nanoid::nanoid!(), nanoid::nanoid!());
 
-        let mut params = rcgen::CertificateParams::new(vec![sni.clone()]);
-        params.alg = &rcgen::PKCS_ECDSA_P256_SHA256;
-
-        /*
-        #[allow(unreachable_patterns)]
-        match options.alg {
-            TlsCertAlg::PkcsEd25519 => params.alg = &rcgen::PKCS_ED25519,
-            TlsCertAlg::PkcsEcdsaP256Sha256 => {
-                params.alg = &rcgen::PKCS_ECDSA_P256_SHA256
-            }
-            TlsCertAlg::PkcsEcdsaP384Sha384 => {
-                params.alg = &rcgen::PKCS_ECDSA_P384_SHA384
-            }
-            TlsCertAlg::PkcsEd25519 => params.alg = &rcgen::PKCS_ED25519,
-            _ => {
-                return Err(
-                    format!("unhandled cert alg: {:?}", options.alg).into()
-                )
-            }
-        };
-        */
-
+        let mut params = rcgen::CertificateParams::new(vec![sni.clone()])
+            .map_err(OneErr::new)?;
         params
             .extended_key_usages
             .push(rcgen::ExtendedKeyUsagePurpose::Any);
@@ -102,18 +84,22 @@ pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
             format!("Lair Pseudo-Self-Signed Cert {}", &sni),
         );
 
-        let cert =
-            rcgen::Certificate::from_params(params).map_err(OneErr::new)?;
+        let keypair =
+            rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)
+                .map_err(OneErr::new)?;
+        let root_cert = &**WK_CA_RCGEN_CERT;
+        let root_keypair =
+            rcgen::KeyPair::from_pem(WK_CA_KEYPAIR_PEM).map_err(OneErr::new)?;
 
-        let cert_pk = zeroize::Zeroizing::new(cert.serialize_private_key_der());
+        let cert = params
+            .signed_by(&keypair, root_cert, &root_keypair)
+            .map_err(OneErr::new)?;
+
+        let cert_pk = zeroize::Zeroizing::new(keypair.serialize_der());
         let mut priv_key = sodoken::LockedArray::new(cert_pk.len())?;
         priv_key.lock().copy_from_slice(&cert_pk);
 
-        let root_cert = &**WK_CA_RCGEN_CERT;
-        let cert_der: Arc<[u8]> = cert
-            .serialize_der_with_signer(root_cert)
-            .map_err(OneErr::new)?
-            .into();
+        let cert_der: Arc<[u8]> = cert.der().to_vec().into();
 
         LairResult::Ok((sni, priv_key, cert_der))
     })

@@ -1,4 +1,4 @@
-const CARGO_TOML_PATH: &str = "./Cargo.toml";
+const CARGO_TOML_PATH: &str = "../../Cargo.toml";
 const VER_FILE_PATH: &str = "./ver.rs";
 const BUILD_RS_PATH: &str = "./build.rs";
 
@@ -14,6 +14,10 @@ pub fn build_ver() {
     ))
     .unwrap();
     let ver = cargo_toml
+        .as_table()
+        .unwrap()
+        .get("workspace")
+        .unwrap()
         .as_table()
         .unwrap()
         .get("package")
