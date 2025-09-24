@@ -7,10 +7,10 @@
 
 //! sqlite/sqlcipher backed LairKeystore server control binary
 
+use clap::{Args, Parser, Subcommand};
 use lair_keystore::dependencies::*;
 use lair_keystore_api::prelude::*;
 use std::sync::Arc;
-use structopt::StructOpt;
 
 pub(crate) const CONFIG_N: &str = "lair-keystore-config.yaml";
 
@@ -60,29 +60,29 @@ pub(crate) async fn read_piped_passphrase() -> LairResult<sodoken::LockedArray>
     Ok(sodoken::LockedArray::from(pass_tmp))
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Args)]
 pub(crate) struct OptInit {
     /// Instead of the normal "interactive" method of passphrase
     /// retrieval, read the passphrase from stdin. Be careful
     /// how you make use of this, as it could be less secure,
     /// for example, make sure it is not saved in your
     /// `~/.bash_history`.
-    #[structopt(short = "p", long, verbatim_doc_comment)]
+    #[arg(short = 'p', long)]
     pub piped: bool,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Args)]
 pub(crate) struct OptServer {
     /// Instead of the normal "interactive" method of passphrase
-    /// retreival, read the passphrase from stdin. Be careful
+    /// retrieval, read the passphrase from stdin. Be careful
     /// how you make use of this, as it could be less secure,
     /// for example, make sure it is not saved in your
     /// `~/.bash_history`.
-    #[structopt(short = "p", long, verbatim_doc_comment)]
+    #[arg(short = 'p', long)]
     pub piped: bool,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Args)]
 pub(crate) struct OptImportSeed {
     /// Instead of the normal "interactive" method of passphrase
     /// retrieval, read the passphrase from stdin. Be careful
@@ -92,46 +92,41 @@ pub(crate) struct OptImportSeed {
     /// - 2 - bundle unlock passphrase
     /// - 3 - deep lock passphrase
     ///   (if -d / --deep-lock is specified)
-    #[structopt(short = "p", long, verbatim_doc_comment)]
+    #[arg(short = 'p', long)]
     pub piped: bool,
 
     /// Specify that this seed should be loaded as a
     /// "deep-locked" seed. This seed will require an
     /// additional passphrase specified at access time
     /// (signature / box / key derivation) to decrypt the seed.
-    #[structopt(short = "d", long, verbatim_doc_comment)]
+    #[arg(short = 'd', long)]
     pub deep_lock: bool,
 
     /// The identification tag for this seed.
-    #[structopt(verbatim_doc_comment)]
     pub tag: String,
 
     /// The base64url encoded hc_seed_bundle.
-    #[structopt(verbatim_doc_comment)]
     pub seed_bundle_base64: String,
 
     /// Mark this seed as "exportable" indicating
     /// this key can be extracted again after having
     /// been imported.
-    #[structopt(short = "e", long, verbatim_doc_comment)]
+    #[arg(short = 'e', long)]
     pub exportable: bool,
 }
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Subcommand)]
 enum Cmd {
     /// Set up a new lair private keystore.
-    #[structopt(verbatim_doc_comment)]
     Init(OptInit),
 
     /// Print the connection_url for a configured lair-keystore
     /// server to stdout and exit.
-    #[structopt(verbatim_doc_comment)]
     Url,
 
     /// Run a lair keystore server instance. Note you must
     /// have initialized a config file first with
     /// 'lair-keystore init'.
-    #[structopt(verbatim_doc_comment)]
     Server(OptServer),
 
     /// Load a seed bundle into this lair-keystore instance.
@@ -140,19 +135,19 @@ enum Cmd {
     /// Note, we currently only support importing seed bundles
     /// with a pwhash cipher. We'll try the passphrase you
     /// supply with all ciphers used to lock the bundle.
-    #[structopt(verbatim_doc_comment)]
     ImportSeed(OptImportSeed),
 }
 
-#[derive(Debug, StructOpt)]
-#[structopt(about = "secret lair private keystore")]
+/// secret lair private keystore
+#[derive(Debug, Parser)]
+#[command(version, about, long_about = None)]
 struct Opt {
     /// Lair root storage and config directory.
-    #[structopt(short = "r", long, default_value = ".", env = "LAIR_ROOT")]
+    #[arg(short = 'r', long, default_value = ".", env = "LAIR_ROOT")]
     lair_root: std::path::PathBuf,
 
     /// The subcommand to execute
-    #[structopt(subcommand)]
+    #[command(subcommand)]
     cmd: Cmd,
 }
 
@@ -188,7 +183,7 @@ async fn exec() -> LairResult<()> {
 
     tracing::info!("starting lair-keystore");
 
-    let opt = Opt::from_args();
+    let opt = Opt::parse();
     let Opt { lair_root, cmd } = opt;
     let lair_root = dunce::canonicalize(&lair_root)?;
     match cmd {
