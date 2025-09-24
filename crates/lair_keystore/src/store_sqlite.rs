@@ -587,13 +587,13 @@ fn encrypt_unencrypted_database(
     let encrypted_path = path
         .parent()
         .ok_or_else(|| -> one_err::OneErr {
-            format!("Database file path has no parent: {:?}", path).into()
+            format!("Database file path has no parent: {path:?}").into()
         })?
         .join(
             path.file_stem()
                 .and_then(|s| s.to_str())
                 .ok_or_else(|| -> one_err::OneErr {
-                    format!("Database file path has no name: {:?}", path).into()
+                    format!("Database file path has no name: {path:?}").into()
                 })?
                 .to_string()
                 + "-encrypted"

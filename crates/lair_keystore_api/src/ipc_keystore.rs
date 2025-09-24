@@ -143,9 +143,7 @@ fn priv_check_hello_ver(
 ) -> LairResult<()> {
     if opts.exact_client_server_version_match && server_version != LAIR_VER {
         return Err(format!(
-            "Invalid lair server version, this client requires '{}', but got '{}'.",
-            LAIR_VER,
-            server_version,
+            "Invalid lair server version, this client requires '{LAIR_VER}', but got '{server_version}'.",
         ).into());
     }
 

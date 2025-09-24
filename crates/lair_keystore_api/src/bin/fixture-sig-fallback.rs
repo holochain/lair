@@ -55,7 +55,7 @@ fn main() {
                     }
                 })
             }
-            oth => panic!("invalid test: '{}'", oth),
+            oth => panic!("invalid test: '{oth}'"),
         };
 
     // using blocking reading -- if you were actually implementing this
