@@ -9,7 +9,7 @@ mod common;
 async fn migrate_unencrypted() {
     use rusqlite::Connection;
 
-    let tmpdir = tempdir::TempDir::new("lair keystore test").unwrap();
+    let tmpdir = tempfile::TempDir::with_prefix("lair keystore test").unwrap();
 
     let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(
         b"passphrase".to_vec(),

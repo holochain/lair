@@ -37,7 +37,7 @@
 //! # use lair_keystore_api::dependencies::*;
 //! # use lair_keystore_api::mem_store::*;
 //! # use std::sync::{Arc, Mutex};
-//! # let tmp_dir = tempdir::TempDir::new("lair_ipc_doc_test").unwrap();
+//! # let tmp_dir = tempfile::TempDir::with_prefix("lair_ipc_doc_test").unwrap();
 //! # let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(b"passphrase".to_vec())));
 //! # let config = Arc::new(
 //! #     hc_seed_bundle::PwHashLimits::Minimum

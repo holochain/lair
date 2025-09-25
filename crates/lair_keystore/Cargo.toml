@@ -36,7 +36,7 @@ sqlformat = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
-tempdir = { workspace = true }
+tempfile = { workspace = true }
 
 [lib]
 name = "lair_keystore"

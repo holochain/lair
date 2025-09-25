@@ -8,7 +8,7 @@ use std::{fs::File, io::Write};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_url_command_only_outputs_connection_url() {
-    let tmp_dir = tempdir::TempDir::new("lair keystore test").unwrap();
+    let tmp_dir = tempfile::TempDir::with_prefix("lair keystore test").unwrap();
     let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(
         b"passphrase".to_vec(),
     )));

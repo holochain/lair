@@ -673,7 +673,8 @@ mod tests {
         // this is just a sanity / smoke test
         // this is exercised better in the full server_test.rs
 
-        let tmpdir = tempdir::TempDir::new("lair-keystore-test").unwrap();
+        let tmpdir =
+            tempfile::TempDir::with_prefix("lair-keystore-test").unwrap();
         let mut sqlite = tmpdir.path().to_path_buf();
         sqlite.push("db.sqlite3");
 

@@ -2,7 +2,7 @@ use hc_seed_bundle::dependencies::sodoken;
 use lair_keystore_api::prelude::*;
 use std::sync::{Arc, Mutex};
 use std::{env::current_dir, path::PathBuf};
-use tempdir::TempDir;
+use tempfile::TempDir;
 
 #[cfg(not(windows))]
 #[tokio::test(flavor = "multi_thread")]
@@ -14,7 +14,7 @@ async fn lair_config_connection_url_relative_root() {
         b"passphrase".to_vec(),
     )));
 
-    let dir = TempDir::new_in(".", "example").unwrap();
+    let dir = TempDir::with_prefix_in("example", ".").unwrap();
 
     let mut relative_lair_root = PathBuf::from(".");
     relative_lair_root.push(dir.path().components().last().unwrap());
@@ -43,7 +43,7 @@ async fn lair_config_connection_url_absolute_root() {
         b"passphrase".to_vec(),
     )));
 
-    let dir = TempDir::new_in(".", "example").unwrap();
+    let dir = TempDir::with_prefix_in("example", ".").unwrap();
     let mut absolute_lair_root = current_dir().unwrap();
     absolute_lair_root.push(dir.path().components().last().unwrap());
 
