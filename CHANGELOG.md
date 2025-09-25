@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## \[[0.6.3](https://github.com/holochain/lair/compare/v0.6.2...v0.6.3)\] - 2025-09-25
+
+### Miscellaneous Tasks
+
+- Update dependencies (#155) by @ThetaSinner in [#155](https://github.com/holochain/lair/pull/155)
+  - Chore: Update dependencies
+  - Chore: Format SQL
+- Fix build script to support publishing (#151) by @ThetaSinner in [#151](https://github.com/holochain/lair/pull/151)
+
+### CI
+
+- Use newer release prepare workflow
+- Update release integration action versions (#156) by @ThetaSinner in [#156](https://github.com/holochain/lair/pull/156)
+
+### Refactor
+
+- Replace the unmaintained crate `tempdir` with the maintained crate `tempfile` (#154) by @ThetaSinner in [#154](https://github.com/holochain/lair/pull/154)
+- Replace `structopt` with `clap` in the `lair-keystore` binary (#153) by @ThetaSinner in [#153](https://github.com/holochain/lair/pull/153)
+
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
