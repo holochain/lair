@@ -7,8 +7,9 @@ mod common;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn server_test_happy_path() {
-    let tmpdir = tempdir::TempDir::new("lair keystore test").unwrap();
-    let tmpdir2 = tempdir::TempDir::new("lair keystore test2").unwrap();
+    let tmpdir = tempfile::TempDir::with_prefix("lair keystore test").unwrap();
+    let tmpdir2 =
+        tempfile::TempDir::with_prefix("lair keystore test2").unwrap();
 
     let client = connect(&tmpdir).await;
     let client2 = connect(&tmpdir2).await;
@@ -63,7 +64,7 @@ async fn server_test_happy_path() {
     );
 
     // create a new deep-locked seed
-    let _seed_info_ref_deep = hc_seed_bundle::PwHashLimits::Minimum
+    let _seed_info_ref_deep = PwHashLimits::Minimum
         .with_exec(|| {
             client.new_seed(
                 "test-tag-deep".into(),

@@ -155,7 +155,7 @@ mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
 
-    async fn connect(tmp_dir: &tempdir::TempDir) -> crate::LairClient {
+    async fn connect(tmp_dir: &tempfile::TempDir) -> crate::LairClient {
         // set up a passphrase
         let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(
             b"passphrase".to_vec(),
@@ -194,9 +194,10 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn ipc_happy_path() {
-        let tmp_dir = tempdir::TempDir::new("lair_ipc_keystore_test").unwrap();
+        let tmp_dir =
+            tempfile::TempDir::with_prefix("lair_ipc_keystore_test").unwrap();
         let tmp_dir2 =
-            tempdir::TempDir::new("lair_ipc_keystore_test2").unwrap();
+            tempfile::TempDir::with_prefix("lair_ipc_keystore_test2").unwrap();
 
         let client = connect(&tmp_dir).await;
         let client2 = connect(&tmp_dir2).await;

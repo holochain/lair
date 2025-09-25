@@ -129,7 +129,7 @@ impl std::fmt::Display for LairServerConfigInner {
 impl LairServerConfigInner {
     /// decode yaml bytes into a config struct
     pub fn from_bytes(bytes: &[u8]) -> LairResult<Self> {
-        serde_yaml::from_slice(bytes).map_err(one_err::OneErr::new)
+        serde_yaml::from_slice(bytes).map_err(OneErr::new)
     }
 
     /// Construct a new default lair server config instance.
@@ -142,7 +142,7 @@ impl LairServerConfigInner {
         P: AsRef<std::path::Path>,
     {
         let root_path = root_path.as_ref().to_owned();
-        let limits = hc_seed_bundle::PwHashLimits::current();
+        let limits = PwHashLimits::current();
         async move {
             // default pid_file name is '[root_path]/pid_file'
             let mut pid_file = root_path.clone();
@@ -345,13 +345,13 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_config_yaml() {
-        let tempdir = tempdir::TempDir::new("example").unwrap();
+        let temp_dir = tempfile::TempDir::with_prefix("example").unwrap();
         let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(
             b"passphrase".to_vec(),
         )));
-        let mut srv = hc_seed_bundle::PwHashLimits::Minimum
+        let mut srv = PwHashLimits::Minimum
             .with_exec(|| {
-                LairServerConfigInner::new(tempdir.path(), passphrase)
+                LairServerConfigInner::new(temp_dir.path(), passphrase)
             })
             .await
             .unwrap();
@@ -359,7 +359,7 @@ mod tests {
         println!("-- server config start --");
         println!("{}", &srv);
         println!("-- server config end --");
-        assert_eq!(tempdir.path(), srv.pid_file.parent().unwrap(),);
+        assert_eq!(temp_dir.path(), srv.pid_file.parent().unwrap(),);
 
         srv.signature_fallback = LairServerSignatureFallback::Command {
             program: std::path::Path::new("./my-executable").into(),

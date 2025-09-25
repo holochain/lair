@@ -3,7 +3,7 @@ use lair_keystore_api::prelude::*;
 use std::sync::{Arc, Mutex};
 
 pub async fn create_config(
-    tmpdir: &tempdir::TempDir,
+    tmpdir: &tempfile::TempDir,
     passphrase: SharedLockedArray,
 ) -> Arc<LairServerConfigInner> {
     // create the config for the test server
@@ -34,7 +34,7 @@ pub async fn connect_with_config(
 }
 
 #[allow(dead_code)]
-pub async fn connect(tmpdir: &tempdir::TempDir) -> LairClient {
+pub async fn connect(tmpdir: &tempfile::TempDir) -> LairClient {
     // set up a passphrase
     let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(
         b"passphrase".to_vec(),
