@@ -15,7 +15,7 @@ edition.workspace = true
 futures = { workspace = true }
 one_err = { workspace = true }
 rmp-serde = { workspace = true }
-rmpv = { workspace = true }        # Version 1.0.1 requires Rust 1.70.0
+rmpv = { workspace = true }
 serde = { workspace = true }
 serde_bytes = { workspace = true }
 sodoken = { workspace = true }
