@@ -3,6 +3,7 @@
 use crate::*;
 use once_cell::sync::Lazy;
 use one_err::OneErr;
+use rcgen::Issuer;
 use std::sync::{Arc, Mutex};
 
 /// The well-known CA keypair in plaintext pem format.
@@ -18,9 +19,7 @@ xkzPZovign1qmbu0vZstKoVLXoGvlA/Kral9txqhSEGqIL7TdbKyMMQz
 /// The well-known pseudo name/id for the well-known lair CA root.
 pub const WK_CA_ID: &str = "aKdjnmYOn1HVc_RwSdxR6qa.aQLW3d5D1nYiSSO2cOrcT7a";
 
-/// This doesn't need to be pub... We need the rcgen::Certificate
-/// with the private keys still integrated in order to sign certs.
-static WK_CA_RCGEN_CERT: Lazy<Arc<rcgen::Certificate>> = Lazy::new(|| {
+fn wk_ca_params() -> rcgen::CertificateParams {
     let mut params = rcgen::CertificateParams::new(vec![WK_CA_ID.into()])
         .expect("Failed to create params");
 
@@ -36,10 +35,16 @@ static WK_CA_RCGEN_CERT: Lazy<Arc<rcgen::Certificate>> = Lazy::new(|| {
     params
         .distinguished_name
         .push(rcgen::DnType::OrganizationName, "Holochain Foundation");
+    params
+}
+
+/// This doesn't need to be pub... We need the rcgen::Certificate
+/// with the private keys still integrated in order to sign certs.
+static WK_CA_RCGEN_CERT: Lazy<Arc<rcgen::Certificate>> = Lazy::new(|| {
     let keypair = rcgen::KeyPair::from_pem(WK_CA_KEYPAIR_PEM)
         .expect("Failed to create keypair from existing private key PEM");
 
-    let cert = params.self_signed(&keypair).unwrap();
+    let cert = wk_ca_params().self_signed(&keypair).unwrap();
     Arc::new(cert)
 });
 
@@ -87,13 +92,11 @@ pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
         let keypair =
             rcgen::KeyPair::generate_for(&rcgen::PKCS_ECDSA_P256_SHA256)
                 .map_err(OneErr::new)?;
-        let root_cert = &**WK_CA_RCGEN_CERT;
         let root_keypair =
             rcgen::KeyPair::from_pem(WK_CA_KEYPAIR_PEM).map_err(OneErr::new)?;
+        let issuer = Issuer::new(wk_ca_params(), root_keypair);
 
-        let cert = params
-            .signed_by(&keypair, root_cert, &root_keypair)
-            .map_err(OneErr::new)?;
+        let cert = params.signed_by(&keypair, &issuer).map_err(OneErr::new)?;
 
         let cert_pk = zeroize::Zeroizing::new(keypair.serialize_der());
         let mut priv_key = sodoken::LockedArray::new(cert_pk.len())?;
