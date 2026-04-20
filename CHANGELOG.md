@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## \[[0.7.0](https://github.com/holochain/lair/compare/v0.6.3...v0.7.0)\] - 2026-04-20
+
+### Miscellaneous Tasks
+
+- Downgrade rusqlite until dependency conflicts can be resolved downstream by @ThetaSinner in [#163](https://github.com/holochain/lair/pull/163)
+- \[**BREAKING**\] Update dependencies by @ThetaSinner
+
+### CI
+
+- Update release actions by @ThetaSinner
+
+### Documentation
+
+- Remove unused PR template by @ThetaSinner in [#162](https://github.com/holochain/lair/pull/162)
+
 ## \[[0.6.3](https://github.com/holochain/lair/compare/v0.6.2...v0.6.3)\] - 2025-09-29
 
 ### Miscellaneous Tasks
