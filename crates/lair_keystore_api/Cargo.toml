@@ -21,7 +21,7 @@ once_cell = { workspace = true }
 rcgen = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_yaml = { workspace = true }
+yaml_serde = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 toml = { workspace = true }
 tracing = { workspace = true }

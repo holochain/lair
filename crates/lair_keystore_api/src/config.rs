@@ -75,7 +75,7 @@ pub struct LairServerConfigInner {
 
 impl std::fmt::Display for LairServerConfigInner {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let s = serde_yaml::to_string(&self).map_err(|_| std::fmt::Error)?;
+        let s = yaml_serde::to_string(&self).map_err(|_| std::fmt::Error)?;
 
         // inject some helpful comments
         let mut lines = Vec::new();
@@ -129,7 +129,7 @@ impl std::fmt::Display for LairServerConfigInner {
 impl LairServerConfigInner {
     /// decode yaml bytes into a config struct
     pub fn from_bytes(bytes: &[u8]) -> LairResult<Self> {
-        serde_yaml::from_slice(bytes).map_err(OneErr::new)
+        yaml_serde::from_slice(bytes).map_err(OneErr::new)
     }
 
     /// Construct a new default lair server config instance.
