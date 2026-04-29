@@ -98,10 +98,10 @@ pub mod dependencies {
     pub use nanoid;
     pub use once_cell;
     pub use serde_json;
-    pub use serde_yaml;
     pub use tokio;
     pub use tracing;
     pub use url;
+    pub use yaml_serde as serde_yaml;
 }
 
 use dependencies::*;
