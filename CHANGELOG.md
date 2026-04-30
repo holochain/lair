@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## \[[0.7.1](https://github.com/holochain/lair/compare/v0.7.0...v0.7.1)\] - 2026-04-30
+
+### Features
+
+- Switch from `serde_yaml` to `yaml_serde` by @ThetaSinner in [#166](https://github.com/holochain/lair/pull/166)
+
+### Miscellaneous Tasks
+
+- Update the CONTRIBUTING.md with shared content in [#165](https://github.com/holochain/lair/pull/165)
+
 ## \[[0.7.0](https://github.com/holochain/lair/compare/v0.6.3...v0.7.0)\] - 2026-04-20
 
 ### Miscellaneous Tasks

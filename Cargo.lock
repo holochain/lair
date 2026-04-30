@@ -569,7 +569,7 @@ dependencies = [
 
 [[package]]
 name = "hc_seed_bundle"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "base64",
  "futures",
@@ -750,7 +750,7 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "lair_keystore"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -766,7 +766,7 @@ dependencies = [
 
 [[package]]
 name = "lair_keystore_api"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "assert_cmd",
  "base64",
