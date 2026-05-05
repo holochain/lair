@@ -55,12 +55,9 @@ async fn populate_and_backup(store_pass: SharedLockedArray) -> Backup {
         b"bundle-pass".to_vec(),
     )));
 
-    let tmpdir_a =
-        tempfile::TempDir::with_prefix("lair-restore-a").unwrap();
-    let config_a =
-        common::create_config(&tmpdir_a, store_pass.clone()).await;
-    let mut server_a =
-        StandaloneServer::new(config_a.clone()).await.unwrap();
+    let tmpdir_a = tempfile::TempDir::with_prefix("lair-restore-a").unwrap();
+    let config_a = common::create_config(&tmpdir_a, store_pass.clone()).await;
+    let mut server_a = StandaloneServer::new(config_a.clone()).await.unwrap();
     server_a.run(store_pass.clone()).await.unwrap();
     let client_a = ipc_keystore_connect(
         config_a.connection_url.clone(),
@@ -69,10 +66,7 @@ async fn populate_and_backup(store_pass: SharedLockedArray) -> Backup {
     .await
     .unwrap();
 
-    let root_info = client_a
-        .new_seed("root".into(), None, true)
-        .await
-        .unwrap();
+    let root_info = client_a.new_seed("root".into(), None, true).await.unwrap();
 
     let path_revoke: Box<[u32]> = vec![1].into();
     let path_app1: Box<[u32]> = vec![2, 1, 1].into();
@@ -170,9 +164,8 @@ async fn populate_and_backup(store_pass: SharedLockedArray) -> Backup {
 
     // PwHashLimits::Minimum keeps the test fast; production callers
     // would use Moderate or Sensitive.
-    let cipher_builder = PwHashLimits::Minimum.with_exec(|| {
-        unlocked.lock().add_pwhash_cipher(bundle_pass.clone())
-    });
+    let cipher_builder = PwHashLimits::Minimum
+        .with_exec(|| unlocked.lock().add_pwhash_cipher(bundle_pass.clone()));
     let locked_bundle: Box<[u8]> = cipher_builder.lock().await.unwrap();
 
     // Tear keystore A down. The locked_bundle bytes are all that survives.
@@ -307,12 +300,9 @@ async fn restore_keystore_in_process() {
     )));
     let backup = populate_and_backup(store_pass.clone()).await;
 
-    let tmpdir_b =
-        tempfile::TempDir::with_prefix("lair-restore-b").unwrap();
-    let config_b =
-        common::create_config(&tmpdir_b, store_pass.clone()).await;
-    let mut server_b =
-        StandaloneServer::new(config_b.clone()).await.unwrap();
+    let tmpdir_b = tempfile::TempDir::with_prefix("lair-restore-b").unwrap();
+    let config_b = common::create_config(&tmpdir_b, store_pass.clone()).await;
+    let mut server_b = StandaloneServer::new(config_b.clone()).await.unwrap();
     server_b.run(store_pass.clone()).await.unwrap();
     let client_b = ipc_keystore_connect(
         config_b.connection_url.clone(),
@@ -322,8 +312,7 @@ async fn restore_keystore_in_process() {
     .unwrap();
 
     let restored =
-        unlock_bundle(&backup.locked_bundle, backup.bundle_pass.clone())
-            .await;
+        unlock_bundle(&backup.locked_bundle, backup.bundle_pass.clone()).await;
 
     let store_b = server_b.store().await.unwrap();
     let restored_root_info = store_b
@@ -363,12 +352,9 @@ async fn restore_keystore_via_ipc() {
     )));
     let backup = populate_and_backup(store_pass.clone()).await;
 
-    let tmpdir_b =
-        tempfile::TempDir::with_prefix("lair-restore-b").unwrap();
-    let config_b =
-        common::create_config(&tmpdir_b, store_pass.clone()).await;
-    let mut server_b =
-        StandaloneServer::new(config_b.clone()).await.unwrap();
+    let tmpdir_b = tempfile::TempDir::with_prefix("lair-restore-b").unwrap();
+    let config_b = common::create_config(&tmpdir_b, store_pass.clone()).await;
+    let mut server_b = StandaloneServer::new(config_b.clone()).await.unwrap();
     server_b.run(store_pass.clone()).await.unwrap();
     let client_b = ipc_keystore_connect(
         config_b.connection_url.clone(),
@@ -378,8 +364,7 @@ async fn restore_keystore_via_ipc() {
     .unwrap();
 
     let restored =
-        unlock_bundle(&backup.locked_bundle, backup.bundle_pass.clone())
-            .await;
+        unlock_bundle(&backup.locked_bundle, backup.bundle_pass.clone()).await;
 
     // Bootstrap recipient seed inside keystore B so we have an x25519
     // pubkey lair already knows about. This is the wart: there's no
@@ -401,8 +386,7 @@ async fn restore_keystore_via_ipc() {
     // Encrypt the (still locked) seed bytes for the bootstrap recipient.
     let mut nonce = [0u8; sodoken::crypto_box::XSALSA_NONCEBYTES];
     sodoken::random::randombytes_buf(&mut nonce).unwrap();
-    let mut cipher =
-        vec![0u8; 32 + sodoken::crypto_box::XSALSA_MACBYTES];
+    let mut cipher = vec![0u8; 32 + sodoken::crypto_box::XSALSA_MACBYTES];
     {
         let shared_seed = restored.get_seed();
         let mut outer = shared_seed.lock().unwrap();
