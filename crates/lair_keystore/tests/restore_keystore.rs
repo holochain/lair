@@ -291,7 +291,7 @@ fn tag_set<const N: usize>(tags: [&str; N]) -> HashSet<String> {
     tags.iter().map(|s| s.to_string()).collect()
 }
 
-/// Path B: in-process embedding. Uses `StandaloneServer::store()` to call
+/// (1) In-process embedding. Uses `StandaloneServer::store()` to call
 /// `LairStore::insert_seed` directly. Clean restore, no detritus.
 #[tokio::test(flavor = "multi_thread")]
 async fn restore_keystore_in_process() {
@@ -336,7 +336,7 @@ async fn restore_keystore_in_process() {
     client_b.shutdown().await.unwrap();
 }
 
-/// Path A: out-of-process. Uses only `LairClient` (the IPC RPC surface).
+/// (2) Out-of-process. Uses only `LairClient` (the IPC RPC surface).
 /// `import_seed` requires an existing seed in the keystore as the
 /// `recipient_pub_key`, so we bootstrap one with `new_seed("import-tmp")`,
 /// crypto_box-encrypt the unlocked seed bytes for that recipient, then
