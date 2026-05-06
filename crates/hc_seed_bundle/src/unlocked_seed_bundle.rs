@@ -11,6 +11,7 @@ const KDF_CONTEXT: &[u8; 8] = b"SeedBndl";
 /// To create an [UnlockedSeedBundle]:
 /// - A new random bundle: [UnlockedSeedBundle::new_random]
 /// - Derived from an existing bundle: [UnlockedSeedBundle::derive]
+/// - Wrap an existing 32-byte seed: [UnlockedSeedBundle::from_seed]
 /// - Unlock encrypted bundle bytes: [UnlockedSeedBundle::from_locked]
 ///
 /// Once unlocked, you can get or set associated app data, or sign messages.
