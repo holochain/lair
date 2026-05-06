@@ -293,6 +293,26 @@ pub(crate) fn priv_dispatch_incoming<'a>(
                 priv_req_import_seed(inner, send, dec_ctx_key, unlocked, req)
                     .await
             }
+            LairApiEnum::ReqExportSeedBundleByTag(req) => {
+                priv_req_export_seed_bundle_by_tag(
+                    inner,
+                    send,
+                    dec_ctx_key,
+                    unlocked,
+                    req,
+                )
+                .await
+            }
+            LairApiEnum::ReqImportSeedBundle(req) => {
+                priv_req_import_seed_bundle(
+                    inner,
+                    send,
+                    dec_ctx_key,
+                    unlocked,
+                    req,
+                )
+                .await
+            }
             LairApiEnum::ReqDeriveSeed(req) => {
                 priv_req_derive_seed(inner, send, dec_ctx_key, unlocked, req)
                     .await
@@ -362,6 +382,8 @@ pub(crate) fn priv_dispatch_incoming<'a>(
             | LairApiEnum::ResNewSeed(_)
             | LairApiEnum::ResExportSeedByTag(_)
             | LairApiEnum::ResImportSeed(_)
+            | LairApiEnum::ResExportSeedBundleByTag(_)
+            | LairApiEnum::ResImportSeedBundle(_)
             | LairApiEnum::ResDeriveSeed(_)
             | LairApiEnum::ResSignByPubKey(_)
             | LairApiEnum::ResCryptoBoxXSalsaByPubKey(_)

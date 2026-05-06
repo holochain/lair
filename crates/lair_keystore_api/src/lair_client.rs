@@ -273,6 +273,62 @@ impl LairClient {
         }
     }
 
+    /// Export a seed (if it is marked exportable) as a passphrase-locked
+    /// `hc_seed_bundle`. The returned bytes are MSGPACK-encoded and can be
+    /// decoded with [hc_seed_bundle::UnlockedSeedBundle::from_locked].
+    ///
+    /// `bundle_passphrase` is what the user must supply to unlock the
+    /// returned bundle later — it is independent of the keystore unlock
+    /// passphrase. `pw_hash_limits` controls the argon2id difficulty for
+    /// that bundle's cipher; production callers should use `Moderate` or
+    /// `Sensitive`.
+    pub fn export_seed_bundle_by_tag(
+        &self,
+        tag: Arc<str>,
+        bundle_passphrase: SharedLockedArray,
+        pw_hash_limits: PwHashLimits,
+    ) -> impl Future<Output = LairResult<Arc<[u8]>>> + 'static + Send {
+        let inner = self.0.clone();
+        async move {
+            let bundle_passphrase =
+                encrypt_passphrase(bundle_passphrase, inner.get_enc_ctx_key())
+                    .await?;
+            let req = LairApiReqExportSeedBundleByTag::new(
+                tag,
+                bundle_passphrase,
+                pw_hash_limits,
+            );
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok(res.bundle_bytes)
+        }
+    }
+
+    /// Import a passphrase-locked `hc_seed_bundle` (as produced by
+    /// [LairClient::export_seed_bundle_by_tag], or any other tooling that
+    /// emits the same format) into the keystore at `tag`.
+    pub fn import_seed_bundle(
+        &self,
+        bundle_bytes: Arc<[u8]>,
+        bundle_passphrase: SharedLockedArray,
+        tag: Arc<str>,
+        exportable: bool,
+    ) -> impl Future<Output = LairResult<SeedInfo>> + 'static + Send {
+        let inner = self.0.clone();
+        async move {
+            let bundle_passphrase =
+                encrypt_passphrase(bundle_passphrase, inner.get_enc_ctx_key())
+                    .await?;
+            let req = LairApiReqImportSeedBundle::new(
+                bundle_bytes,
+                bundle_passphrase,
+                tag,
+                exportable,
+            );
+            let res = priv_lair_api_request(&*inner, req).await?;
+            Ok(res.seed_info)
+        }
+    }
+
     // uhhhh... clippy?? [u32] by itself is not sized... so, yes
     // this *does* have to be Boxed...
     #[allow(clippy::boxed_local)]

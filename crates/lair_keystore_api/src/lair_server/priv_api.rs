@@ -412,6 +412,131 @@ pub(crate) fn priv_req_export_seed_by_tag<'a>(
     }
 }
 
+pub(crate) fn priv_req_export_seed_bundle_by_tag<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    send: &'a sodium_secretstream::S3Sender<LairApiEnum>,
+    dec_ctx_key: SharedSizedLockedArray<32>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqExportSeedBundleByTag,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("KeystoreLocked".into());
+        }
+
+        let (seed_entry, _) =
+            priv_get_full_entry_by_tag(inner, req.tag.clone()).await?;
+
+        let msg_id = req.msg_id.clone();
+        let limits = req.pw_hash_limits;
+
+        let Some(seed) = seed_entry.seed else {
+            return Err(
+                "deep_seed seed bundle export not yet implemented".into()
+            );
+        };
+        if !seed_entry.exportable {
+            return Err("seed is not exportable".into());
+        }
+
+        // Copy the seed bytes out of the cached SharedSizedLockedArray into a
+        // fresh SizedLockedArray that pwhash_lock_seed can take by value. The
+        // bytes never leave protected memory.
+        let mut seed_copy = sodoken::SizedLockedArray::<32>::new()?;
+        {
+            let mut shared_guard = seed.lock().unwrap();
+            let src_guard = shared_guard.lock();
+            seed_copy.lock().copy_from_slice(src_guard.as_slice());
+        }
+
+        // Decrypt the bundle passphrase straight into a fresh LockedArray
+        // shaped the way add_pwhash_cipher expects, without ever exposing
+        // the bytes outside protected memory.
+        let mut bundle_pass_sized =
+            req.bundle_passphrase.decrypt(dec_ctx_key).await?;
+        let mut bundle_pass_locked = sodoken::LockedArray::new(64)?;
+        bundle_pass_locked
+            .lock()
+            .copy_from_slice(bundle_pass_sized.lock().as_slice());
+        let bundle_pass = Arc::new(Mutex::new(bundle_pass_locked));
+
+        let bundle_bytes =
+            hc_seed_bundle::pwhash_lock_seed(seed_copy, bundle_pass, limits)
+                .await?;
+
+        send.send(
+            LairApiResExportSeedBundleByTag {
+                msg_id,
+                bundle_bytes: bundle_bytes.into(),
+            }
+            .into_api_enum(),
+        )
+        .await?;
+
+        Ok(())
+    }
+}
+
+pub(crate) fn priv_req_import_seed_bundle<'a>(
+    inner: &'a Arc<RwLock<SrvInner>>,
+    send: &'a sodium_secretstream::S3Sender<LairApiEnum>,
+    dec_ctx_key: SharedSizedLockedArray<32>,
+    unlocked: &'a Arc<atomic::AtomicBool>,
+    req: LairApiReqImportSeedBundle,
+) -> impl Future<Output = LairResult<()>> + 'a + Send {
+    async move {
+        let store = priv_get_store(inner, unlocked)?;
+
+        if !unlocked.load(atomic::Ordering::Relaxed) {
+            return Err("KeystoreLocked".into());
+        }
+
+        let msg_id = req.msg_id.clone();
+        let tag = req.tag.clone();
+        let exportable = req.exportable;
+
+        let mut bundle_pass_sized =
+            req.bundle_passphrase.decrypt(dec_ctx_key).await?;
+        let mut bundle_pass_locked = sodoken::LockedArray::new(64)?;
+        bundle_pass_locked
+            .lock()
+            .copy_from_slice(bundle_pass_sized.lock().as_slice());
+        let bundle_pass = Arc::new(Mutex::new(bundle_pass_locked));
+
+        let cipher_list =
+            hc_seed_bundle::UnlockedSeedBundle::from_locked(&req.bundle_bytes)
+                .await?;
+
+        let mut unlocked_bundle = None;
+        for cipher in cipher_list {
+            if let hc_seed_bundle::LockedSeedCipher::PwHash(pw) = cipher {
+                if let Ok(b) = pw.unlock(bundle_pass.clone()).await {
+                    unlocked_bundle = Some(b);
+                    break;
+                }
+            }
+        }
+        let unlocked_bundle = unlocked_bundle
+            .ok_or_else(|| OneErr::from("no PwHash cipher unlocked"))?;
+
+        let seed_info = store
+            .insert_seed(unlocked_bundle.get_seed(), tag.clone(), exportable)
+            .await?;
+
+        send.send(
+            LairApiResImportSeedBundle {
+                msg_id,
+                tag,
+                seed_info,
+            }
+            .into_api_enum(),
+        )
+        .await?;
+
+        Ok(())
+    }
+}
+
 pub(crate) fn priv_req_import_seed<'a>(
     inner: &'a Arc<RwLock<SrvInner>>,
     send: &'a sodium_secretstream::S3Sender<LairApiEnum>,
