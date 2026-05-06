@@ -26,11 +26,7 @@ pub struct UnlockedSeedBundle {
 }
 
 impl UnlockedSeedBundle {
-    // Kept private so every public `UnlockedSeedBundle` has provenance via
-    // `new_random` (CSPRNG), `derive` (KDF), or `LockedSeedCipher::*::unlock`
-    // (authenticated decrypt). External callers that hold raw seed bytes go
-    // through [`crate::pwhash_lock_seed`], which wraps and locks atomically
-    // without exposing the unlocked bundle.
+    /// Private core constructor
     pub(crate) async fn priv_from_seed(
         seed: sodoken::SizedLockedArray<32>,
     ) -> Result<Self, OneErr> {
