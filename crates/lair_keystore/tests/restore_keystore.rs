@@ -178,3 +178,175 @@ async fn restore_keystore_via_seed_bundle() {
 
     client_b.shutdown().await.unwrap();
 }
+
+/// Helper: bring up a standalone keystore + connected client. Returns the
+/// tempdir last so the caller can keep it alive for the test's lifetime.
+async fn spawn_keystore(
+    prefix: &str,
+    store_pass: SharedLockedArray,
+) -> (StandaloneServer, LairClient, tempfile::TempDir) {
+    let tmpdir = tempfile::TempDir::with_prefix(prefix).unwrap();
+    let config = common::create_config(&tmpdir, store_pass.clone()).await;
+    let mut server = StandaloneServer::new(config.clone()).await.unwrap();
+    server.run(store_pass.clone()).await.unwrap();
+    let client =
+        ipc_keystore_connect(config.connection_url.clone(), store_pass.clone())
+            .await
+            .unwrap();
+    (server, client, tmpdir)
+}
+
+/// A bundle exported via lair's IPC verb must be unlockable by stand-alone
+/// `hc_seed_bundle` tooling — i.e. the on-disk format isn't lair-specific.
+/// This is the cross-tool portability proof: we never let lair touch the
+/// unlock side, only `UnlockedSeedBundle::from_locked` + `unlock`.
+#[tokio::test(flavor = "multi_thread")]
+async fn exported_bundle_unlocks_via_hc_seed_bundle_directly() {
+    let store_pass = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"store-pass".to_vec(),
+    )));
+    let bundle_pass = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"correct horse battery staple".to_vec(),
+    )));
+
+    let (_server, client, _tmpdir) =
+        spawn_keystore("lair-portable-a", store_pass).await;
+
+    let seed_info = client.new_seed("root".into(), None, true).await.unwrap();
+
+    let locked_bundle = client
+        .export_seed_bundle_by_tag(
+            "root".into(),
+            bundle_pass.clone(),
+            PwHashLimits::Minimum,
+        )
+        .await
+        .unwrap();
+
+    // Drive the unlock side purely through hc_seed_bundle's public API —
+    // no lair, no IPC, no prehashing, just `from_locked` + `unlock`.
+    let cipher =
+        hc_seed_bundle::UnlockedSeedBundle::from_locked(&locked_bundle)
+            .await
+            .unwrap()
+            .into_iter()
+            .find_map(|c| match c {
+                hc_seed_bundle::LockedSeedCipher::PwHash(pw) => Some(pw),
+                _ => None,
+            })
+            .expect("bundle contains a PwHash cipher");
+
+    let unlocked = cipher.unlock(bundle_pass).await.expect(
+        "hc_seed_bundle unlocks lair-produced bundle with raw passphrase",
+    );
+
+    // The ed25519 pubkey derived from the seed inside the bundle must match
+    // the one lair reported when it created the seed.
+    assert_eq!(
+        unlocked.get_sign_pub_key().as_slice(),
+        seed_info.ed25519_pub_key.as_ref(),
+    );
+
+    client.shutdown().await.unwrap();
+}
+
+/// Importing with the wrong passphrase must fail rather than silently
+/// inserting garbage.
+#[tokio::test(flavor = "multi_thread")]
+async fn import_seed_bundle_with_wrong_passphrase_fails() {
+    let store_pass = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"store-pass".to_vec(),
+    )));
+    let right_pass = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"the right one".to_vec(),
+    )));
+    let wrong_pass = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"the wrong one".to_vec(),
+    )));
+
+    let (_server_a, client_a, _tmpdir_a) =
+        spawn_keystore("lair-wrongpass-a", store_pass.clone()).await;
+    client_a.new_seed("root".into(), None, true).await.unwrap();
+    let locked_bundle = client_a
+        .export_seed_bundle_by_tag(
+            "root".into(),
+            right_pass,
+            PwHashLimits::Minimum,
+        )
+        .await
+        .unwrap();
+    client_a.shutdown().await.unwrap();
+
+    let (_server_b, client_b, _tmpdir_b) =
+        spawn_keystore("lair-wrongpass-b", store_pass).await;
+    let result = client_b
+        .import_seed_bundle(locked_bundle, wrong_pass, "root".into(), true)
+        .await;
+    assert!(result.is_err(), "import with wrong passphrase must error");
+
+    // The keystore must not contain a "root" entry after a failed import.
+    assert!(client_b.get_entry("root".into()).await.is_err());
+
+    client_b.shutdown().await.unwrap();
+}
+
+/// Asking to export a tag that doesn't exist must surface as an error,
+/// not panic and not return an empty bundle.
+#[tokio::test(flavor = "multi_thread")]
+async fn export_seed_bundle_for_missing_tag_fails() {
+    let store_pass = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"store-pass".to_vec(),
+    )));
+    let bundle_pass = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"bundle-pass".to_vec(),
+    )));
+
+    let (_server, client, _tmpdir) =
+        spawn_keystore("lair-missingtag", store_pass).await;
+
+    let result = client
+        .export_seed_bundle_by_tag(
+            "no-such-tag".into(),
+            bundle_pass,
+            PwHashLimits::Minimum,
+        )
+        .await;
+    assert!(result.is_err(), "exporting a missing tag must error");
+
+    client.shutdown().await.unwrap();
+}
+
+/// A seed created with `exportable: false` must not be exportable as a
+/// bundle either — otherwise the flag would be a paper protection.
+#[tokio::test(flavor = "multi_thread")]
+async fn export_seed_bundle_for_non_exportable_seed_fails() {
+    let store_pass = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"store-pass".to_vec(),
+    )));
+    let bundle_pass = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"bundle-pass".to_vec(),
+    )));
+
+    let (_server, client, _tmpdir) =
+        spawn_keystore("lair-nonexport", store_pass).await;
+
+    // exportable: false
+    client
+        .new_seed("locked-root".into(), None, false)
+        .await
+        .unwrap();
+
+    let result = client
+        .export_seed_bundle_by_tag(
+            "locked-root".into(),
+            bundle_pass,
+            PwHashLimits::Minimum,
+        )
+        .await;
+    assert!(
+        result.is_err(),
+        "exporting a non-exportable seed as a bundle must error",
+    );
+
+    client.shutdown().await.unwrap();
+}
