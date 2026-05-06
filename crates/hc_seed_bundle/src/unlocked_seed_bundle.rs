@@ -11,7 +11,6 @@ const KDF_CONTEXT: &[u8; 8] = b"SeedBndl";
 /// To create an [UnlockedSeedBundle]:
 /// - A new random bundle: [UnlockedSeedBundle::new_random]
 /// - Derived from an existing bundle: [UnlockedSeedBundle::derive]
-/// - Wrap an existing 32-byte seed: [UnlockedSeedBundle::from_seed]
 /// - Unlock encrypted bundle bytes: [UnlockedSeedBundle::from_locked]
 ///
 /// Once unlocked, you can get or set associated app data, or sign messages.
@@ -27,16 +26,7 @@ pub struct UnlockedSeedBundle {
 }
 
 impl UnlockedSeedBundle {
-    /// Wrap a pre-existing 32-byte seed in an [UnlockedSeedBundle].
-    ///
-    /// Use this when you already hold the raw seed bytes — for example,
-    /// after exporting a seed from a running keystore — and need a
-    /// SeedBundle so the seed can be encrypted via [UnlockedSeedBundle::lock]
-    /// and persisted as a portable backup.
-    ///
-    /// For new random seeds use [UnlockedSeedBundle::new_random]; to restore
-    /// from an already-locked bundle use [UnlockedSeedBundle::from_locked].
-    pub async fn from_seed(
+    pub(crate) async fn priv_from_seed(
         seed: sodoken::SizedLockedArray<32>,
     ) -> Result<Self, OneErr> {
         let seed = Arc::new(Mutex::new(seed));
@@ -65,7 +55,7 @@ impl UnlockedSeedBundle {
     pub async fn new_random() -> Result<Self, OneErr> {
         let mut seed = sodoken::SizedLockedArray::new()?;
         sodoken::random::randombytes_buf(&mut *seed.lock())?;
-        Self::from_seed(seed).await
+        Self::priv_from_seed(seed).await
     }
 
     /// Decode locked SeedBundle bytes into a list of
@@ -96,7 +86,7 @@ impl UnlockedSeedBundle {
                 &seed.lock().unwrap().lock(),
             )?;
 
-            Self::from_seed(new_seed).await
+            Self::priv_from_seed(new_seed).await
         }
     }
 

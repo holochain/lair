@@ -187,7 +187,8 @@ impl LockedSeedCipherPwHash {
         .await?;
 
         // build the "unlocked" seed bundle struct with the seed
-        let mut bundle = crate::UnlockedSeedBundle::from_seed(seed).await?;
+        let mut bundle =
+            crate::UnlockedSeedBundle::priv_from_seed(seed).await?;
 
         // apply the app_data
         bundle.set_app_data_bytes(app_data);
@@ -257,7 +258,8 @@ impl LockedSeedCipherSecurityQuestions {
         .await?;
 
         // build the "unlocked" seed bundle struct with the seed
-        let mut bundle = crate::UnlockedSeedBundle::from_seed(seed).await?;
+        let mut bundle =
+            crate::UnlockedSeedBundle::priv_from_seed(seed).await?;
 
         // apply the app_data
         bundle.set_app_data_bytes(app_data);
