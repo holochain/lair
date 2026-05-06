@@ -12,7 +12,7 @@ pub struct LairApiReqImportSeedBundle {
 
     /// Encrypted bundle passphrase. The server uses this to unlock the
     /// `PwHash` cipher inside the seed bundle.
-    pub bundle_passphrase: DeepLockPassphraseBytes,
+    pub bundle_passphrase: EncryptedPassphrase,
 
     /// The tag at which to store the recovered seed.
     pub tag: Arc<str>,
@@ -25,7 +25,7 @@ impl LairApiReqImportSeedBundle {
     /// Make an import-seed-bundle request.
     pub fn new(
         bundle_bytes: Arc<[u8]>,
-        bundle_passphrase: DeepLockPassphraseBytes,
+        bundle_passphrase: EncryptedPassphrase,
         tag: Arc<str>,
         exportable: bool,
     ) -> Self {
