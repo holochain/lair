@@ -11,7 +11,9 @@
 ///   // execute my function that needs "Sensitive" limits
 /// });
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 pub enum PwHashLimits {
     /// minimum limits (UNIT TESTING ONLY)
     Minimum,

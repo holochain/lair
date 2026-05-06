@@ -147,7 +147,7 @@ async fn derive_key(client: &LairClient, path: Box<[u32]>) -> String {
 
     // we are just using the debug repr of the path for the result tag name
     BASE64_STANDARD.encode(
-        &*client
+        *client
             .derive_seed(
                 "root".into(),
                 None,
