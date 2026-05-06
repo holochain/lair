@@ -279,9 +279,13 @@ impl LairClient {
     ///
     /// `bundle_passphrase` is what the user must supply to unlock the
     /// returned bundle later — it is independent of the keystore unlock
-    /// passphrase. `pw_hash_limits` controls the argon2id difficulty for
-    /// that bundle's cipher; production callers should use `Moderate` or
-    /// `Sensitive`.
+    /// passphrase. The raw passphrase bytes are encrypted for transport but
+    /// not prehashed, so the resulting bundle is unlockable by any tool
+    /// that calls
+    /// [`hc_seed_bundle::UnlockedSeedBundle::from_locked`] followed by
+    /// `unlock(passphrase)` with the same raw bytes.
+    /// `pw_hash_limits` controls the argon2id difficulty for that bundle's
+    /// cipher; production callers should use `Moderate` or `Sensitive`.
     pub fn export_seed_bundle_by_tag(
         &self,
         tag: Arc<str>,
@@ -291,7 +295,7 @@ impl LairClient {
         let inner = self.0.clone();
         async move {
             let bundle_passphrase =
-                encrypt_passphrase(bundle_passphrase, inner.get_enc_ctx_key())
+                SecretData::encrypt(inner.get_enc_ctx_key(), bundle_passphrase)
                     .await?;
             let req = LairApiReqExportSeedBundleByTag::new(
                 tag,
@@ -316,7 +320,7 @@ impl LairClient {
         let inner = self.0.clone();
         async move {
             let bundle_passphrase =
-                encrypt_passphrase(bundle_passphrase, inner.get_enc_ctx_key())
+                SecretData::encrypt(inner.get_enc_ctx_key(), bundle_passphrase)
                     .await?;
             let req = LairApiReqImportSeedBundle::new(
                 bundle_bytes,

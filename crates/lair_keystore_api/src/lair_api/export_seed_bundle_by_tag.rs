@@ -10,9 +10,13 @@ pub struct LairApiReqExportSeedBundleByTag {
     /// The tag of the seed to export.
     pub tag: Arc<str>,
 
-    /// Encrypted bundle passphrase. The server will use this to derive the
-    /// argon2id-based cipher key that locks the returned seed bundle.
-    pub bundle_passphrase: EncryptedPassphrase,
+    /// Encrypted bundle passphrase. Encrypted via [`SecretData`] using the
+    /// connection's enc_ctx_key; the server decrypts to the raw passphrase
+    /// bytes and feeds them directly to argon2id, so the resulting bundle
+    /// is unlockable by any tool that calls
+    /// [`hc_seed_bundle::UnlockedSeedBundle::from_locked`] followed by
+    /// `unlock(passphrase)` with the same raw bytes.
+    pub bundle_passphrase: SecretData,
 
     /// Argon2id difficulty for the bundle's passphrase cipher.
     pub pw_hash_limits: hc_seed_bundle::PwHashLimits,
@@ -22,7 +26,7 @@ impl LairApiReqExportSeedBundleByTag {
     /// Make an export-seed-bundle request.
     pub fn new(
         tag: Arc<str>,
-        bundle_passphrase: EncryptedPassphrase,
+        bundle_passphrase: SecretData,
         pw_hash_limits: hc_seed_bundle::PwHashLimits,
     ) -> Self {
         Self {

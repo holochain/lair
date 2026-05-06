@@ -10,9 +10,10 @@ pub struct LairApiReqImportSeedBundle {
     /// The MSGPACK-encoded locked seed bundle bytes.
     pub bundle_bytes: Arc<[u8]>,
 
-    /// Encrypted bundle passphrase. The server uses this to unlock the
-    /// `PwHash` cipher inside the seed bundle.
-    pub bundle_passphrase: EncryptedPassphrase,
+    /// Encrypted bundle passphrase. Encrypted via [`SecretData`] using the
+    /// connection's enc_ctx_key; the server decrypts to the raw passphrase
+    /// bytes and uses them as the input to the bundle's `PwHash` cipher.
+    pub bundle_passphrase: SecretData,
 
     /// The tag at which to store the recovered seed.
     pub tag: Arc<str>,
@@ -25,7 +26,7 @@ impl LairApiReqImportSeedBundle {
     /// Make an import-seed-bundle request.
     pub fn new(
         bundle_bytes: Arc<[u8]>,
-        bundle_passphrase: EncryptedPassphrase,
+        bundle_passphrase: SecretData,
         tag: Arc<str>,
         exportable: bool,
     ) -> Self {

@@ -449,16 +449,11 @@ pub(crate) fn priv_req_export_seed_bundle_by_tag<'a>(
             seed_copy.lock().copy_from_slice(src_guard.as_slice());
         }
 
-        // Decrypt the bundle passphrase straight into a fresh LockedArray
-        // shaped the way add_pwhash_cipher expects, without ever exposing
-        // the bytes outside protected memory.
-        let mut bundle_pass_sized =
-            req.bundle_passphrase.decrypt(dec_ctx_key).await?;
-        let mut bundle_pass_locked = sodoken::LockedArray::new(64)?;
-        bundle_pass_locked
-            .lock()
-            .copy_from_slice(bundle_pass_sized.lock().as_slice());
-        let bundle_pass = Arc::new(Mutex::new(bundle_pass_locked));
+        // Decrypt the bundle passphrase. `SecretData::decrypt` returns the
+        // raw bytes in a fresh LockedArray, ready to hand to argon2id via
+        // `add_pwhash_cipher` — no prehashing, no extra copy.
+        let bundle_pass = req.bundle_passphrase.decrypt(dec_ctx_key).await?;
+        let bundle_pass = Arc::new(Mutex::new(bundle_pass));
 
         let bundle_bytes =
             hc_seed_bundle::pwhash_lock_seed(seed_copy, bundle_pass, limits)
@@ -495,13 +490,8 @@ pub(crate) fn priv_req_import_seed_bundle<'a>(
         let tag = req.tag.clone();
         let exportable = req.exportable;
 
-        let mut bundle_pass_sized =
-            req.bundle_passphrase.decrypt(dec_ctx_key).await?;
-        let mut bundle_pass_locked = sodoken::LockedArray::new(64)?;
-        bundle_pass_locked
-            .lock()
-            .copy_from_slice(bundle_pass_sized.lock().as_slice());
-        let bundle_pass = Arc::new(Mutex::new(bundle_pass_locked));
+        let bundle_pass = req.bundle_passphrase.decrypt(dec_ctx_key).await?;
+        let bundle_pass = Arc::new(Mutex::new(bundle_pass));
 
         let cipher_list =
             hc_seed_bundle::UnlockedSeedBundle::from_locked(&req.bundle_bytes)

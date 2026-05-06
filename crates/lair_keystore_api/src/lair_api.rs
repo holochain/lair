@@ -65,14 +65,6 @@ impl DeepLockPassphrase {
 /// The secret bytes of the passphrase
 pub type DeepLockPassphraseBytes = SecretDataSized<64, 81>;
 
-/// Wire envelope for a blake2b-prehashed, secretstream-encrypted client
-/// passphrase. Produced by [`crate::lair_client::encrypt_passphrase`] and
-/// consumed server-side by `decrypt(dec_ctx_key)`. Use this for any
-/// user-supplied passphrase travelling client → server other than a
-/// deep-lock passphrase (which has its own [`DeepLockPassphraseBytes`]
-/// alias because the deep-lock case bundles ops/mem limits alongside it).
-pub type EncryptedPassphrase = SecretDataSized<64, 81>;
-
 fn new_msg_id() -> Arc<str> {
     nanoid::nanoid!().into()
 }
