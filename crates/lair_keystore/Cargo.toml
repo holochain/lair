@@ -26,7 +26,6 @@ lair_keystore_api = { workspace = true }
 rpassword = { workspace = true }
 rusqlite = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
-sysinfo = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [build-dependencies]

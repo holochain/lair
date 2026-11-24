@@ -14,6 +14,10 @@ const READ_CON_COUNT: usize = 3;
 /// by an encrypted (sqlcipher) sqlite database.
 /// WARNING: If running on windows, this currently degenerates to a
 /// plaintext (non-encrypted) sqlite database.
+///
+/// Note, this constructor does not acquire exclusive ownership of the
+/// store file. Use [crate::store_lock::prepare_persistent_store] if you
+/// need to ensure no other lair instance can clobber the database.
 pub fn create_sql_pool_factory<P>(
     sqlite_file_path: P,
     db_salt: &BinDataSized<16>,
@@ -21,8 +25,37 @@ pub fn create_sql_pool_factory<P>(
 where
     P: AsRef<std::path::Path>,
 {
+    create_sql_pool_factory_inner(sqlite_file_path, db_salt, None)
+}
+
+/// Create a [LairStoreFactory] backed by sqlite that holds the given
+/// exclusive store ownership guard for as long as the factory or any
+/// store it creates is alive.
+pub(crate) fn create_sql_pool_factory_with_lock<P>(
+    sqlite_file_path: P,
+    db_salt: &BinDataSized<16>,
+    lock: crate::store_lock::StoreLock,
+) -> LairStoreFactory
+where
+    P: AsRef<std::path::Path>,
+{
+    create_sql_pool_factory_inner(sqlite_file_path, db_salt, Some(lock))
+}
+
+fn create_sql_pool_factory_inner<P>(
+    sqlite_file_path: P,
+    db_salt: &BinDataSized<16>,
+    lock: Option<crate::store_lock::StoreLock>,
+) -> LairStoreFactory
+where
+    P: AsRef<std::path::Path>,
+{
     let sqlite_file_path = sqlite_file_path.as_ref().to_owned();
-    struct X(std::path::PathBuf, BinDataSized<16>);
+    struct X(
+        std::path::PathBuf,
+        BinDataSized<16>,
+        Option<crate::store_lock::StoreLock>,
+    );
     impl AsLairStoreFactory for X {
         fn connect_to_store(
             &self,
@@ -30,13 +63,15 @@ where
         ) -> BoxFuture<'static, LairResult<LairStore>> {
             let sqlite_file_path = self.0.clone();
             let db_salt = self.1.clone();
+            let lock = self.2.clone();
             async move {
-                SqlPool::new(sqlite_file_path, unlock_secret, db_salt).await
+                SqlPool::new(sqlite_file_path, unlock_secret, db_salt, lock)
+                    .await
             }
             .boxed()
         }
     }
-    let inner = X(sqlite_file_path, db_salt.clone());
+    let inner = X(sqlite_file_path, db_salt.clone(), lock);
     LairStoreFactory(Arc::new(inner))
 }
 
@@ -46,6 +81,8 @@ struct SqlPoolInner {
     write_con: Option<rusqlite::Connection>,
     read_limit: Arc<Semaphore>,
     read_cons: [Option<rusqlite::Connection>; READ_CON_COUNT],
+    // hold exclusive store ownership while any store handle is alive
+    _lock: Option<crate::store_lock::StoreLock>,
 }
 
 struct SqlCon {
@@ -87,6 +124,7 @@ impl SqlCon {
             rusqlite::TransactionBehavior::Deferred
         };
         let mut con = self.con.take().unwrap();
+        let pool = self.pool.clone();
         let (con, r) = tokio::task::spawn_blocking(move || {
             let r = match con
                 .transaction_with_behavior(b)
@@ -104,6 +142,12 @@ impl SqlCon {
                     Err(err) => Err(err),
                 },
             };
+
+            // keep the pool, and therefore the store ownership lock, alive
+            // until the transaction and commit finish, even if the calling
+            // future is dropped while this blocking task is still running
+            drop(pool);
+
             (con, r)
         })
         .await
@@ -140,6 +184,7 @@ impl SqlPool {
         path: std::path::PathBuf,
         db_key: SharedSizedLockedArray<32>,
         db_salt: BinDataSized<16>,
+        lock: Option<crate::store_lock::StoreLock>,
     ) -> LairResult<LairStore> {
         use rusqlite::OpenFlags;
 
@@ -239,6 +284,7 @@ impl SqlPool {
 
         // build the pool state instance
         let inner = Self(Arc::new(Mutex::new(SqlPoolInner {
+            _lock: lock,
             ctx_secret: Arc::new(Mutex::new(ctx_secret)),
             write_limit: Arc::new(Semaphore::new(1)),
             write_con: Some(write_con),
@@ -255,10 +301,11 @@ impl SqlPool {
         path: std::path::PathBuf,
         db_key: SharedSizedLockedArray<32>,
         db_salt: BinDataSized<16>,
+        lock: Option<crate::store_lock::StoreLock>,
     ) -> impl Future<Output = LairResult<LairStore>> + 'static + Send {
         async move {
             tokio::task::spawn_blocking(move || {
-                Self::new_sync(path, db_key, db_salt)
+                Self::new_sync(path, db_key, db_salt, lock)
             })
             .await
             .map_err(one_err::OneErr::new)?
@@ -683,7 +730,7 @@ mod tests {
         ));
         let db_salt = BinDataSized([0; 16].into());
 
-        let pool = SqlPool::new(sqlite, db_key, db_salt).await.unwrap();
+        let pool = SqlPool::new(sqlite, db_key, db_salt, None).await.unwrap();
 
         let pk = pool
             .new_seed("test-tag".into(), false)

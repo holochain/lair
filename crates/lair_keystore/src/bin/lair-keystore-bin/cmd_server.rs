@@ -5,7 +5,7 @@ pub(crate) async fn exec(
     config: LairServerConfig,
     opt: OptServer,
 ) -> LairResult<()> {
-    // construct the server so that pid-check etc happens first
+    // construct the server so that store ownership is acquired first
     let mut server =
         lair_keystore::server::StandaloneServer::new(config).await?;
 

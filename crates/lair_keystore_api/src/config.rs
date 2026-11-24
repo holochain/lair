@@ -6,7 +6,6 @@ use one_err::OneErr;
 use std::future::Future;
 use std::sync::{Arc, Mutex};
 
-const PID_FILE_NAME: &str = "pid_file";
 const STORE_FILE_NAME: &str = "store_file";
 
 /// Enum for configuring signature fallback handling.
@@ -43,9 +42,6 @@ pub struct LairServerConfigInner {
     /// - `named_pipe:\\.\pipe\my_pipe_name?k=Yada`
     /// - `tcp://127.0.0.1:12345?k=Yada`
     pub connection_url: url::Url,
-
-    /// The pid file for managing a running lair-keystore process
-    pub pid_file: std::path::PathBuf,
 
     /// The sqlcipher store file for persisting secrets
     pub store_file: std::path::PathBuf,
@@ -89,9 +85,6 @@ impl std::fmt::Display for LairServerConfigInner {
                         "# - `named_pipe:\\\\.\\pipe\\my_pipe_name?k=Yada`",
                     );
                     lines.push("# - (not yet supported) `tcp://127.0.0.1:12345?k=Yada`");
-                } else if line.starts_with("pidFile:") {
-                    lines.push("");
-                    lines.push("# The pid file for managing a running lair-keystore process");
                 } else if line.starts_with("storeFile:") {
                     lines.push("");
                     lines.push(
@@ -144,10 +137,6 @@ impl LairServerConfigInner {
         let root_path = root_path.as_ref().to_owned();
         let limits = PwHashLimits::current();
         async move {
-            // default pid_file name is '[root_path]/pid_file'
-            let mut pid_file = root_path.clone();
-            pid_file.push(PID_FILE_NAME);
-
             // default store_file name is '[root_path]/store_file'
             let mut store_file = root_path.clone();
             store_file.push(STORE_FILE_NAME);
@@ -276,7 +265,6 @@ impl LairServerConfigInner {
             // put together the full server config struct
             let config = LairServerConfigInner {
                 connection_url,
-                pid_file,
                 store_file,
                 signature_fallback: LairServerSignatureFallback::None,
                 database_salt: db_salt.into(),
@@ -359,7 +347,6 @@ mod tests {
         println!("-- server config start --");
         println!("{}", &srv);
         println!("-- server config end --");
-        assert_eq!(temp_dir.path(), srv.pid_file.parent().unwrap(),);
 
         srv.signature_fallback = LairServerSignatureFallback::Command {
             program: std::path::Path::new("./my-executable").into(),
