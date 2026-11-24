@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## \[[0.8.0](https://github.com/holochain/lair/compare/v0.7.1...v0.8.0)\] - 2026-11-24
+
+### Features
+
+- Add a persistent in-process keystore constructor by @jost-s in [#177](https://github.com/holochain/lair/pull/177)
+  - Add lair_keystore::InProcKeystore::new, which acquires exclusive ownership of the configured sqlite store and runs the lair server in-process. This lets callers use the canonical persistent store without an ipc socket, avoiding socket path limits on iOS.
+  - The factory-taking lair_keystore_api::InProcKeystore::new is unchanged.
+- \[**BREAKING**\] Lock the store with an exclusive OS file lock by @jost-s
+  - Replace the pid/process-name check with an exclusive, nonblocking OS file lock derived from the resolved store path. The shared store preparation is used by StandaloneServer, so competing lair instances in the same process or across processes cannot clobber the store.
+  - The lock is held as long as any store factory or store handle is alive and is released on startup failure or when the last resource closes.
+  - **Breaking Change**: Remove the public pid_file config field, the pid_check module, and the sysinfo re-export. Store ownership is now enforced with an OS file lock derived from the store path.
+
+### Automated Changes
+
+- Update CODEOWNERS with shared content in [#170](https://github.com/holochain/lair/pull/170)
+
 ## \[[0.7.1](https://github.com/holochain/lair/compare/v0.7.0...v0.7.1)\] - 2026-04-30
 
 ### Features
