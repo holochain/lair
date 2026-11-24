@@ -16,11 +16,11 @@ jobs:
         ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install vcpkg packages
         if: matrix.os == 'windows-latest'
-        uses: johnwason/vcpkg-action@v6
+        uses: johnwason/vcpkg-action@v8
         id: vcpkg
         with:
           triplet: x64-windows-release
