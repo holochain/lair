@@ -130,8 +130,9 @@ enum Cmd {
     Server(OptServer),
 
     /// Load a seed bundle into this lair-keystore instance.
-    /// Note, this operation requires capturing the pid_file,
-    /// make sure you do not have a lair-server running.
+    /// Note, this operation requires exclusive ownership of
+    /// the store file, make sure you do not have a lair-server
+    /// running.
     /// Note, we currently only support importing seed bundles
     /// with a pwhash cipher. We'll try the passphrase you
     /// supply with all ciphers used to lock the bundle.

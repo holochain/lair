@@ -9,47 +9,26 @@ use std::future::Future;
 /// You probably only want to use this directly if you're writing tests.
 pub struct StandaloneServer {
     config: LairServerConfig,
+    // held for the life of the server; also cloned into the store factory
+    // and every store handle
+    _lock: crate::store_lock::StoreLock,
+    store_factory: LairStoreFactory,
     srv_hnd: Option<IpcKeystoreServer>,
 }
 
 impl StandaloneServer {
-    /// Construct a new standalone server. Note, pid-check is acquired here.
+    /// Construct a new standalone server. Note, exclusive ownership of the
+    /// store file is acquired here.
     pub async fn new(config: LairServerConfig) -> LairResult<Self> {
-        // first make sure we can acquire a pid_file for the given location
-        {
-            let config = config.clone();
-            // TODO - make pid_check async friendly
-            tokio::task::spawn_blocking(move || {
-                crate::pid_check::pid_check(&config)
-            })
-            .await
-            .map_err(one_err::OneErr::new)??;
-        }
-
-        // sanity check that store_file's parent is a directory
-        if !tokio::fs::metadata(
-            config.store_file.parent().expect("invalid store_file dir"),
-        )
-        .await?
-        .is_dir()
-        {
-            return Err("invalid store file directory".into());
-        }
-
-        // sanity check that store file either doesn't exist or is a file
-        match tokio::fs::metadata(&config.store_file).await {
-            // it's ok if the store file doesn't exist yet
-            Err(_) => (),
-            Ok(m) => {
-                // if it exists, it must be a file
-                if !m.is_file() {
-                    return Err("store file is not a file".into());
-                }
-            }
-        }
+        // acquire exclusive ownership of the store file and construct the
+        // sqlite store factory
+        let (lock, store_factory) =
+            crate::store_lock::prepare_persistent_store(config.clone()).await?;
 
         Ok(Self {
             config,
+            _lock: lock,
+            store_factory,
             srv_hnd: None,
         })
     }
@@ -59,16 +38,10 @@ impl StandaloneServer {
         &mut self,
         passphrase: SharedLockedArray,
     ) -> LairResult<()> {
-        // construct our sqlite store factory
-        let store_factory = crate::store_sqlite::create_sql_pool_factory(
-            &self.config.store_file,
-            &self.config.database_salt,
-        );
-
         // spawn the server
         let srv_hnd = IpcKeystoreServer::new(
             self.config.clone(),
-            store_factory,
+            self.store_factory.clone(),
             passphrase,
         )
         .await?;

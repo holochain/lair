@@ -94,7 +94,6 @@ pub mod dependencies {
     pub use lair_keystore_api::dependencies::*;
     pub use rpassword;
     pub use rusqlite;
-    pub use sysinfo;
     pub use tracing_subscriber;
 }
 
@@ -103,8 +102,8 @@ use lair_keystore_api::prelude::*;
 
 pub(crate) mod sql;
 
-pub mod pid_check;
 pub mod server;
+pub mod store_lock;
 pub mod store_sqlite;
 
 #[doc(inline)]

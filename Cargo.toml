@@ -44,7 +44,6 @@ yaml_serde = "0.10"
 sodoken = "=0.1.0"
 sqlformat = "=0.5.0"
 clap = "4.5"
-sysinfo = "0.38"
 tempfile = "3.23"
 tokio = { version = "1.35.1" }
 toml = "1.1"

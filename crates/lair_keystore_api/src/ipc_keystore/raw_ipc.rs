@@ -52,7 +52,7 @@ pub(crate) fn ipc_bind(
 
         let path = config.get_connection_path();
 
-        // we've already acquired our pid_file
+        // the caller has already acquired exclusive ownership of the store
         // it's safe to say we own the domain socket
         // and can remove any previous remnant
         let _ = tokio::fs::remove_file(&path).await;

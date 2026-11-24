@@ -6,7 +6,7 @@ pub(crate) async fn exec(
     config: LairServerConfig,
     opt: OptImportSeed,
 ) -> LairResult<()> {
-    // first start the server so the pid_file is acquired / etc
+    // first start the server so exclusive store ownership is acquired
     let mut server =
         lair_keystore::server::StandaloneServer::new(config).await?;
 
