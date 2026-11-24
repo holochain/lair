@@ -86,7 +86,7 @@ pub async fn tls_cert_self_signed_new() -> LairResult<TlsCertGenResult> {
         params.distinguished_name = rcgen::DistinguishedName::new();
         params.distinguished_name.push(
             rcgen::DnType::CommonName,
-            format!("Lair Pseudo-Self-Signed Cert {}", &sni),
+            format!("Lair Pseudo-Self-Signed Cert {}", sni),
         );
 
         let keypair =

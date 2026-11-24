@@ -18,7 +18,8 @@
 //! initialization, configuration, and running of a Lair keystore.
 //!
 //! If you want to run an in-process keystore, this crate also provides the
-//! canonical sqlite store.
+//! canonical sqlite store, including a persistent [InProcKeystore]
+//! constructor that acquires exclusive ownership of the store file.
 //!
 //! For making use of a Lair keystore in a client application, see the
 //! [lair_keystore_api](https://crates.io/crates/lair_keystore_api) crate.
@@ -102,9 +103,13 @@ use lair_keystore_api::prelude::*;
 
 pub(crate) mod sql;
 
+pub mod in_proc_keystore;
 pub mod server;
 pub mod store_lock;
 pub mod store_sqlite;
+
+#[doc(inline)]
+pub use in_proc_keystore::InProcKeystore;
 
 #[doc(inline)]
 pub use store_sqlite::create_sql_pool_factory;
