@@ -80,3 +80,38 @@ async fn in_proc_keystore_persists_and_locks() {
         LairEntryInfo::Seed { tag, .. } if &**tag == "persist"
     )));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn shutdown_awaits_teardown() {
+    let tmpdir = tempfile::TempDir::with_prefix("lair-shutdown-test").unwrap();
+    let passphrase = Arc::new(Mutex::new(sodoken::LockedArray::from(
+        b"passphrase".to_vec(),
+    )));
+    let config = create_config(&tmpdir, passphrase.clone()).await;
+
+    let keystore =
+        lair_keystore::InProcKeystore::new(config.clone(), passphrase.clone())
+            .await
+            .unwrap();
+    let client = keystore.new_client().await.unwrap();
+
+    // shutdown must not return until the connection teardown has finished
+    client.shutdown().await.unwrap();
+
+    // once shutdown has returned no request can be accepted - it must fail
+    // fast rather than waiting out the 30 s request timeout
+    tokio::time::timeout(
+        std::time::Duration::from_secs(1),
+        client.list_entries(),
+    )
+    .await
+    .expect("request after shutdown hung")
+    .expect_err("request after shutdown should fail");
+
+    // the client-side recv loop was joined by shutdown, so the server
+    // session released its store handle and the lock is immediately free
+    drop(keystore);
+    let lock = acquire_store_lock(&config.store_file)
+        .expect("store lock was not released by the awaited shutdown");
+    drop(lock);
+}
