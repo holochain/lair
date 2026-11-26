@@ -77,7 +77,7 @@ impl LairClient {
         AsLairClient::get_dec_ctx_key(&*self.0)
     }
 
-    /// Shutdown the client connection.
+    /// Shutdown the client connection, awaiting full teardown.
     pub fn shutdown(
         &self,
     ) -> impl Future<Output = LairResult<()>> + 'static + Send {

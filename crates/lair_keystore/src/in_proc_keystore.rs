@@ -11,7 +11,12 @@ use std::future::Future;
 /// constructor acquires exclusive ownership of the configured store file,
 /// so it is safe to use with the persistent sqlite store.
 #[derive(Clone)]
-pub struct InProcKeystore(lair_keystore_api::in_proc_keystore::InProcKeystore);
+pub struct InProcKeystore {
+    // held for the life of the server; also cloned into the store factory
+    // and every store handle
+    _lock: crate::store_lock::StoreLock,
+    inner: lair_keystore_api::in_proc_keystore::InProcKeystore,
+}
 
 impl InProcKeystore {
     /// Construct a new persistent in-process keystore instance.
@@ -23,7 +28,7 @@ impl InProcKeystore {
         async move {
             // acquire exclusive ownership of the store file and construct
             // the sqlite store factory
-            let (_lock, store_factory) =
+            let (lock, store_factory) =
                 crate::store_lock::prepare_persistent_store(config.clone())
                     .await?;
 
@@ -36,7 +41,9 @@ impl InProcKeystore {
                 )
                 .await?;
 
-            Ok(Self(inner))
+            // keep the exclusive store ownership on the server handle,
+            // mirroring `crate::server::StandaloneServer`
+            Ok(Self { _lock: lock, inner })
         }
     }
 
@@ -45,12 +52,12 @@ impl InProcKeystore {
     pub fn store(
         &self,
     ) -> impl Future<Output = LairResult<LairStore>> + 'static + Send {
-        self.0.store()
+        self.inner.store()
     }
 
     /// Get the config used by the LairServer held by this InProcKeystore.
     pub fn get_config(&self) -> LairServerConfig {
-        self.0.get_config()
+        self.inner.get_config()
     }
 
     /// Get a new LairClient connection to this InProcKeystore server.
@@ -59,6 +66,6 @@ impl InProcKeystore {
     pub fn new_client(
         &self,
     ) -> impl Future<Output = LairResult<LairClient>> + 'static + Send {
-        self.0.new_client()
+        self.inner.new_client()
     }
 }

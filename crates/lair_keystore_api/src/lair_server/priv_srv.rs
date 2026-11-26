@@ -202,53 +202,67 @@ pub(crate) fn priv_srv_accept(
 
         // spawn a task for reading incoming messages from the client
         tokio::task::spawn(async move {
-            let inner = &inner;
-            let send = &send;
             let enc_ctx_key = Arc::new(Mutex::new(enc_ctx_key));
             let dec_ctx_key = Arc::new(Mutex::new(dec_ctx_key));
-            let unlocked = &unlocked;
-            recv.for_each_concurrent(4096, move |incoming| {
+            recv.for_each_concurrent(4096, {
+                let inner = inner.clone();
+                let send = send.clone();
+                let unlocked = unlocked.clone();
                 let enc_ctx_key = enc_ctx_key.clone();
                 let dec_ctx_key = dec_ctx_key.clone();
-                async move {
-                    let incoming = match incoming {
-                        Err(e) => {
-                            tracing::warn!("incoming channel error: {:?}", e);
-                            return;
-                        }
-                        Ok(incoming) => incoming,
-                    };
+                move |incoming| {
+                    let inner = inner.clone();
+                    let send = send.clone();
+                    let unlocked = unlocked.clone();
+                    let enc_ctx_key = enc_ctx_key.clone();
+                    let dec_ctx_key = dec_ctx_key.clone();
+                    async move {
+                        let incoming = match incoming {
+                            Err(e) => {
+                                tracing::warn!(
+                                    "incoming channel error: {:?}",
+                                    e
+                                );
+                                return;
+                            }
+                            Ok(incoming) => incoming,
+                        };
 
-                    let msg_id = incoming.msg_id();
+                        let msg_id = incoming.msg_id();
 
-                    // dispatch the message to the appropriate api handler
-                    if let Err(e) = priv_dispatch_incoming(
-                        inner,
-                        send,
-                        enc_ctx_key,
-                        dec_ctx_key,
-                        unlocked,
-                        incoming,
-                    )
-                    .await
-                    {
-                        // if we get an error - send the error back to the client
-                        if let Err(e) = send
-                            .send(LairApiEnum::ResError(LairApiResError {
-                                msg_id,
-                                error: e,
-                            }))
-                            .await
+                        // dispatch the message to the appropriate api handler
+                        if let Err(e) = priv_dispatch_incoming(
+                            &inner,
+                            &send,
+                            enc_ctx_key,
+                            dec_ctx_key,
+                            &unlocked,
+                            incoming,
+                        )
+                        .await
                         {
-                            tracing::warn!(
-                                "error sending error response: {:?}",
-                                e
-                            );
+                            // if we get an error - send the error back to the client
+                            if let Err(e) =
+                                send.send(LairApiEnum::ResError(
+                                    LairApiResError { msg_id, error: e },
+                                ))
+                                .await
+                            {
+                                tracing::warn!(
+                                    "error sending error response: {:?}",
+                                    e
+                                );
+                            }
                         }
                     }
                 }
             })
             .await;
+
+            // release our handle to the server state (and thus the store)
+            // before signaling the close, so that a client awaiting
+            // shutdown observes a fully torn down session
+            drop(inner);
 
             // when our loop ends, shutdown the sending side too
             let _ = send.shutdown().await;
