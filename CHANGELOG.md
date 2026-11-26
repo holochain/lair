@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## \[[0.9.0](https://github.com/holochain/lair/compare/v0.8.0...v0.9.0)\] - 2026-11-26
+
+### Features
+
+- \[**BREAKING**\] Await client shutdown before returning by @jost-s in [#180](https://github.com/holochain/lair/pull/180)
+  - **Breaking Change**: Lair_keystore::InProcKeystore is now a named-field struct that holds the exclusive store lock, and client shutdown blocks until teardown completes instead of returning after signalling.
+
+### Miscellaneous Tasks
+
+- Update the AI_POLICY.md with shared content in [#174](https://github.com/holochain/lair/pull/174)
+- Update the AI_POLICY.md with shared content
+- Update the CONTRIBUTING.md with shared content
+
+### Automated Changes
+
+- *(deps)* Bump the updates group with 4 updates by @dependabot[bot] in [#179](https://github.com/holochain/lair/pull/179)
+- Update dependabot.yml with shared content in [#173](https://github.com/holochain/lair/pull/173)
+- Update dependabot.yml with shared content
+
+### First-time Contributors
+
+- @dependabot[bot] made their first contribution in [#179](https://github.com/holochain/lair/pull/179)
+
 ## \[[0.8.0](https://github.com/holochain/lair/compare/v0.7.1...v0.8.0)\] - 2026-11-24
 
 ### Features
