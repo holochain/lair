@@ -17,7 +17,7 @@ async fn lair_config_connection_url_relative_root() {
     let dir = TempDir::with_prefix_in("example", ".").unwrap();
 
     let mut relative_lair_root = PathBuf::from(".");
-    relative_lair_root.push(dir.path().components().last().unwrap());
+    relative_lair_root.push(dir.path().components().next_back().unwrap());
 
     let config = hc_seed_bundle::PwHashLimits::Minimum
         .with_exec(|| {
@@ -27,7 +27,7 @@ async fn lair_config_connection_url_relative_root() {
         .unwrap();
 
     let mut expected_path = current_dir().unwrap();
-    expected_path.push(dir.path().components().last().unwrap());
+    expected_path.push(dir.path().components().next_back().unwrap());
     let expected_path_str = expected_path.to_str().unwrap();
 
     assert!(config.connection_url.as_str().contains(expected_path_str));
@@ -45,7 +45,7 @@ async fn lair_config_connection_url_absolute_root() {
 
     let dir = TempDir::with_prefix_in("example", ".").unwrap();
     let mut absolute_lair_root = current_dir().unwrap();
-    absolute_lair_root.push(dir.path().components().last().unwrap());
+    absolute_lair_root.push(dir.path().components().next_back().unwrap());
 
     let config = hc_seed_bundle::PwHashLimits::Minimum
         .with_exec(|| {
@@ -58,7 +58,7 @@ async fn lair_config_connection_url_absolute_root() {
         .unwrap();
 
     let mut expected_path = current_dir().unwrap();
-    expected_path.push(dir.path().components().last().unwrap());
+    expected_path.push(dir.path().components().next_back().unwrap());
     let expected_path_str = expected_path.to_str().unwrap();
 
     assert!(config.connection_url.as_str().contains(expected_path_str));

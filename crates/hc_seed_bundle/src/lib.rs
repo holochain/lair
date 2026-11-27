@@ -160,6 +160,9 @@ pub use seed_cipher::*;
 mod unlocked_seed_bundle;
 pub use unlocked_seed_bundle::*;
 
+mod pwhash_lock_seed;
+pub use pwhash_lock_seed::*;
+
 /// SharedLockedArray type alias for a [sodoken::LockedArray] wrapped in an [Arc] and [Mutex].
 pub type SharedLockedArray = Arc<Mutex<sodoken::LockedArray>>;
 

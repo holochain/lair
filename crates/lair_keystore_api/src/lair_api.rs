@@ -94,11 +94,17 @@ pub use new_seed::*;
 mod export_seed_by_tag;
 pub use export_seed_by_tag::*;
 
+mod export_seed_bundle_by_tag;
+pub use export_seed_bundle_by_tag::*;
+
 mod derive_seed;
 pub use derive_seed::*;
 
 mod import_seed;
 pub use import_seed::*;
+
+mod import_seed_bundle;
+pub use import_seed_bundle::*;
 
 mod sign_by_pub_key;
 pub use sign_by_pub_key::*;
@@ -180,6 +186,19 @@ pub enum LairApiEnum {
 
     /// Response for import seed.
     ResImportSeed(LairApiResImportSeed),
+
+    /// Export a seed (if it is marked exportable) as a passphrase-locked
+    /// `hc_seed_bundle` for portable backup.
+    ReqExportSeedBundleByTag(LairApiReqExportSeedBundleByTag),
+
+    /// Response for export seed bundle by tag.
+    ResExportSeedBundleByTag(LairApiResExportSeedBundleByTag),
+
+    /// Import a passphrase-locked `hc_seed_bundle`.
+    ReqImportSeedBundle(LairApiReqImportSeedBundle),
+
+    /// Response for import seed bundle.
+    ResImportSeedBundle(LairApiResImportSeedBundle),
 
     /// Derive a new seed from an existing one according to a specified derivation path.
     ReqDeriveSeed(LairApiReqDeriveSeed),
@@ -289,6 +308,20 @@ impl LairApiEnum {
             Self::ResImportSeed(LairApiResImportSeed { msg_id, .. }) => {
                 msg_id.clone()
             }
+            Self::ReqExportSeedBundleByTag(
+                LairApiReqExportSeedBundleByTag { msg_id, .. },
+            ) => msg_id.clone(),
+            Self::ResExportSeedBundleByTag(
+                LairApiResExportSeedBundleByTag { msg_id, .. },
+            ) => msg_id.clone(),
+            Self::ReqImportSeedBundle(LairApiReqImportSeedBundle {
+                msg_id,
+                ..
+            }) => msg_id.clone(),
+            Self::ResImportSeedBundle(LairApiResImportSeedBundle {
+                msg_id,
+                ..
+            }) => msg_id.clone(),
             Self::ReqDeriveSeed(LairApiReqDeriveSeed { msg_id, .. }) => {
                 msg_id.clone()
             }
